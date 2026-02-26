@@ -1,0 +1,620 @@
+[
+  {
+    "table": {
+      "uid": "449e2b67-e6f6-416f-b409-63b8c88cdf7e",
+      "table": [
+        [
+          "",
+          "Year Ended December 31,",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "2019",
+          "2018",
+          "2017",
+          "2016",
+          "2015"
+        ],
+        [
+          "",
+          "(unaudited)",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Total bookings (in millions)",
+          "$3,401.2",
+          "$3,011.5",
+          "$2,618.2",
+          "$2,155.5",
+          "$1,914.2"
+        ],
+        [
+          "Total customers at period end (in thousands)",
+          "19,274",
+          "18,518",
+          "17,339",
+          "14,740",
+          "13,774"
+        ],
+        [
+          "Average revenue per user",
+          "$158",
+          "$148",
+          "$139",
+          "$130",
+          "$121"
+        ]
+      ]
+    },
+    "paragraphs": [
+      {
+        "uid": "cd0b7d6b-14eb-402b-a288-8e4275b5f714",
+        "order": 1,
+        "text": "Key Metrics"
+      },
+      {
+        "uid": "d8bfe164-b039-4acf-a97d-09c40d8d7d5b",
+        "order": 2,
+        "text": "In addition to our results determined in accordance with GAAP, we believe the following operating metrics are useful as supplements in evaluating our ongoing operational performance and help provide an enhanced understanding of our business:"
+      },
+      {
+        "uid": "8e28bc91-ebcf-45eb-a2b7-d42c42321eed",
+        "order": 3,
+        "text": "Total bookings. Total bookings represents cash receipts from the sale of products to customers in a given period adjusted for products where we recognize revenue on a net basis and without giving effect to certain adjustments, primarily net refunds granted in the period. Total bookings provides valuable insight into the sales of our products and the performance of our business since we typically collect payment at the time of sale and recognize revenue ratably over the term of our customer contracts. We report total bookings without giving effect to refunds granted in the period because refunds often occur in periods different from the period of sale for reasons unrelated to the marketing efforts leading to the initial sale. Accordingly, by excluding net refunds, we believe total bookings reflects the effectiveness of our sales efforts in a given period."
+      },
+      {
+        "uid": "fd8e8408-1d55-403e-8773-eb408004c147",
+        "order": 4,
+        "text": "Total customers. We define a customer as an individual or entity, as of the end of a period, having an account with one or more paid product subscriptions. A single user may be counted asacustomer more than once if the user maintains paid subscriptions in multiple accounts. Total customers is one way we measure the scale of our business and is an important part of our ability to increase our revenue base"
+      },
+      {
+        "uid": "c694d2c0-9e26-427d-b7a9-dc468c36098a",
+        "order": 5,
+        "text": "Average revenue per user (ARPU). We calculate ARPU as total revenue during the preceding 12 month period divided by the average of the number of total customers at the beginning and end of the period. ARPU provides insight into our ability to sell additional products to customers, though the impact to date has been muted due to our continued growth in total customers."
+      }
+    ],
+    "questions": [
+      {
+        "uid": "aaf18567-88cd-4316-9fc9-afe063cc3c99",
+        "order": 1,
+        "question": "What is the total bookings for each financial year listed, in chronological order?"
+      },
+      {
+        "uid": "0d284239-d4f5-41e8-9620-b91f4f422f08",
+        "order": 2,
+        "question": "What is the total number of customers at each listed period end, in chronological order?"
+      },
+      {
+        "uid": "c3480ac8-9ae1-4338-ad6a-e214c141e303",
+        "order": 3,
+        "question": "Which financial years are listed in the table? (in chronological order)"
+      },
+      {
+        "uid": "54b08646-2ddc-4cde-a33c-73497ba52518",
+        "order": 4,
+        "question": "What is the average total bookings for 2018 and 2019?"
+      },
+      {
+        "uid": "009a69dd-29f1-4ef6-bd6d-585e7616a930",
+        "order": 5,
+        "question": "What is the average total bookings for 2017 and 2018?"
+      },
+      {
+        "uid": "557ec939-c4f5-4c0f-932d-ec4fc66b7449",
+        "order": 6,
+        "question": "What is the change in the average total bookings between 2017-2018, and 2018-2019?"
+      }
+    ]
+  },
+  {
+    "table": {
+      "uid": "0ec71b17-f447-4108-9d6d-d2aa74e4d248",
+      "table": [
+        [
+          "",
+          "2019",
+          "2018",
+          "$ CHANGE",
+          "% CHANGE"
+        ],
+        [
+          "Bell Wireless",
+          "697",
+          "664",
+          "(33)",
+          "(5.0%)"
+        ],
+        [
+          "Capital intensity ratio",
+          "7.6%",
+          "7.5%",
+          "",
+          "(0.1) pts"
+        ],
+        [
+          "Bell Wireline",
+          "3,183",
+          "3,193",
+          "10",
+          "0.3%"
+        ],
+        [
+          "Capital intensity ratio",
+          "25.8%",
+          "26.0%",
+          "",
+          "0.2 pts"
+        ],
+        [
+          "Bell Media",
+          "108",
+          "114",
+          "6",
+          "5.3%"
+        ],
+        [
+          "Capital intensity ratio",
+          "3.4%",
+          "3.7%",
+          "",
+          "0.3 pts"
+        ],
+        [
+          "BCE",
+          "3,988",
+          "3,971",
+          "(17)",
+          "(0.4%)"
+        ],
+        [
+          "Capital intensity ratio",
+          "16.6%",
+          "16.9%",
+          "",
+          "0.3 pts"
+        ]
+      ]
+    },
+    "paragraphs": [
+      {
+        "uid": "5605df6a-d051-4804-8ead-63eabe001142",
+        "order": 1,
+        "text": "CAPITAL EXPENDITURES"
+      },
+      {
+        "uid": "feac90d3-f158-4792-b542-96d7470deceb",
+        "order": 2,
+        "text": "BCE capital expenditures totaled $3,988  million for the year, up $17 million over 2018. This corresponded to a capital intensity ratio of 16.6%, down 0.3 pts compared to last year. Capital spending in the year reflected the following:"
+      },
+      {
+        "uid": "69db318e-f1c9-4347-a388-c595c368c849",
+        "order": 3,
+        "text": "• Greater capital investments in our wireless segment of $33 million in 2019, compared to 2018, as we advanced the build-out of our LTE-A network, continued to deploy wireless small-cells to expand capacity to support subscriber growth and increase network speeds, coverage and signal quality, as well as to expand data fibre backhaul in preparation for 5G technology"
+      },
+      {
+        "uid": "874115d1-0c79-429a-818f-fef87b607950",
+        "order": 4,
+        "text": "• A modest reduction in capital spending in our wireline segment of $10 million in 2019, compared to last year, as we continued to focus our investments on the ongoing deployment of FTTP to more homes and businesses, the roll-out of fixed WTTP to rural locations in Ontario and Québec, the connection of fibre Internet and TV services to more homes and businesses and the execution of business customer contracts"
+      },
+      {
+        "uid": "3571a212-d219-4695-8f85-b83525707072",
+        "order": 5,
+        "text": "• Lower capital expenditures at Bell Media of $6 million in 2019, compared to 2018, mainly due to production equipment and IT upgrades in 2018"
+      }
+    ],
+    "questions": [
+      {
+        "uid": "ad473e9b-aaca-4408-b407-9610ea3ce999",
+        "order": 1,
+        "question": "What is the % change in the capital intensity ratio for BCE?"
+      },
+      {
+        "uid": "5f344d86-694b-4be7-b270-fe42310e7a65",
+        "order": 2,
+        "question": "What led to lower capital expenditures at Bell Media in 2019?"
+      },
+      {
+        "uid": "bbb37e42-0829-424a-9376-8733b8a22d52",
+        "order": 3,
+        "question": "What is the $ change in the capital expenditures for Bell Wireless?"
+      },
+      {
+        "uid": "263a7839-b67d-41ef-91c6-c9740aa58107",
+        "order": 4,
+        "question": "Which segment has the largest % change in capital intensity ratio?"
+      },
+      {
+        "uid": "f5f959bd-8551-42df-9b46-91c7c9e7fb32",
+        "order": 5,
+        "question": "What are the capital expenditures for Bell Media in 2018 and 2019?"
+      },
+      {
+        "uid": "f56c6351-79ef-4299-82c4-365f01aa16fe",
+        "order": 6,
+        "question": "What is the percentage of capital expenditures for Bell Wireline out of the BCE capital expenditures in 2019?"
+      }
+    ]
+  },
+  {
+    "table": {
+      "uid": "155d8fc0-3fec-48f9-a3d6-a600e529d506",
+      "table": [
+        [
+          "",
+          "2019",
+          "2018"
+        ],
+        [
+          "",
+          "$ million",
+          "$ million"
+        ],
+        [
+          "At 1 January",
+          "2.3",
+          "2.6"
+        ],
+        [
+          "Received during the year",
+          "0.3",
+          "0.1"
+        ],
+        [
+          "Released to the income statement",
+          "(0.6)",
+          "(0.4)"
+        ],
+        [
+          "At 31 December",
+          "2.0",
+          "2.3"
+        ]
+      ]
+    },
+    "paragraphs": [
+      {
+        "uid": "8684a8be-8a01-4081-883c-0ddc752fb7be",
+        "order": 1,
+        "text": "24. Government grants"
+      },
+      {
+        "uid": "11fa5268-d508-47c6-b281-a612e9191f22",
+        "order": 2,
+        "text": "The following government grants are included within trade and other payables:"
+      },
+      {
+        "uid": "66e81c99-d93f-4b6e-8373-2c4463cf2fcd",
+        "order": 3,
+        "text": "Government grants have been received to accelerate and support research and development in the vulnerability of global navigation satellite systems and other high technology projects."
+      }
+    ],
+    "questions": [
+      {
+        "uid": "1cb28861-5055-41b3-8b98-6b0f8b9f107b",
+        "order": 1,
+        "question": "Where are the government grants included within?"
+      },
+      {
+        "uid": "25ed55c8-0b84-4aec-9fd1-76f9e0816a94",
+        "order": 2,
+        "question": "What are the government grants received for?"
+      },
+      {
+        "uid": "128851ec-2096-4dc6-870c-3cf1cdcbfb01",
+        "order": 3,
+        "question": "What variables are considered on top of the value at 1 January when calculating the value at 31 December for government grants that are included within trade and other payables?"
+      },
+      {
+        "uid": "ad09fc51-3d4e-4e96-b168-b5cf4d7e72a2",
+        "order": 4,
+        "question": "In which year was the amount at 1 January larger?"
+      },
+      {
+        "uid": "37940cb1-658c-43e9-aba7-df0db454d2bc",
+        "order": 5,
+        "question": "What was the change in the amount at 31 December?"
+      },
+      {
+        "uid": "a5430e6b-003c-4c1f-82db-8e7b47a81bf1",
+        "order": 6,
+        "question": "What was the percentage change in the amount at 31 December?"
+      }
+    ]
+  },
+  {
+    "table": {
+      "uid": "28a61ee9-a1cd-42ba-bf5f-7c4cf8d9d73f",
+      "table": [
+        [
+          "",
+          "",
+          "",
+          "Payments Due By Period (in thousands) ",
+          "",
+          ""
+        ],
+        [
+          "Contractual Obligations",
+          "Total",
+          "Less than 1 Year",
+          "1-3 Years",
+          "3-5  Years",
+          "5 Years"
+        ],
+        [
+          "Operating leases ",
+          "47,774",
+          "$15,363",
+          "$22,919",
+          "$ 9,382",
+          "$110"
+        ],
+        [
+          "Long-term debt ",
+          "55,000",
+          "—",
+          "—",
+          "55,000",
+          "—"
+        ],
+        [
+          "Purchase obligations:   ",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Feed grains, feed ingredients and packaging supplies",
+          "199,097",
+          "199,097",
+          "—",
+          "",
+          ""
+        ],
+        [
+          "Construction contracts and other ",
+          "8,996",
+          "8,996",
+          "—",
+          "—",
+          "—"
+        ],
+        [
+          "Claims payable ",
+          "20,587",
+          "9,687",
+          "10,900",
+          "—",
+          "—"
+        ],
+        [
+          "Total ",
+          "331,454",
+          "$233,143",
+          "$33,819",
+          "$ 64,382",
+          "$110"
+        ]
+      ]
+    },
+    "paragraphs": [
+      {
+        "uid": "1c1277e9-7988-40bf-b088-4d3ba22e5b04",
+        "order": 1,
+        "text": "Contractual Obligations"
+      },
+      {
+        "uid": "3820d859-144e-41a0-89cb-0b904e089029",
+        "order": 2,
+        "text": "Obligations under long-term debt; non-cancelable operating leases; purchase obligations relating to feed grains, other feed ingredients and packaging supplies; construction contracts and claims payable relating to the Company’s workers’ compensation insurance policy at October 31, 2019, were as follows:"
+      }
+    ],
+    "questions": [
+      {
+        "uid": "972cfb43-844b-429d-abbc-2b29809da054",
+        "order": 1,
+        "question": "What is the total operating leases due for payment?"
+      },
+      {
+        "uid": "94dfb7e8-a0ad-4eb7-a82a-54682329d5ec",
+        "order": 2,
+        "question": "What is the total long-term debt due for payment?"
+      },
+      {
+        "uid": "d3b8134a-c7d7-410f-b60f-6f121088f00b",
+        "order": 3,
+        "question": "What does the table provide data for?"
+      },
+      {
+        "uid": "a2e9cc94-003f-40bf-95e1-93adf0ca876c",
+        "order": 4,
+        "question": "What is the percentage constitution of the total claims payable among the total contractual obligations?"
+      },
+      {
+        "uid": "ca553243-404b-41af-ba0c-bc992a691b56",
+        "order": 5,
+        "question": "What is the total operating leases due within 3 years?"
+      },
+      {
+        "uid": "d33040dc-ff87-49fd-985a-bb7ee3cae883",
+        "order": 6,
+        "question": "What is the total purchasing obligations due?"
+      }
+    ]
+  },
+  {
+    "table": {
+      "uid": "af493f14-718f-4d98-9ae7-70ae385e0fce",
+      "table": [
+        [
+          "",
+          "",
+          "",
+          "Year Ended December 31,",
+          "",
+          ""
+        ],
+        [
+          "",
+          "2019 (1)",
+          "2018 (2)",
+          "2017 (3)",
+          "2016",
+          "2015"
+        ],
+        [
+          "",
+          "",
+          "",
+          "(in thousands, except per share amounts)",
+          "",
+          ""
+        ],
+        [
+          "Statement of Income Data:",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Revenues",
+          "$2,222,559",
+          "$1,958,557",
+          "$1,717,018",
+          "$1,601,596",
+          "$1,550,117"
+        ],
+        [
+          "Operating income",
+          "$138,325",
+          "$112,742",
+          "$98,194",
+          "$90,963",
+          "$84,886"
+        ],
+        [
+          "Net income",
+          "$113,890",
+          "$82,097",
+          "$114,141",
+          "$56,391",
+          "$51,127"
+        ],
+        [
+          "Basic earnings per share (Class A and B)",
+          "$2.85",
+          "$2.08",
+          "$2.94",
+          "$1.48",
+          "$1.36"
+        ],
+        [
+          "Diluted earnings per share (Class A and B)",
+          "$2.83",
+          "$2.06",
+          "$2.91",
+          "$1.47",
+          "$1.36"
+        ],
+        [
+          "Dividend per share",
+          "$1.08",
+          "$1.00",
+          "$0.84",
+          "$0.84",
+          "$0.84"
+        ],
+        [
+          "Balance Sheet Data:",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Working capital",
+          "$154,753",
+          "$196,652",
+          "$138,879",
+          "$229,659",
+          "$189,276"
+        ],
+        [
+          "Goodwill (4)",
+          "$1,191,259",
+          "$1,085,806",
+          "$1,084,560",
+          "$955,874",
+          "$919,591"
+        ],
+        [
+          "Total assets",
+          "$2,107,914",
+          "$1,803,871",
+          "$1,744,475",
+          "$1,598,464",
+          "$1,506,424"
+        ],
+        [
+          "Long-term debt",
+          "$36,500",
+          "$7,500",
+          "$31,000",
+          "$—",
+          "$—"
+        ]
+      ]
+    },
+    "paragraphs": [
+      {
+        "uid": "7a7bfb6f-9fd8-489a-a931-7ffa6c5f9fa3",
+        "order": 1,
+        "text": "Item 6. Selected Financial Data"
+      },
+      {
+        "uid": "7de8cd89-f94d-4116-96c3-14143bfd738a",
+        "order": 2,
+        "text": "The selected financial data presented for each of the five years ended December 31, 2019 is derived from our audited consolidated financial statements. The selected financial data presented should be read in conjunction with our consolidated financial statements, the notes to our consolidated financial statements and Item 7 “Management's Discussion and Analysis of Financial Condition and Results of Operations.”"
+      },
+      {
+        "uid": "8c0f95f8-8f76-49fb-b414-6ccdfca94840",
+        "order": 3,
+        "text": "(1) On January 1, 2019, we adopted Accounting Standards Codification (ASC) 842, Leases, using the modified retrospective method at the beginning of the period of adoption, January 1, 2019, through the recognition of a lease obligation and corresponding right of use asset. Results for reporting periods beginning after January 1, 2019 are presented under ASC 842, while prior periods amount were not adjusted and continue to be reported in accordance with ASC 840, Leases."
+      },
+      {
+        "uid": "375df895-18c6-4c2b-b1b9-5bb32bc5f874",
+        "order": 4,
+        "text": "(2) On January 1, 2018, we adopted ASC 606, Revenue from Contracts with Customers, using the modified retrospective method applied to those contracts that were not substantially complete as of January 1, 2018. Results for reporting periods beginning after January 1, 2018 are presented under ASC 606, while prior period amounts were not adjusted and continue to be reported in accordance with ASC 605, Revenue Recognition."
+      },
+      {
+        "uid": "40734dc4-78af-4d51-a7f5-b2b6755c5fd7",
+        "order": 5,
+        "text": "(3) The Tax Cuts and Jobs Act, enacted on December 22, 2017, reduces the U.S. corporate tax rate from 35% to 21% beginning in 2018. Due to the enactment of the Tax Cuts and Jobs Act, our income tax expense was reduced by $50.6 million for the year ended December 31, 2017 from the re-measurement of our existing deferred tax assets and liabilities."
+      },
+      {
+        "uid": "9a1ad8b9-57af-4003-ae0e-49f36e9f4276",
+        "order": 6,
+        "text": "(4) Over the past five years, we completed 7 acquisitions. In aggregate, these acquisitions have added $343.6 million in goodwill. For additional information on our recent acquisitions, see Note 5 to our consolidated financial statements in Item 8."
+      }
+    ],
+    "questions": [
+      {
+        "uid": "d7c4c903-d23b-4df3-b910-3fd24b9e5659",
+        "order": 3,
+        "question": "What was the revenue in the Year Ended December 31, 2019?"
+      }
+    ]
+  }
+]

@@ -9,6 +9,7 @@
 你应该已经收到一份 GNU Affero 通用公共许可证副本；如果没有，请访问 <https://www.gnu.org/licenses/>。
 """
 
+import os
 import re
 import string
 from collections import Counter, OrderedDict, defaultdict
@@ -26,7 +27,7 @@ from fewshots_table import (DEMO_CRT, DEMO_CRT_DIRECT, DEMO_SCITAB,
 from langchain import Wikipedia
 from langchain.agents.react.base import DocstoreExplorer
 from llm import OpenSourceLLM
-from openai import AzureOpenAI
+from openai import AzureOpenAI, OpenAI
 from prompts_table import (DIRECT_AGENT, NUMERICAL_OPERATION_PROMPT,
                            TABLE_OPERATION_PROMPT, react_agent_prompt_crt,
                            react_agent_prompt_scitab, react_agent_prompt_tat,
@@ -42,21 +43,41 @@ all_input_token, all_output_token = 0, 0
 
 
 def load_gpt_azure():
-    """Initialize an Azure OpenAI client using local credentials.
+    """Initialize an OpenAI-compatible client.
 
-    通过 .env 中的配置和 Azure 身份凭据获取 token provider，随后构造
-    AzureOpenAI 客户端，供 GPT 规划/生成阶段复用。
+    优先使用阿里云 DashScope（通过 DASHSCOPE_API_KEY），否则回退到 Azure AD
+    取 token 的方式。这样可以直接在运行时通过环境变量切换。
     """
     _ = load_dotenv(find_dotenv())
-    token_provider = get_bearer_token_provider(
+
+    # 优先走 DashScope（OpenAI 兼容接口），便于快速切换到 API Key 模式。
+    dashscope_key = os.getenv("DASHSCOPE_API_KEY")  # DashScope API Key
+    if dashscope_key:
+        # DashScope OpenAI-compatible endpoint.
+        dashscope_base = os.getenv(  # DashScope 服务地址
+            "DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        return OpenAI(api_key=dashscope_key, base_url=dashscope_base)  # OpenAI 兼容客户端
+
+    # 若未配置 DashScope，则使用 Azure AD Token 方式。
+    azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "")  # Azure 端点
+    azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")  # API 版本
+    if not azure_endpoint:
+        raise ValueError(
+            "Neither DASHSCOPE_API_KEY nor AZURE_OPENAI_ENDPOINT is set; "
+            "please configure one of them to run GPT calls."
+        )
+
+    # Azure AD token-based client for OpenAI.
+    token_provider = get_bearer_token_provider(  # Azure AD token
         DefaultAzureCredential(
             exclude_managed_identity_credential=True
         ),
     )
     client = AzureOpenAI(
-        api_version="",
+        api_version=azure_api_version,
         azure_ad_token_provider=token_provider,
-        azure_endpoint="")
+        azure_endpoint=azure_endpoint)
     return client
 
 # client = load_gpt_azure()
@@ -69,8 +90,9 @@ def get_completion(prompt, client, n, model="gpt-35-turbo"):
     并将所有候选的 content 列表返回给上层（如规划器或代码生成器）。
     """
     global all_input_token, all_output_token
-    messages = [{"role": "user", "content": prompt}]
-    response = client.chat.completions.create(
+    # 将 prompt 包装成标准 ChatCompletion 输入格式。
+    messages = [{"role": "user", "content": prompt}]  # ChatCompletion 输入
+    response = client.chat.completions.create(  # 调用模型生成
         model=model,
         messages=messages,
         temperature=0.6,
@@ -81,8 +103,8 @@ def get_completion(prompt, client, n, model="gpt-35-turbo"):
         n=n,
         stop=None
     )
-    input_token_num = response.usage.prompt_tokens
-    output_token_num = response.usage.completion_tokens
+    input_token_num = response.usage.prompt_tokens  # 输入 token
+    output_token_num = response.usage.completion_tokens  # 输出 token
     all_input_token += input_token_num
     all_output_token += output_token_num
     # print(all_input_token, all_output_token)

@@ -1,0 +1,78 @@
+{
+  "overall_metrics": {
+    "exact_match_accuracy": 66.66666666666666,
+    "f1_score": 66.66666666666666,
+    "scale_score": 100.0,
+    "operation_score": null
+  },
+  "detail_metrics": {
+    "raw_pivot_table": [
+      {
+        "('em', 'table-text')": 3
+      }
+    ],
+    "em_detail": [
+      {
+        "('em', 'table-text')": 0.6666666666666666
+      }
+    ],
+    "f1_detail": [
+      {
+        "('f1', 'table-text')": 0.6666666666666666
+      }
+    ]
+  },
+  "per_sample_results": [
+    {
+      "uid": "q1",
+      "question": "What is the amount of total sales in 2019?",
+      "gold_answer": [
+        "$1,496.5"
+      ],
+      "pred_answer": [
+        "$1,496.5"
+      ],
+      "gold_scale": "million",
+      "pred_scale": "million",
+      "exact_match": true,
+      "f1_score": 1.0,
+      "scale_match": true
+    },
+    {
+      "uid": "q2",
+      "question": "What was the Fixed Price sales in 2018?",
+      "gold_answer": [
+        "$1,146.2"
+      ],
+      "pred_answer": [
+        "$1,146.2"
+      ],
+      "gold_scale": "million",
+      "pred_scale": "million",
+      "exact_match": true,
+      "f1_score": 1.0,
+      "scale_match": true
+    },
+    {
+      "uid": "q3",
+      "question": "What is the total sales for Q2?",
+      "gold_answer": [
+        "210"
+      ],
+      "pred_answer": [
+        "420.0"
+      ],
+      "gold_scale": "",
+      "pred_scale": "",
+      "exact_match": false,
+      "f1_score": 0.0,
+      "scale_match": true
+    }
+  ],
+  "summary": {
+    "total_samples": 3,
+    "exact_match_count": 2,
+    "scale_match_count": 3,
+    "average_f1": 0.6666666666666666
+  }
+}

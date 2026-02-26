@@ -1,0 +1,73 @@
+[
+  {
+    "table": {
+      "uid": "test-table-1",
+      "table": [
+        ["", "", "Years Ended September 30,", ""],
+        ["", "2019", "2018", "2017"],
+        ["Fixed Price", "$  1,452.4", "$  1,146.2", "$  1,036.9"],
+        ["Other", "44.1", "56.7", "70.8"],
+        ["Total sales", "$1,496.5", "$1,202.9", "$1,107.7"]
+      ]
+    },
+    "paragraphs": [
+      {
+        "uid": "para-1",
+        "order": 1,
+        "text": "Sales by Contract Type: Substantially all of our contracts are fixed-price type contracts."
+      }
+    ],
+    "questions": [
+      {
+        "uid": "q1",
+        "order": 1,
+        "question": "What is the amount of total sales in 2019?",
+        "answer": ["$1,496.5"],
+        "derivation": "",
+        "answer_type": "span",
+        "answer_from": "table-text",
+        "rel_paragraphs": ["1"],
+        "req_comparison": false,
+        "scale": "million"
+      },
+      {
+        "uid": "q2",
+        "order": 2,
+        "question": "What was the Fixed Price sales in 2018?",
+        "answer": ["$1,146.2"],
+        "derivation": "",
+        "answer_type": "span",
+        "answer_from": "table-text",
+        "rel_paragraphs": ["1"],
+        "req_comparison": false,
+        "scale": "million"
+      }
+    ]
+  },
+  {
+    "table": {
+      "uid": "test-table-2",
+      "table": [
+        ["Product", "Q1", "Q2", "Q3", "Q4"],
+        ["Widget A", "100", "120", "110", "130"],
+        ["Widget B", "80", "90", "95", "100"],
+        ["Total", "180", "210", "205", "230"]
+      ]
+    },
+    "paragraphs": [],
+    "questions": [
+      {
+        "uid": "q3",
+        "order": 1,
+        "question": "What is the total sales for Q2?",
+        "answer": ["210"],
+        "derivation": "",
+        "answer_type": "span",
+        "answer_from": "table-text",
+        "rel_paragraphs": [],
+        "req_comparison": false,
+        "scale": ""
+      }
+    ]
+  }
+]

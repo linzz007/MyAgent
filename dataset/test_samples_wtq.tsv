@@ -1,0 +1,3 @@
+id	question	table_path	answer
+test-wtq-1	what was the last year where this team was a part of the usl a-league?	test_csv/590.csv	2004
+test-wtq-2	which team won previous to crettyard?	test_csv/772.csv	Wolfe Tones

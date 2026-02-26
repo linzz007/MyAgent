@@ -36,6 +36,14 @@ class TQASessionState:
 
         # Routing / 难度与路径信息
         self.route_type: Optional[str] = None  # "SIMPLE" or "COMPLEX"
+        self.sem_score: Optional[float] = None
+        self.cell_score: Optional[float] = None
+        self.coarse_intent: Optional[str] = None
+        self.selected_columns: List[str] = []
+        self.row_filter: Dict[str, Any] = {}
+        self.table_reduced: bool = False
+        self.original_shape: Optional[Tuple[int, int]] = None
+        self.reduced_shape: Optional[Tuple[int, int]] = None
         self.semantic_features: Dict[str, Any] = {}
         self.structural_features: Dict[str, Any] = {}
         self.difficulty_score: Optional[float] = None  # 0~1 综合难度分
@@ -60,6 +68,7 @@ class TQASessionState:
 
         # Final answer
         self.final_answer: Optional[str] = None
+        self.simple_answer: Optional[str] = None
 
 
 # ------------------------ helpers ------------------------
@@ -71,13 +80,29 @@ def _build_table_schema(df: pd.DataFrame) -> Dict[str, Any]:
     Currently includes:
     - columns: list of column names
     - preview_text: a short textual preview of the first few rows
+    - num_rows / num_cols
+    - row_names_str / col_names_str
     """
     columns = list(df.columns)
     preview_df = df.head(5)
     preview_text = preview_df.to_string(index=False)
+    num_rows, num_cols = df.shape
+
+    col_labels = [str(c).strip() for c in df.columns.tolist()]
+    col_names_str: Optional[str] = "##".join(col_labels) if any(col_labels) else None
+
+    if not isinstance(df.index, pd.RangeIndex):
+        idx_labels = [str(i).strip() for i in df.index.tolist()]
+        row_names_str: Optional[str] = "##".join(idx_labels) if any(idx_labels) else None
+    else:
+        row_names_str = None
     return {
         "columns": columns,
         "preview_text": preview_text,
+        "num_rows": num_rows,
+        "num_cols": num_cols,
+        "row_names_str": row_names_str,
+        "col_names_str": col_names_str,
     }
 
 
@@ -143,207 +168,227 @@ def _find_line_startswith(text: str, prefix: str) -> str:
 # ------------------------ Router ------------------------
 
 
-ROUTER_PROMPT_TEMPLATE = """You are a classifier for table questions.
-Given a Chinese question and a table schema, decide whether solving it
-requires complex multi-step numerical reasoning.
-
-Output exactly one token: "SIMPLE" or "COMPLEX".
-
-[Question]
-{question}
-
-[Table Columns]
-{col_names}
-
-[Hints]
-- If the question only asks for a single value lookup, classification or a direct comparison between 2 cells: SIMPLE.
-- If the question requires sum/average/ratio, year-on-year/环比, difference across years or aggregations over multiple rows/columns: COMPLEX.
-
-[Answer]
-"""
+ROUTER_PROMPT_TEMPLATE = """你是一个表格问答路由器。\n\n请基于问题语义和表格结构，输出以下 JSON：\n{\n  \"sem_score\": 0-1,\n  \"coarse_intent\": \"lookup|filter|aggregation|comparison|multi_step|other\",\n  \"selected_columns\": [\"col1\", \"col2\"],\n  \"row_filter\": {\"column\": \"列名\", \"values\": [\"值1\", \"值2\"]},\n  \"semantic_flags\": {\"has_aggregation\": bool, \"has_comparison\": bool, \"has_temporal_reasoning\": bool, \"has_multi_step\": bool, \"has_ranking\": bool, \"num_constraints\": int}\n}\n\n要求：\n- 必须输出 JSON，不能附加其他文本。\n- selected_columns 为空表示不确定。\n- row_filter 为空对象表示不确定。\n\n[Question]\n{question}\n\n[Table Columns]\n{col_names}\n\n[Answer JSON]\n"""
 
 
-class RouterAgent:
-    """Router that combines semantic and structural scores.
+class InputHandler:
+    """输入管理模块：规范化问题与表格，构建轻量 schema。"""
 
-    - sem_score: semantic complexity, based on question only (0=easy,1=hard)
-    - cell_score: structural complexity, based on question + row/col names,
-                  approximated by number of cells touched / total cells
-    - total_score = w_sem * sem_score + w_cell * cell_score
-      => SIMPLE / COMPLEX decision
-    """
+    @staticmethod
+    def process_input(question: str, table: Any) -> Tuple[str, pd.DataFrame, Dict[str, Any]]:
+        normalized_question = (question or "").strip()
+        df = build_df_from_table(table)
+        table_schema = _build_table_schema(df)
+        return normalized_question, df, table_schema
 
-    def __init__(self, llm_fn: Callable[[str], str], router_prompt_template: str = ROUTER_PROMPT_TEMPLATE):
+
+class FeatureExtractor:
+    """语义特征抽取：生成 sem_score + 意图 + 行列提示。"""
+
+    def __init__(self, llm_fn: Callable[[str], str], prompt_template: str = ROUTER_PROMPT_TEMPLATE):
         self.llm_fn = llm_fn
-        self.prompt_tmpl = router_prompt_template
+        self.prompt_tmpl = prompt_template
 
-    def _rule_based_route(self, question: str) -> Optional[str]:
-        """Simple keyword-based fallback when scores are ambiguous."""
+    def _fallback(self, question: str) -> Dict[str, Any]:
         complex_keywords = [
             "增长", "增幅", "占比", "比例", "同比", "环比", "平均",
             "总和", "合计", "总计", "变化", "差值", "增速", "下降",
         ]
-        simple_triggers = ["是多少", "有多少", "是什么", "为多少"]
-
         has_complex = any(k in question for k in complex_keywords)
-        has_simple = any(k in question for k in simple_triggers)
+        sem_score = 0.7 if has_complex else 0.3
+        return {
+            "sem_score": sem_score,
+            "coarse_intent": "aggregation" if has_complex else "lookup",
+            "selected_columns": [],
+            "row_filter": {},
+            "semantic_flags": {
+                "has_aggregation": has_complex,
+                "has_comparison": False,
+                "has_temporal_reasoning": "年" in question,
+                "has_multi_step": has_complex,
+                "has_ranking": False,
+                "num_constraints": 1 if "年" in question else 0,
+            },
+        }
 
-        if has_complex:
-            return "COMPLEX"
-        if has_simple and not has_complex:
-            return "SIMPLE"
-        return None
-
-    def _score_difficulty(self, sem_score: float, cell_score: float) -> Tuple[float, str]:
-        """DifficultyScorer: 根据语义/结构两个分数，给出总分 + 难度等级。
-
-        - 输入：
-          sem_score  ∈ [0,1]  语义复杂度（越大越复杂）
-          cell_score ∈ [0,1]  结构复杂度 / 单元格覆盖比例
-        - 输出：
-          total_score ∈ [0,1]
-          difficulty_level ∈ {"easy","hard"}
-        """
-        # 加权融合，总分 0~1
-        w_sem, w_cell = 0.6, 0.4
-        total_score = w_sem * sem_score + w_cell * cell_score
-        total_score = max(0.0, min(1.0, total_score))
-
-        # 对应你 README 中的 0.0–0.3 / 0.3–0.7 / 0.7–1.0 规则
-        if total_score < 0.5:
-            level = "easy"
-        else:
-            level = "hard"
-        return total_score, level
-
-    # -------- LLM scoring helpers --------
-
-    def llm_semantic_score(self, question: str) -> float:
-        """Return a semantic complexity score in [0,1] based only on the question."""
-        prompt = f"""
-You are an expert in semantic parsing for table-based QA. Evaluate the semantic complexity of this specific table question: {question}
-
-Break down the required operations (e.g., direct lookup=simple, filter/aggregate=medium, multi-step/comparison/inference=complex). Rate on a [0-1] scale: 0=very simple (single-step retrieval), 1=very complex (multi-hop reasoning or verification).
-
-Explain reasoning in 2-3 sentences, highlighting key operations. Then, output only the score as a decimal (e.g., 0.60).
-
-[Answer]
-"""
+    def extract(self, question: str, table_schema: Dict[str, Any]) -> Tuple[float, Dict[str, Any], Dict[str, Any], str, List[str], Dict[str, Any]]:
+        col_names = "##".join([str(c) for c in table_schema.get("columns", [])])
+        prompt = self.prompt_tmpl.format(question=question, col_names=col_names)
         raw = (self.llm_fn(prompt) or "").strip()
-        m = re.search(r"\d+(\.\d+)?", raw)
-        if not m:
-            return 0.5
+        data: Dict[str, Any]
         try:
-            val = float(m.group(0))
-        except ValueError:
-            val = 0.5
-        return max(0.0, min(1.0, val))
-
-    def llm_cell_score(
-        self,
-        question: str,
-        row_names: Optional[str],
-        col_names: Optional[str],
-        df: pd.DataFrame,
-    ) -> Tuple[float, int]:
-        """Estimate which rows/columns are needed and how many cells will be touched.
-
-        Returns:
-            cell_score in [0,1]
-            estimated_cells (int)
-        """
-        row_part = row_names or "N/A"
-        col_part = col_names or "N/A"
-        prompt = f"""
-You are an assistant for estimating how many table cells are needed
-to answer a question.
-
-Given:
-- A Chinese question.
-- Candidate row names (separated by '##').
-- Candidate column names (separated by '##').
-
-1. Decide which row names and column names are actually needed.
-2. Output ONLY a JSON object in the format:
-   {{"rows": ["row_name1", ...], "cols": ["col_name1", ...]}}
-
-[Question]
-{question}
-
-[Row Candidates]
-{row_part}
-
-[Column Candidates]
-{col_part}
-
-[Answer JSON]
-"""
-        print(f"表格row_names: {row_names}")
-        print(f"表格col_names: {col_names}")
-        raw = (self.llm_fn(prompt) or "").strip()
-        try:
+            # 允许输出被包裹在代码块里
+            if raw.startswith("```"):
+                raw = raw.strip("` \n")
+                raw = raw.split("\n", 1)[-1]
             data = json.loads(raw)
-            sel_rows = list(set(data.get("rows", [])))
-            sel_cols = list(set(data.get("cols", [])))
         except Exception:
-            sel_rows, sel_cols = [], []
+            data = self._fallback(question)
 
-        n_rows, n_cols = df.shape
-        # Columns: map selected names back to actual columns; if none selected, assume all columns
-        if sel_cols:
-            used_cols = [c for c in df.columns if str(c) in sel_cols]
+        sem_score = float(data.get("sem_score", 0.5))
+        sem_score = max(0.0, min(1.0, sem_score))
+        coarse_intent = data.get("coarse_intent", "other")
+        selected_columns = data.get("selected_columns", []) or []
+        row_filter = data.get("row_filter", {}) or {}
+        semantic_flags = data.get("semantic_flags", {}) or {}
+
+        semantic_features = {
+            "sem_score": sem_score,
+            "semantic_flags": semantic_flags,
+        }
+        structural_hints = {
+            "selected_columns": selected_columns,
+            "row_filter": row_filter,
+        }
+        return sem_score, semantic_features, structural_hints, coarse_intent, selected_columns, row_filter
+
+
+class DifficultyScorer:
+    """综合难度评分器。"""
+
+    def __init__(self, w_sem: float = 0.6, w_cell: float = 0.4, threshold: float = 0.5):
+        self.w_sem = w_sem
+        self.w_cell = w_cell
+        self.threshold = threshold
+
+    def score(self, sem_score: float, cell_score: float) -> Tuple[float, str]:
+        total_score = self.w_sem * sem_score + self.w_cell * cell_score
+        total_score = max(0.0, min(1.0, total_score))
+        difficulty_level = "easy" if total_score < self.threshold else "hard"
+        return total_score, difficulty_level
+
+
+class RouterAgent:
+    """Router 模块：抽取特征、压缩表格、计算分数并做路径决策。"""
+
+    def __init__(self, llm_fn: Callable[[str], str]):
+        self.feature_extractor = FeatureExtractor(llm_fn=llm_fn)
+        self.difficulty_scorer = DifficultyScorer()
+
+    @staticmethod
+    def _filter_rows_by_column_values(df: pd.DataFrame, column: str, values: List[Any]) -> pd.DataFrame:
+        if column not in df.columns:
+            return df
+        if not values:
+            return df
+        return df[df[column].isin(values)]
+
+    def _reduce_df(self, df: pd.DataFrame, selected_columns: List[str], row_filter: Dict[str, Any]) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+        original_shape = df.shape
+
+        # 列裁剪
+        if selected_columns:
+            kept_cols = [c for c in df.columns if str(c) in [str(x) for x in selected_columns]]
+            reduced_df = df[kept_cols] if kept_cols else df
         else:
-            used_cols = list(df.columns)
+            reduced_df = df
 
-        # Rows: if any selected row names, approximate by their count; otherwise use full table
-        used_row_count = n_rows if not sel_rows else min(n_rows, len(sel_rows))
+        # 行裁剪（支持 {"column": "...", "values": [...] }）
+        col = row_filter.get("column")
+        values = row_filter.get("values") or []
+        if col and values:
+            reduced_df = self._filter_rows_by_column_values(reduced_df, col, values)
 
-        estimated_cells = max(1, used_row_count * max(1, len(used_cols)))
-        total_cells = max(1, n_rows * max(1, n_cols))
+        reduced_shape = reduced_df.shape
+        table_reduced = reduced_shape != original_shape
 
-        cell_score = estimated_cells / total_cells
-        cell_score = max(0.0, min(1.0, cell_score))
-        return cell_score, estimated_cells
+        reduce_info = {
+            "table_reduced": table_reduced,
+            "original_shape": list(original_shape),
+            "reduced_shape": list(reduced_shape),
+        }
+        return reduced_df, reduce_info
+
+    @staticmethod
+    def _compute_cell_score(original_df: pd.DataFrame, reduced_df: pd.DataFrame) -> float:
+        original_rows, original_cols = original_df.shape
+        reduced_rows, reduced_cols = reduced_df.shape
+        original_size = max(1, original_rows * max(1, original_cols))
+        reduced_size = max(1, reduced_rows * max(1, reduced_cols))
+        cell_score = reduced_size / original_size
+        return max(0.0, min(1.0, cell_score))
 
     def route(self, state: TQASessionState) -> TQASessionState:
-        """综合计算 sem_score + cell_score → difficulty_score → SIMPLE/COMPLEX。"""
-        q = state.question or ""
+        question = state.question or ""
+        original_df = state.df
 
-        # 1) semantic complexity score
-        sem_score = self.llm_semantic_score(q)
-        state.semantic_features["sem_score"] = sem_score
-
-        # 2) structural complexity score
-        row_names = state.table_schema.get("row_names_str")
-        col_names = state.table_schema.get("col_names_str")
-        cell_score, estimated_cells = self.llm_cell_score(
-            question=q,
-            row_names=row_names,
-            col_names=col_names,
-            df=state.df,
+        # 1) 特征抽取：sem_score + 结构提示
+        sem_score, semantic_features, structural_hints, coarse_intent, selected_columns, row_filter = (
+            self.feature_extractor.extract(question, state.table_schema)
         )
-        state.structural_features["cell_score"] = cell_score
-        state.structural_features["estimated_cells_touched"] = estimated_cells
+        state.sem_score = sem_score
+        state.coarse_intent = coarse_intent
+        state.selected_columns = selected_columns
+        state.row_filter = row_filter
+        state.semantic_features = semantic_features
 
-        # 3) DifficultyScorer：得到总分和难度等级
-        total_score, difficulty_level = self._score_difficulty(sem_score, cell_score)
+        # 2) 压缩表格
+        reduced_df, reduce_info = self._reduce_df(state.df, selected_columns, row_filter)
+        state.original_shape = tuple(reduce_info["original_shape"])
+        state.reduced_shape = tuple(reduce_info["reduced_shape"])
+        state.table_reduced = reduce_info["table_reduced"]
+        if state.table_reduced:
+            state.df = reduced_df
+
+        # 3) cell_score
+        reduced_rows, reduced_cols = state.df.shape
+        estimated_cells = max(1, reduced_rows * max(1, reduced_cols))
+        cell_score = self._compute_cell_score(
+            original_df=original_df,
+            reduced_df=state.df,
+        )
+        state.cell_score = cell_score
+        state.structural_features = {
+            "cell_score": cell_score,
+            "estimated_cells_touched": estimated_cells,
+        }
+
+        # 4) 综合难度
+        total_score, difficulty_level = self.difficulty_scorer.score(sem_score, cell_score)
         state.difficulty_score = total_score
         state.difficulty_level = difficulty_level
+
+        # 5) 路由决策
+        state.route_type = "SIMPLE" if difficulty_level == "easy" else "COMPLEX"
         state.routing_context = {
             "sem_score": sem_score,
             "cell_score": cell_score,
             "estimated_cells_touched": estimated_cells,
             "total_score": total_score,
             "difficulty_level": difficulty_level,
+            "coarse_intent": coarse_intent,
+            "selected_columns": selected_columns,
+            "row_filter": row_filter,
+            "table_reduced": state.table_reduced,
+            "original_shape": list(state.original_shape) if state.original_shape else None,
+            "reduced_shape": list(state.reduced_shape) if state.reduced_shape else None,
         }
+        return state
 
-        # 4) 根据难度等级进行路由：easy→SIMPLE，hard→COMPLEX，
-        if difficulty_level == "easy":
-            state.route_type = "SIMPLE"
-            return state
-        if difficulty_level == "hard":
-            state.route_type = "COMPLEX"
-            return state
+
+# ------------------------ Simple Path ------------------------
+
+
+SIMPLE_PATH_PROMPT = """你是一个表格问答助手。\n\n【问题】\n{question}\n\n【表格预览】\n{table_preview}\n\n请直接给出答案，1-2 句中文即可。\n如果可以，说明涉及的年份/地区/指标名称。\n"""
+
+
+class SimplePathAgent:
+    """简单路径：一次 LLM 直接回答。"""
+
+    def __init__(self, llm_fn: Callable[[str], str], prompt_template: str = SIMPLE_PATH_PROMPT):
+        self.llm_fn = llm_fn
+        self.prompt_tmpl = prompt_template
+
+    def run_simple_path(self, state: TQASessionState) -> TQASessionState:
+        table_preview = state.table_schema.get("preview_text", "")
+        prompt = self.prompt_tmpl.format(
+            question=state.question,
+            table_preview=table_preview,
+        )
+        answer = self.llm_fn(prompt)
+        state.simple_answer = (answer or "").strip()
+        state.final_answer = state.simple_answer
+        return state
 
 
 
@@ -649,6 +694,7 @@ class TableQAPipeline:
         calculator: Calculator,
         critic: CriticAgent,
         final_answer_agent: FinalAnswerAgent,
+        simple_agent: Optional[SimplePathAgent] = None,
         max_replan: int = 2,
     ) -> None:
         self.router = router
@@ -656,6 +702,7 @@ class TableQAPipeline:
         self.calculator = calculator
         self.critic = critic
         self.final_answer_agent = final_answer_agent
+        self.simple_agent = simple_agent
         self.max_replan = max_replan
 
     def build_state_from_table(self, question: str, table: Any) -> TQASessionState:
@@ -669,7 +716,10 @@ class TableQAPipeline:
 
         # 2) simple path
         if state.route_type == "SIMPLE":
-            state = self.final_answer_agent.respond(state)
+            if self.simple_agent:
+                state = self.simple_agent.run_simple_path(state)
+            else:
+                state = self.final_answer_agent.respond(state)
             return state
 
         # 3) complex path with planner / calculator / critic (allowing limited REPLAN)
