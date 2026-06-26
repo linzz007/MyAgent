@@ -901,7 +901,7 @@ git commit -m "feat: wire selective collaboration pipeline"
 - Modify: `code/run_wtq_myagent.py`
 - Modify: `tests/test_task_modes.py`
 
-- [ ] **Step 1: Write failing observability tests**
+- [x] **Step 1: Write failing observability tests**
 
 Add to `tests/test_task_modes.py`:
 
@@ -924,7 +924,7 @@ def test_state_observability_includes_selective_fields(self):
     self.assertIn("budget_state", payload)
 ```
 
-- [ ] **Step 2: Run focused test and confirm RED**
+- [x] **Step 2: Run focused test and confirm RED**
 
 Run:
 
@@ -934,7 +934,7 @@ python -m unittest tests.test_task_modes -v
 
 Expected: FAIL because selective fields are not emitted.
 
-- [ ] **Step 3: Add CLI flags**
+- [x] **Step 3: Add CLI flags**
 
 In both `code/tqa.py` and `code/run_wtq_myagent.py`, add:
 
@@ -973,7 +973,7 @@ if getattr(args, "limit", 0):
     table_dataset = table_dataset[: args.limit]
 ```
 
-- [ ] **Step 4: Emit selective observability**
+- [x] **Step 4: Emit selective observability**
 
 In `_state_observability`, add serializable fields:
 
@@ -1002,7 +1002,7 @@ def _to_serializable(value):
     return value
 ```
 
-- [ ] **Step 5: Run focused tests and commit Task 5**
+- [x] **Step 5: Run focused tests and commit Task 5**
 
 Run:
 
