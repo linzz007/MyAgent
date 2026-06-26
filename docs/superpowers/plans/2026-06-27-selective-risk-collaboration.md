@@ -567,7 +567,7 @@ git commit -m "feat: build selective evidence packs"
 - Create: `code/selective_collaboration.py`
 - Create: `tests/test_selective_collaboration.py`
 
-- [ ] **Step 1: Write failing collaboration tests**
+- [x] **Step 1: Write failing collaboration tests**
 
 Add this test file:
 
@@ -646,7 +646,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run focused test and confirm RED**
+- [x] **Step 2: Run focused test and confirm RED**
 
 Run:
 
@@ -656,7 +656,7 @@ python -m unittest tests.test_selective_collaboration -v
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'selective_collaboration'`.
 
-- [ ] **Step 3: Implement `code/selective_collaboration.py`**
+- [x] **Step 3: Implement `code/selective_collaboration.py`**
 
 Create:
 
@@ -729,7 +729,7 @@ Implement:
   - parses JSON object with `answer`, `confidence`, and `reasoning_summary`.
   - returns invalid `CandidateAnswer` with `failure="thinking_parse_error"` when parsing fails.
 
-- [ ] **Step 4: Run focused test and commit Task 3**
+- [x] **Step 4: Run focused test and commit Task 3**
 
 Run:
 
