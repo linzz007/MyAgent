@@ -1027,7 +1027,7 @@ git commit -m "feat: expose selective collaboration mode"
 - Modify: `code/compare_blind_results.py`
 - Modify: `tests/test_compare_blind_results.py`
 
-- [ ] **Step 1: Write failing evaluator tests**
+- [x] **Step 1: Write failing evaluator tests**
 
 Add to `tests/test_evaluate_results.py`:
 
@@ -1072,7 +1072,7 @@ def test_acceptance_uses_075_token_ratio_and_risk_deltas(self):
     self.assertEqual(result["myagent"]["avg_total_tokens"], 75)
 ```
 
-- [ ] **Step 2: Run focused tests and confirm RED**
+- [x] **Step 2: Run focused tests and confirm RED**
 
 Run:
 
@@ -1082,7 +1082,7 @@ python -m unittest tests.test_evaluate_results tests.test_compare_blind_results 
 
 Expected: FAIL because risk-stratum summaries and 0.75 acceptance fields are missing.
 
-- [ ] **Step 3: Add risk-stratum summaries**
+- [x] **Step 3: Add risk-stratum summaries**
 
 In `summarize_rows`, group evaluated rows by:
 
@@ -1102,7 +1102,7 @@ For each stratum, report:
 }
 ```
 
-- [ ] **Step 4: Update blind comparison acceptance**
+- [x] **Step 4: Update blind comparison acceptance**
 
 In `code/compare_blind_results.py`, replace the old `token_ratio_at_most_0_40` field with:
 
@@ -1124,7 +1124,7 @@ Add:
 
 Compute `risk_accuracy_deltas` for shared risk levels using `myagent["risk_strata"]` and `mact["risk_strata"]`.
 
-- [ ] **Step 5: Run focused tests and commit Task 6**
+- [x] **Step 5: Run focused tests and commit Task 6**
 
 Run:
 
