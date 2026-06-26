@@ -67,7 +67,7 @@
 - Create: `code/risk_control.py`
 - Create: `tests/test_risk_control.py`
 
-- [ ] **Step 1: Write failing formula tests**
+- [x] **Step 1: Write failing formula tests**
 
 Add this test file:
 
@@ -162,7 +162,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run the focused test and confirm RED**
+- [x] **Step 2: Run the focused test and confirm RED**
 
 Run:
 
@@ -172,7 +172,7 @@ python -m unittest tests.test_risk_control -v
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'risk_control'`.
 
-- [ ] **Step 3: Implement `code/risk_control.py`**
+- [x] **Step 3: Implement `code/risk_control.py`**
 
 Create these dataclasses and functions:
 
@@ -340,7 +340,7 @@ class RiskProfiler:
         return assessment
 ```
 
-- [ ] **Step 4: Run focused test and commit Task 1**
+- [x] **Step 4: Run focused test and commit Task 1**
 
 Run:
 
