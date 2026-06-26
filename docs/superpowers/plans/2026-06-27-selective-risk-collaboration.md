@@ -1147,7 +1147,7 @@ git commit -m "feat: report selective risk metrics"
 - Create: `code/calibrate_risk_policy.py`
 - Create: `tests/test_calibrate_risk_policy.py`
 
-- [ ] **Step 1: Write failing calibration tests**
+- [x] **Step 1: Write failing calibration tests**
 
 Add this test file:
 
@@ -1182,7 +1182,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run focused test and confirm RED**
+- [x] **Step 2: Run focused test and confirm RED**
 
 Run:
 
@@ -1192,7 +1192,7 @@ python -m unittest tests.test_calibrate_risk_policy -v
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'calibrate_risk_policy'`.
 
-- [ ] **Step 3: Implement calibration script**
+- [x] **Step 3: Implement calibration script**
 
 Create `choose_policy(rows)`:
 
@@ -1216,7 +1216,7 @@ python code/calibrate_risk_policy.py --input outputs/dev_selective/evaluated_row
 
 The CLI must read JSONL, write JSON with UTF-8 encoding, and print the selected policy.
 
-- [ ] **Step 4: Run focused test and commit Task 7**
+- [x] **Step 4: Run focused test and commit Task 7**
 
 Run:
 
