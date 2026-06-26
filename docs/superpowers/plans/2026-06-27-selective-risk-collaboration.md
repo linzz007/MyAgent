@@ -363,7 +363,7 @@ git commit -m "feat: add selective risk control"
 - Create: `code/evidence_builder.py`
 - Create: `tests/test_evidence_builder.py`
 
-- [ ] **Step 1: Write failing evidence tests**
+- [x] **Step 1: Write failing evidence tests**
 
 Add this test file:
 
@@ -452,7 +452,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run focused test and confirm RED**
+- [x] **Step 2: Run focused test and confirm RED**
 
 Run:
 
@@ -462,7 +462,7 @@ python -m unittest tests.test_evidence_builder -v
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'evidence_builder'`.
 
-- [ ] **Step 3: Implement `code/evidence_builder.py`**
+- [x] **Step 3: Implement `code/evidence_builder.py`**
 
 Create:
 
@@ -544,7 +544,7 @@ Implement `EvidenceBuilder.build(...)` using these rules:
   - list/which/how many by/tuple contract -> `contract >= 0.5`
 - Exclude every schema key containing `gold`, `answer`, `label`, or `correct` from provenance.
 
-- [ ] **Step 4: Run focused test and commit Task 2**
+- [x] **Step 4: Run focused test and commit Task 2**
 
 Run:
 
