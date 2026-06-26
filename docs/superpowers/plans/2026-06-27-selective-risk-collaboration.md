@@ -752,7 +752,7 @@ git commit -m "feat: compare selective candidates"
 - Modify: `code/my_agents.py`
 - Modify: `tests/test_myagent_pipeline.py`
 
-- [ ] **Step 1: Write failing selective pipeline tests**
+- [x] **Step 1: Write failing selective pipeline tests**
 
 Append these tests to `tests/test_myagent_pipeline.py` inside the existing pipeline test class or a new `SelectivePipelineTests` class that reuses `FakePipelineLLM`:
 
@@ -799,7 +799,7 @@ def test_legacy_mode_does_not_populate_selective_fields(self):
     self.assertIsNone(result.evidence_pack)
 ```
 
-- [ ] **Step 2: Run focused tests and confirm RED**
+- [x] **Step 2: Run focused tests and confirm RED**
 
 Run:
 
@@ -809,7 +809,7 @@ python -m unittest tests.test_myagent_pipeline.SelectivePipelineTests -v
 
 Expected: FAIL because `enable_selective_collaboration`, `risk_assessment`, `evidence_pack`, `candidate_answers`, `agreement_decision`, and `budget_state` are missing or unused.
 
-- [ ] **Step 3: Add state fields and constructor arguments**
+- [x] **Step 3: Add state fields and constructor arguments**
 
 Modify `TQASessionState.__init__` to initialize:
 
@@ -846,7 +846,7 @@ self.thinking_solver_factory = thinking_solver_factory
 self.budget_controller = BudgetController(BudgetPolicy(mact_avg_tokens=mact_avg_tokens))
 ```
 
-- [ ] **Step 4: Split legacy run into a helper**
+- [x] **Step 4: Split legacy run into a helper**
 
 Rename the current body of `TableQAPipeline.run` to `_run_legacy(self, state)` without behavior changes.
 
@@ -859,7 +859,7 @@ def run(self, state: TQASessionState) -> TQASessionState:
     return self._run_selective(state)
 ```
 
-- [ ] **Step 5: Implement `_run_selective` as a conservative wrapper**
+- [x] **Step 5: Implement `_run_selective` as a conservative wrapper**
 
 Implement `_run_selective` using this order:
 
@@ -877,7 +877,7 @@ Implement `_run_selective` using this order:
 
 Do not add ID-specific, table-specific, gold-specific, or sample-specific branches.
 
-- [ ] **Step 6: Run focused tests and commit Task 4**
+- [x] **Step 6: Run focused tests and commit Task 4**
 
 Run:
 
