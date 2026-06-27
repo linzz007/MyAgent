@@ -1306,7 +1306,7 @@ python code/evaluate_results.py outputs/selective_risk_dev_2026-06-27/crt_v4_20_
 
 Compare with the existing V4 MACT outputs when present in `outputs/blind_holdout_v4_2026-06-24/`.
 
-- [ ] **Step 6: Produce a concise development report**
+- [x] **Step 6: Produce a concise development report**
 
 Create `outputs/selective_risk_dev_2026-06-27/REPORT.md` with:
 
@@ -1317,7 +1317,11 @@ Create `outputs/selective_risk_dev_2026-06-27/REPORT.md` with:
 - Any remaining gap versus MACT.
 - The next formal blind protocol: at least 100 random unseen samples per dataset, table-ID isolation, code frozen before scoring.
 
-- [ ] **Step 7: Commit final verified state**
+Completed in `outputs/selective_risk_dev_2026-06-27/REPORT.md`. Current small
+development sample: WTQ 4/5, TabFact 4/5, CRT 5/5, combined 13/15, average API
+tokens 2732.3.
+
+- [x] **Step 7: Commit final verified state**
 
 Run:
 
