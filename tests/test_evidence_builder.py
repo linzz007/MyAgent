@@ -77,6 +77,34 @@ class EvidenceBuilderTests(unittest.TestCase):
         self.assertGreaterEqual(pack.operation_signals["contract"], 0.5)
         self.assertIn("Method", pack.candidate_columns)
 
+    def test_semantic_stressors_raise_logic_and_dependency_signals(self):
+        df = pd.DataFrame(
+            {
+                "Location": ["Park A", "Park B"],
+                "rank 2008": [3, 11],
+                "rank 2012": [8, 4],
+            }
+        )
+        contract = infer_answer_contract(
+            "Are there any locations that consistently ranked in the top 10 "
+            "from 2008 to 2012?",
+            answer_mode="yes_no",
+        )
+        pack = EvidenceBuilder().build(
+            question=(
+                "Are there any locations that consistently ranked in the top "
+                "10 from 2008 to 2012?"
+            ),
+            df=df,
+            schema={"column_profiles": []},
+            dataset_name="crt",
+            answer_contract=contract,
+        )
+
+        self.assertIn("temporal_consistency", pack.operation_hints)
+        self.assertGreaterEqual(pack.operation_signals["logic"], 0.8)
+        self.assertGreaterEqual(pack.operation_signals["dependency"], 0.8)
+
     def test_pack_serialization_excludes_gold_answer(self):
         df = pd.DataFrame({"Name": ["A"], "Value": [1]})
         contract = infer_answer_contract("What is the value for A?")

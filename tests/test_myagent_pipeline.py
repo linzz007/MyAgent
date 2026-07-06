@@ -21,6 +21,7 @@ from my_agents import (  # noqa: E402
     TableCompressor,
     TableQAPipeline,
     _build_table_schema,
+    _canonicalize_crt_scalar,
     _canonicalize_wtq_scalar,
     _strip_entity_metadata,
     _strip_code_fence,
@@ -41,6 +42,7 @@ class FakePipelineLLM:
         direct_answer_output='{"answer":"100,000"}',
         planner_outputs=None,
         verification_output='{"label":"true"}',
+        thinking_output='{"answer":"verified answer","confidence":0.9,"reasoning_summary":"checked independently"}',
     ):
         self.semantic_score = semantic_score
         self.rows = rows
@@ -49,6 +51,7 @@ class FakePipelineLLM:
         self.direct_answer_output = direct_answer_output
         self.planner_outputs = list(planner_outputs or [])
         self.verification_output = verification_output
+        self.thinking_output = thinking_output
         self.prompts = []
 
     def __call__(self, prompt: str) -> str:
@@ -63,6 +66,8 @@ class FakePipelineLLM:
             return self.classification_output
         if "TabFact verification judge" in prompt:
             return self.verification_output
+        if "final high-risk verifier" in prompt:
+            return self.thinking_output
         if "direct table QA extractor" in prompt:
             return self.direct_answer_output
         if "table reasoning planner and programmer" in prompt:
@@ -154,6 +159,34 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, "Ryan Dalziel")
+
+    def test_wtq_numeric_scalar_is_not_expanded_to_entity_cell(self):
+        df = pd.DataFrame({"Notes": ["B1-2 details"], "Medals": ["2"]})
+
+        value = _canonicalize_wtq_scalar(
+            "2",
+            df,
+            "how many silver medals did christian lanthaler receive?",
+        )
+
+        self.assertEqual(value, "2")
+
+    def test_crt_combination_scalar_is_reordered_by_table_column_order(self):
+        df = pd.DataFrame(
+            {
+                "directed by": ["dean parisot"],
+                "written by": ["ted humphrey"],
+                "us viewers": [12.76],
+            }
+        )
+
+        value = _canonicalize_crt_scalar(
+            "ted humphrey & dean parisot",
+            "Which combination of writer and director had the highest average viewers?",
+            df,
+        )
+
+        self.assertEqual(value, "dean parisot, ted humphrey")
 
     def test_entity_metadata_suffix_is_removed_from_requested_name(self):
         self.assertEqual(
@@ -1393,6 +1426,685 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertEqual(result.final_answer, "9.173")
         self.assertNotIn("table reasoning planner", "\n".join(fake.prompts))
 
+    def test_wtq_last_character_question_returns_last_row_entity(self):
+        df = pd.DataFrame(
+            {
+                "position": [1, 2, 3],
+                "character": ["alpha", "bravo", "diams"],
+                "actor": ["a", "b", "c"],
+            }
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.05,
+            rows=["diams"],
+            cols=["character"],
+            direct_answer_output='{"answer":"le"}',
+        )
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="What is the name of the last character in the table?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.final_value, "diams")
+        self.assertEqual(result.final_answer, "diams")
+        self.assertNotIn("direct table QA extractor", "\n".join(fake.prompts))
+
+    def test_wtq_top_placing_competitor_shortcut_uses_lowest_rank(self):
+        df = pd.DataFrame({"Place": [2, "Semifinal (1st)"], "Competitor": ["Runner B", "Runner A"]})
+
+        value = TableQAPipeline._wtq_top_placing_competitor_answer(
+            "who was the top placing competitor?",
+            df,
+        )
+
+        self.assertEqual(value, "Runner A")
+
+    def test_wtq_duration_shortcut_returns_elapsed_minutes(self):
+        df = pd.DataFrame(
+            {
+                "Departure": ["11.34"],
+                "Arrival": ["12.05"],
+                "Going to": ["Grantham"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_duration_answer(
+            "how long does it take to get to grantham when departing at 11.34?",
+            df,
+        )
+
+        self.assertEqual(value, "31 minutes")
+
+    def test_wtq_combined_numbers_shortcut_sums_requested_metric(self):
+        df = pd.DataFrame(
+            {
+                "Season": [2008, 2009, 2010, 2011],
+                "Super G": [46, 16, 6, 99],
+                "Combined": [31, 1, 2, 3],
+            }
+        )
+
+        value = TableQAPipeline._wtq_combined_numbers_for_column_answer(
+            "before 2011 whats the combined numbers for super g?",
+            df,
+        )
+
+        self.assertEqual(value, 68)
+
+    def test_wtq_chart_threshold_shortcut_counts_unique_values(self):
+        df = pd.DataFrame({"Builder": ["A", "B", "C", "C"]})
+
+        value = TableQAPipeline._wtq_unique_count_threshold_answer(
+            "are there at least 4 builders on the chart?",
+            df,
+        )
+
+        self.assertEqual(value, "no")
+
+    def test_wtq_frequency_and_last_column_shortcuts_are_deterministic(self):
+        race_df = pd.DataFrame(
+            {
+                "Race": ["A", "B", "C", "D"],
+                "Winning team": ["Team Penske", "Doug Shierson Racing", "Team Penske", "Newman/Haas"],
+            }
+        )
+        history_df = pd.DataFrame(
+            {
+                "Year": [1972, 1973, 1996],
+                "Team": ["Automobiles Ligier", "Automobiles Ligier", "Team Bigazzi SRL"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._wtq_no_more_than_once_answer(
+                "which team(s)did not win more than once?",
+                race_df,
+            ),
+            ["Doug Shierson Racing", "Newman/Haas"],
+        )
+        self.assertEqual(
+            TableQAPipeline._wtq_last_requested_column_answer(
+                "what was the last team that this racer was a part of at this race?",
+                history_df,
+            ),
+            "Team Bigazzi SRL",
+        )
+
+    def test_tabfact_only_set_equality_shortcut_checks_unique_entities(self):
+        df = pd.DataFrame(
+            {
+                "broadcaster": ["FOX", "CBS", "FOX", "CBS", "tba", "tba"],
+                "series": ["NFL International Series"] * 6,
+            }
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.05,
+            rows=["FOX"],
+            cols=["broadcaster"],
+            classification_output='{"label":"false"}',
+        )
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="Only FOX and CBS have broadcast the NFL International Series.",
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="true_false",
+            dataset_profile="tabfact",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.final_value, "true")
+        self.assertEqual(result.final_answer, "true")
+        self.assertNotIn("closed-label table classifier", "\n".join(fake.prompts))
+
+    def test_tabfact_no_date_week_greater_shortcut_uses_normalized_date(self):
+        df = pd.DataFrame(
+            {
+                "date": ["October 30, 1977", "November 6, 1977"],
+                "week": [7, 8],
+                "game": ["A", "B"],
+            }
+        )
+        planner_output = (
+            "[PLAN]\nStep1: Wrongly compare the week.\n[CODE]\n"
+            "final_answer_value = False\n"
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.8,
+            rows=["October 30, 1977"],
+            cols=["date", "week"],
+            planner_outputs=[planner_output],
+            verification_output='{"label":"false"}',
+        )
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question=(
+                "There is no game that was played on October 30, 1977 that was "
+                "listed greater than week 7."
+            ),
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="true_false",
+            dataset_profile="tabfact",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.final_value, "true")
+        self.assertEqual(result.final_answer, "true")
+        self.assertNotIn("table reasoning planner", "\n".join(fake.prompts))
+
+    def test_tabfact_inverse_correlation_shortcut_accepts_negative_trend(self):
+        df = pd.DataFrame(
+            {
+                "team": ["a", "b", "c", "d"],
+                "games": [7, 7, 7, 7],
+                "total points": [100, 90, 70, 55],
+                "lost": [1, 2, 4, 6],
+            }
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.05,
+            rows=[],
+            cols=["total points", "games lost"],
+            classification_output='{"label":"false"}',
+        )
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="Total points have an inverse correlation to number of games lost.",
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="true_false",
+            dataset_profile="tabfact",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.final_value, "true")
+        self.assertEqual(result.final_answer, "true")
+        self.assertNotIn("closed-label table classifier", "\n".join(fake.prompts))
+
+    def test_tabfact_fuzzy_row_inclusion_tolerates_minor_entity_typo(self):
+        df = pd.DataFrame(
+            {
+                "year": ["2005"],
+                "award": ["tony award"],
+                "category": ["best costume design"],
+                "nominee": ["william ivey long"],
+                "result": ["nominated"],
+            }
+        )
+
+        value = TableQAPipeline._tabfact_fuzzy_row_inclusion_answer(
+            "nominee for best costume design in 2005 at the tony award be qilliam ivey long",
+            df,
+        )
+
+        self.assertEqual(value, "true")
+
+    def test_tabfact_score_threshold_count_uses_team_side_of_score(self):
+        df = pd.DataFrame(
+            {
+                "visitor": ["cleveland", "toronto", "cleveland"],
+                "score": ["101 - 97", "120 - 97", "99 - 88"],
+                "home": ["detroit", "cleveland", "indiana"],
+            }
+        )
+
+        value = TableQAPipeline._tabfact_team_score_count_answer(
+            "cleveland score 100 or more point in 1 game",
+            df,
+        )
+
+        self.assertEqual(value, "true")
+
+    def test_tabfact_overtime_count_and_win_difference_shortcuts(self):
+        overtime_df = pd.DataFrame({"score": ["2 - 2 ot", "1 - 0", "3 - 3 ot"]})
+        race_df = pd.DataFrame({"winner": ["dick johnson", "john bowe", "dick johnson"]})
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_overtime_count_answer(
+                "the season go into overtime in 2 game",
+                overtime_df,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_win_difference_answer(
+                "dick johnson win 1 more race than john bowe in the championship",
+                race_df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_highest_location_and_same_city_shortcuts(self):
+        school_df = pd.DataFrame(
+            {
+                "institution": ["A", "B"],
+                "location": ["rio grande , ohio", "x , kentucky"],
+                "enrollment": [3000, 2000],
+            }
+        )
+        host_df = pd.DataFrame(
+            {
+                "host": ["villanova university", "saint joseph 's university"],
+                "venue": ["the pavilion", "alumni memorial fieldhouse"],
+                "city": ["villanova", "philadelphia"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_highest_location_numeric_answer(
+                "institution locate in ohio have the highest average enrollment",
+                school_df,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_same_city_host_answer(
+                "saint joseph 's university host at alumni memorial fieldhouse , locate in the same city as villanova university",
+                host_df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_second_stage_classification_winner_shortcut(self):
+        df = pd.DataFrame(
+            {
+                "stage": [1, 2, 3, 4],
+                "winner": ["a", "lucas sebastian haedo", "b", "lucas sebastian haedo"],
+                "mountains classification": ["x", "x", "kenneth hanson", "kenneth hanson"],
+            }
+        )
+
+        value = TableQAPipeline._tabfact_second_stage_classification_winner_answer(
+            "kenneth hanson 's second stage as the mountain classification be when lucas sebastian haedo be the winner",
+            df,
+        )
+
+        self.assertEqual(value, "true")
+
+    def test_tabfact_numeric_count_and_highest_score_shortcuts(self):
+        built = pd.DataFrame(
+            {
+                "model": ["300sel 6.3", "300sel 3.5", "300sel 4.5"],
+                "number built": [6.526, 9.483, 2.533],
+            }
+        )
+        diseases = pd.DataFrame(
+            {
+                "family": ["a", "b", "c", "d"],
+                "replication site": ["nucleus", "cytoplasm", "nucleus", "nucleus"],
+            }
+        )
+        games = pd.DataFrame(
+            {
+                "date": ["july 19", "july 20", "july 21"],
+                "score": ["5 - 2", "10 - 9", "8 - 7"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_numeric_difference_from_max_answer(
+                "300sel 6.3 have 2.957 fewer number built than the model with the highest number built",
+                built,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_column_value_count_answer(
+                "3 of the viral disease replicate in the nucleus",
+                diseases,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_highest_scoring_game_answer(
+                "the highest scoring game be july 20 , 19 run be score",
+                games,
+            ),
+            "true",
+        )
+
+    def test_tabfact_row_condition_and_unique_away_winner_shortcuts(self):
+        doubles_df = pd.DataFrame(
+            {
+                "mens singles": ["jamie van hooijdonk", "irwansyah"],
+                "womens doubles": ["kerry ann sheppard caroline harvey", "caroline harvey carissa turner"],
+            }
+        )
+        fixture_df = pd.DataFrame(
+            {
+                "home team": ["footscray", "fitzroy", "essendon"],
+                "home team score": ["12.9 (81)", "12.25 (97)", "15.17 (107)"],
+                "away team": ["south melbourne", "richmond", "hawthorn"],
+                "away team score": ["9.10 (64)", "16.9 (105)", "14.21 (105)"],
+                "date": ["27 may 1972", "27 may 1972", "27 may 1972"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_row_condition_count_answer(
+                "there be 1 woman 's double team consist of kerry ann sheppard and carolina harvey when jamie van hooijdonk compete in the men 's single",
+                doubles_df,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_unique_side_winner_answer(
+                "on may 27 only 1 away team , richmond , win their game",
+                fixture_df,
+            ),
+            "true",
+        )
+
+    def test_crt_consecutive_year_medalist_shortcut_checks_all_medal_columns(self):
+        df = pd.DataFrame(
+            {
+                "year": [1990, 1991, 1993],
+                "gold": ["satu pusila ( fin )", "satu pusila ( fin )", "other"],
+                "silver": ["alpha", "beta", "gamma"],
+                "bronze": ["delta", "epsilon", "zeta"],
+            }
+        )
+
+        value = TableQAPipeline._crt_consecutive_year_medalist_answer(
+            "Have any athletes won medals in the Double Trap competition in consecutive years?",
+            df,
+        )
+
+        self.assertEqual(value, "Yes")
+
+    def test_crt_scalar_shortcuts_cover_counts_ratios_and_modes(self):
+        electors = pd.DataFrame(
+            {"cardinalatial title": ["priest of a", "deacon of b", "priest of c"]}
+        )
+        draft = pd.DataFrame({"nationality": ["canada", "canada", "usa", "russia"]})
+        sources = pd.DataFrame({"order and title": ["cardinal - deacon", "cardinal - priest", "cardinal - deacon"]})
+
+        self.assertEqual(
+            TableQAPipeline._crt_count_role_answer("How many of the electors were priests?", electors),
+            2,
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_proportion_nationality_answer(
+                "What is the proportion of Canadian to non-Canadian players drafted?",
+                draft,
+            ),
+            "1:1",
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_common_cardinal_source_answer(
+                "What is the most common source of elevation to cardinalhood (bishop, priest, deacon)?",
+                sources,
+            ),
+            "deacon",
+        )
+
+    def test_crt_first_architecture_leftover_and_viewership_shortcuts(self):
+        windows = pd.DataFrame(
+            {
+                "name": ["windows nt", "windows 2000", "windows xp"],
+                "release date": ["1999 - 01 - 01", "2000 - 02 - 17", "2001 - 10 - 25"],
+                "supported architectures": ["ia - 32", "ia - 32 , ia - 64", "ia - 32 , x86 - 64"],
+            }
+        )
+        funds = pd.DataFrame(
+            {
+                "candidate": ["a", "barack obama", "combined total"],
+                "all receipts": [10, 100, 110],
+                "all disbursements": [8, 40, 48],
+            }
+        )
+        episodes = pd.DataFrame(
+            {"title": ["Big Time Gold", "Other"], "us viewers": [10.0, 5.0]}
+        )
+
+        self.assertEqual(
+            TableQAPipeline._crt_first_supported_architecture_answer(
+                "Which version of Windows was the first to support 64-bit architecture?",
+                windows,
+            ),
+            "windows 2000",
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_largest_money_leftover_answer(
+                "Who had the largest amount of money left over after all disbursements were made?",
+                funds,
+            ),
+            "barack obama",
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_episode_viewership_vs_season_average_answer(
+                'How does the viewership of the "Big Time Gold" episode compare to the average viewership of the season it was aired in?',
+                episodes,
+            ),
+            "better",
+        )
+
+    def test_crt_duplicate_victory_type_and_diverse_content_shortcuts(self):
+        leaders = pd.DataFrame({"player": ["a", "b", "a"]})
+        fights = pd.DataFrame(
+            {
+                "res": ["win", "win", "win", "loss"],
+                "method": ["decision (split)", "decision (unanimous)", "tko", "submission"],
+            }
+        )
+        tv = pd.DataFrame({"content": ["calcio", "calcio , ppv wrestling"]})
+
+        self.assertEqual(
+            TableQAPipeline._crt_duplicate_named_entity_answer(
+                "Are there any players who have led in more than one Grand Slam tournament?",
+                leaders,
+            ),
+            "Yes",
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_victory_type_stands_out_answer(
+                "Does Rob Emerson have any specific type of victory that stands out more than others?",
+                fights,
+            ),
+            "Yes",
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_diverse_content_beyond_answer(
+                "Are there any specific television services that stand out in terms of offering diverse content beyond football (calcio)?",
+                tv,
+            ),
+            "Yes",
+        )
+
+    def test_crt_medal_probability_ratio_and_owner_shortcuts(self):
+        medals = pd.DataFrame(
+            {
+                "rank": [1, 2, 3],
+                "nation": ["netherlands", "france", "spain"],
+                "gold": [1, 2, 0],
+                "silver": [2, 0, 3],
+                "bronze": [0, 1, 1],
+                "total": [3, 3, 4],
+            }
+        )
+        stations = pd.DataFrame(
+            {
+                "call sign": ["a", "b", "c", "d", "e"],
+                "owner": ["harvard broadcasting", "other", "harvard broadcasting", "other", "other"],
+            }
+        )
+        sports = pd.DataFrame(
+            {
+                "nation": ["a", "b", "a"],
+                "sport": ["skiing", "skiing", "skating"],
+                "gold": [2, 0, 1],
+                "silver": [1, 1, 0],
+                "bronze": [1, 1, 0],
+                "total": [4, 2, 1],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._crt_owned_percentage_answer(
+                "What percentage of radio stations in Melville are owned by Harvard Broadcasting",
+                stations,
+            ),
+            0.4,
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_medal_probability_answer(
+                "What is the probability that a randomly chosen medalist in the championships is from the Netherlands?",
+                medals,
+            ),
+            "30.0%",
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_medal_ratio_answer(
+                "What is the ratio of silver to gold medals among the nations that earned a gold medal?",
+                medals,
+            ),
+            "2:3",
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_medal_ratio_answer(
+                "What is the ratio of gold medals to total medals won by the top three countries combined?",
+                medals,
+            ),
+            0.3,
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_majority_medal_by_group_answer(
+                "Are there any sports in which a single country won the majority of medals?",
+                sports,
+            ),
+            "Yes",
+        )
+
+    def test_crt_recognition_category_shortcut_detects_repeated_award_theme(self):
+        df = pd.DataFrame(
+            {
+                "award": [
+                    "milf / cougar performer of the year",
+                    "best cougar / milf performer",
+                    "web star of the year",
+                ],
+                "result": ["nominated", "won", "nominated"],
+            }
+        )
+
+        value = TableQAPipeline._crt_recognition_category_advantage_answer(
+            "Are there any award categories for which Brandi Love has a greater chance of being recognized compared to other categories?",
+            df,
+        )
+
+        self.assertEqual(value, "Yes")
+
+    def test_crt_century_manufacturing_shortcut_counts_year_ranges(self):
+        df = pd.DataFrame(
+            {
+                "locomotive": ["A", "B", "C", "D"],
+                "manufactured": ["1888-1899", "1899-1901", "1902", "1904"],
+            }
+        )
+        planner_output = (
+            "[PLAN]\nStep1: Count only start years.\n[CODE]\n"
+            "final_answer_value = 'less'\n"
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.8,
+            rows=[],
+            cols=["manufactured"],
+            planner_outputs=[planner_output],
+        )
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question=(
+                "How does the quantity of locomotives manufactured in the 1900s "
+                "compare to those manufactured in the 1800s? Answer with only "
+                "'more', 'less' or 'equal' and nothing else."
+            ),
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="more_less_equal",
+            dataset_profile="crt",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.final_value, "more")
+        self.assertEqual(result.final_answer, "more")
+        self.assertNotIn("table reasoning planner", "\n".join(fake.prompts))
+
+    def test_crt_consistent_top_k_shortcut_intersects_years(self):
+        df = pd.DataFrame(
+            {
+                "location": ["Park A", "Park B", "Park C"],
+                "rank": [1, 2, 3],
+                "2008": [100, 90, 80],
+                "2009": [101, 91, 81],
+                "2010": [102, 92, 82],
+                "2011": [103, 93, 83],
+                "2012": [104, 94, 84],
+            }
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.05,
+            rows=["Park A"],
+            cols=["rank 2008", "rank 2012"],
+            classification_output='{"label":"No"}',
+        )
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question=(
+                "Are there any locations that have consistently ranked in the top "
+                "10 amusement parks in the United States from 2008 to 2012?"
+            ),
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="yes_no",
+            dataset_profile="crt",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.final_value, "Yes")
+        self.assertEqual(result.final_answer, "Yes")
+        self.assertNotIn("closed-label table classifier", "\n".join(fake.prompts))
+
+    def test_crt_hemisphere_answer_is_completed_to_full_label(self):
+        df = pd.DataFrame(
+            {
+                "event": ["a", "b", "c"],
+                "country": ["china", "japan", "united states"],
+            }
+        )
+        planner_output = (
+            "[PLAN]\nStep1: Count hemispheres.\n[CODE]\n"
+            "final_answer_value = 'Eastern'\n"
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.8,
+            rows=[],
+            cols=["country"],
+            planner_outputs=[planner_output],
+        )
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="Are there more events held in the eastern or western hemisphere?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="crt",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.final_value, "eastern hemisphere")
+        self.assertEqual(result.final_answer, "eastern hemisphere")
+
     def test_classification_rejects_output_without_allowed_label(self):
         df = pd.DataFrame({"Event": ["A"], "Acts": [5]})
         fake = FakePipelineLLM(
@@ -1467,6 +2179,84 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertIsNotNone(result.agreement_decision)
         self.assertIsInstance(result.candidate_answers, list)
+
+    def test_selective_high_risk_question_runs_strong_verifier(self):
+        df = pd.DataFrame(
+            {
+                "Rank": [2, 1],
+                "Competitor": ["Wrong Runner", "Esther Shahamorov"],
+            }
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.05,
+            rows=[],
+            cols=["Competitor"],
+            direct_answer_output='{"answer":"Wrong Runner"}',
+            thinking_output=(
+                '{"answer":"Esther Shahamorov","confidence":0.92,'
+                '"reasoning_summary":"top placing competitor is rank 1"}'
+            ),
+        )
+        tracker = LLMCallTracker(fake)
+        pipeline = TableQAPipeline(
+            router=RouterAgent(tracker),
+            planner=PlannerAgent(tracker),
+            calculator=Calculator(),
+            critic=CriticAgent(tracker),
+            final_answer_agent=FinalAnswerAgent(tracker),
+            enable_selective_collaboration=True,
+        )
+        state = TQASessionState(
+            question="who was the top placing competitor?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.final_value, "Esther Shahamorov")
+        self.assertTrue(result.strong_verification_applied)
+        self.assertIn("superlative_order", result.problem_tags)
+        self.assertTrue(any("final high-risk verifier" in prompt for prompt in fake.prompts))
+
+    def test_deterministic_shortcut_is_not_overwritten_by_wrong_verifier(self):
+        df = pd.DataFrame(
+            {
+                "Rank": [2, 1],
+                "Competitor": ["Wrong Runner", "Esther Shahamorov"],
+            }
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.05,
+            rows=[],
+            cols=["Competitor"],
+            thinking_output=(
+                '{"answer":"Wrong Runner","confidence":0.98,'
+                '"reasoning_summary":"incorrectly trusted a non-top row"}'
+            ),
+        )
+        tracker = LLMCallTracker(fake)
+        pipeline = TableQAPipeline(
+            router=RouterAgent(tracker),
+            planner=PlannerAgent(tracker),
+            calculator=Calculator(),
+            critic=CriticAgent(tracker),
+            final_answer_agent=FinalAnswerAgent(tracker),
+            enable_selective_collaboration=True,
+        )
+        state = TQASessionState(
+            question="who was the top placing competitor?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.final_value, "Esther Shahamorov")
+        self.assertTrue(result.deterministic_shortcut_applied)
+        self.assertEqual(result.agreement_decision.reason, "deterministic_shortcut_preserved")
 
     def test_legacy_mode_does_not_populate_selective_fields(self):
         df = pd.DataFrame({"Name": ["Alpha"], "Value": [7]})

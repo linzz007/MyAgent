@@ -1,0 +1,54 @@
+{
+  "protocol": "blind_holdout_v3",
+  "base_seed": 2734090110644773824,
+  "sample_size_per_dataset": 20,
+  "excluded_prior_ids": 126,
+  "excluded_prior_tables": 117,
+  "datasets": {
+    "wtq": {
+      "seed": 2734090110644773824,
+      "source_records": 4344,
+      "eligible_records": 3756,
+      "records": 20,
+      "unique_tables": 20,
+      "category_counts": {
+        "all": 20
+      },
+      "prior_id_overlap": 0,
+      "prior_table_overlap": 0,
+      "sha256": "c45eb12ffeab7119b7f2ded960c168ea7626405cbb2187c486ba61fb72c92d9b",
+      "file": "datasets_ready\\blind_holdout_v3_2026-06-24\\wtq.jsonl"
+    },
+    "tabfact": {
+      "seed": 2734090110644878553,
+      "source_records": 12779,
+      "eligible_records": 12366,
+      "records": 20,
+      "unique_tables": 20,
+      "category_counts": {
+        "false": 10,
+        "true": 10
+      },
+      "prior_id_overlap": 0,
+      "prior_table_overlap": 0,
+      "sha256": "883f2471feb83ac5093708e25979cb85fc7b4d478796955e05a4101fd5c1665c",
+      "file": "datasets_ready\\blind_holdout_v3_2026-06-24\\tabfact.jsonl"
+    },
+    "crt": {
+      "seed": 2734090110644983282,
+      "source_records": 728,
+      "eligible_records": 635,
+      "records": 20,
+      "unique_tables": 20,
+      "category_counts": {
+        "yes_no": 7,
+        "general": 7,
+        "closed_other": 6
+      },
+      "prior_id_overlap": 0,
+      "prior_table_overlap": 0,
+      "sha256": "cc34a83cc0fd33e5004e45813c8278ea9a7dc44f64377ee3ce302621e168234c",
+      "file": "datasets_ready\\blind_holdout_v3_2026-06-24\\crt.jsonl"
+    }
+  }
+}

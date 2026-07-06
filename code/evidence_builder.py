@@ -256,6 +256,14 @@ class EvidenceBuilder:
         if re.search(r"\b(and|or|not|no|only|either|both)\b", text):
             operation_hints.append("logic")
             logic = max(logic, 0.5)
+        if re.search(
+            r"\b(consistently|correlation|inverse|ranked?|top\s+\d+|"
+            r"from\s+\d{4}\s+to\s+\d{4}|1[89]00s)\b",
+            text,
+        ):
+            operation_hints.append("temporal_consistency")
+            dependency = max(dependency, 0.8)
+            logic = max(logic, 0.8)
         if re.search(r"\b(average|mean|percent|percentage|rate|ratio|unit|miles|kg)\b|%", text):
             operation_hints.append("unit")
             unit = max(unit, 0.5)

@@ -53,6 +53,22 @@ def _metric_delta(before, after):
     }
 
 
+def _append_jsonl_with_retry(path, item, attempts=5, delay_seconds=0.5):
+    payload = json.dumps(item, ensure_ascii=False, default=_json_default) + "\n"
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            with open(path, "a", encoding="utf-8") as fout:
+                fout.write(payload)
+            return
+        except PermissionError as exc:
+            last_error = exc
+            if attempt == attempts - 1:
+                break
+            time.sleep(delay_seconds * (attempt + 1))
+    raise last_error
+
+
 def _to_serializable(value):
     if value is None:
         return None
@@ -82,6 +98,19 @@ def _state_observability(state):
         "risk_level": getattr(state, "risk_level", ""),
         "risk_assessment": _to_serializable(getattr(state, "risk_assessment", None)),
         "post_risk_assessment": _to_serializable(getattr(state, "post_risk_assessment", None)),
+        "problem_tags": list(getattr(state, "problem_tags", [])),
+        "strong_verification_applied": bool(
+            getattr(state, "strong_verification_applied", False)
+        ),
+        "strong_verification_reason": getattr(state, "strong_verification_reason", ""),
+        "deterministic_shortcut_applied": bool(
+            getattr(state, "deterministic_shortcut_applied", False)
+        ),
+        "deterministic_shortcut_reason": getattr(
+            state,
+            "deterministic_shortcut_reason",
+            "",
+        ),
         "evidence_pack": _to_serializable(getattr(state, "evidence_pack", None)),
         "candidate_answers": _to_serializable(getattr(state, "candidate_answers", [])),
         "agreement_decision": _to_serializable(getattr(state, "agreement_decision", None)),
@@ -114,6 +143,7 @@ def answer_mode_for_sample(task: str, question: str) -> str:
         return ""
 
     text = question or ""
+    normalized_choice_text = re.sub(r"\bmroe\b", "more", text, flags=re.I)
     if re.search(
         r"\b(proportion|number|count)\b.*\bcompared\s+to\b",
         text,
@@ -130,7 +160,7 @@ def answer_mode_for_sample(task: str, question: str) -> str:
         flags=re.I,
     ):
         return "yes_no"
-    if not re.search(r"answer\s+with\s+only\b", text, flags=re.IGNORECASE):
+    if not re.search(r"answer\s+with\s+only\b", normalized_choice_text, flags=re.IGNORECASE):
         return ""
 
     modes = (
@@ -144,7 +174,7 @@ def answer_mode_for_sample(task: str, question: str) -> str:
         ("better_worse", ("better", "worse")),
     )
     for mode, labels in modes:
-        if all(re.search(rf"\b{re.escape(label)}\b", text, flags=re.I) for label in labels):
+        if all(re.search(rf"\b{re.escape(label)}\b", normalized_choice_text, flags=re.I) for label in labels):
             return mode
     return ""
 
@@ -196,6 +226,8 @@ def main(args):
         final_answer_agent=final_answer_agent,
         enable_multi_view_validation=args.enable_multiview_validation,
         enable_selective_collaboration=getattr(args, "collaboration_mode", "selective") != "legacy",
+        enable_strong_verification=not getattr(args, "disable_strong_verification", False),
+        enable_deterministic_shortcuts=not getattr(args, "disable_deterministic_shortcuts", False),
         mact_avg_tokens=getattr(args, "mact_avg_tokens", 8867.0),
         max_replan=args.max_replan,
     )
@@ -322,10 +354,7 @@ def main(args):
             item["final_answer"] = state.final_answer
             item["gold_answer"] = row.get("answer") or row.get("targetValue") or row.get("target_value") or ""
 
-            with open(output_path, "a", encoding="utf-8") as fout:
-                fout.write(
-                    json.dumps(item, ensure_ascii=False, default=_json_default) + "\n"
-                )
+            _append_jsonl_with_retry(output_path, item)
 
             trial += 1
             print(f"Finished sample {trial}/{len(table_dataset)}")
@@ -471,6 +500,16 @@ if __name__ == "__main__":
         choices=["legacy", "selective", "calibration"],
         default="selective",
         help="Select legacy myAgent or risk-driven selective collaboration.",
+    )
+    parser.add_argument(
+        "--disable_strong_verification",
+        action="store_true",
+        help="Disable high-risk LLM strong verification for ablation experiments.",
+    )
+    parser.add_argument(
+        "--disable_deterministic_shortcuts",
+        action="store_true",
+        help="Disable deterministic semantic verifier shortcuts for ablation experiments.",
     )
     parser.add_argument(
         "--mact_avg_tokens",

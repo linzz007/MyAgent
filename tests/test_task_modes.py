@@ -199,6 +199,13 @@ class TaskModeTests(unittest.TestCase):
         self.assertEqual(
             answer_mode_for_sample(
                 "crt",
+                "Answer with only 'mroe', 'less' or 'equal'.",
+            ),
+            "more_less_equal",
+        )
+        self.assertEqual(
+            answer_mode_for_sample(
+                "crt",
                 "Answer with only 'better' or 'worse'.",
             ),
             "better_worse",

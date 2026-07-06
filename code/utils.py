@@ -26,11 +26,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import os
-import joblib
+try:
+    import joblib
+except ImportError:
+    joblib = None
 import json
 import pandas as pd
 import random
-import tiktoken
+try:
+    import tiktoken
+except ImportError:
+    tiktoken = None
 import re
 # random.seed(42)
 

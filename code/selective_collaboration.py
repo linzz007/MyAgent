@@ -204,15 +204,37 @@ class ThinkingSolver:
         evidence: Dict[str, object],
         candidates: Sequence[CandidateAnswer],
         answer_contract,
+        style: str = "direct",
     ) -> CandidateAnswer:
         contract_payload = (
             answer_contract.as_dict() if hasattr(answer_contract, "as_dict") else dict(answer_contract)
         )
         candidate_payload = [candidate.to_dict() for candidate in candidates]
+        style_instructions = {
+            "direct": (
+                "Use a direct recomputation path. Identify the exact rows and columns "
+                "needed, then return the requested final answer."
+            ),
+            "audit": (
+                "Act as a skeptical auditor. First look for ways each candidate could "
+                "be wrong: wrong row, wrong column, missing comparison peer, wrong "
+                "aggregation, answer-shape mismatch, or unsupported label. Then return "
+                "the corrected answer."
+            ),
+            "program": (
+                "Mentally construct a minimal dataframe-style calculation from the "
+                "table evidence. Compare all relevant rows or columns before returning "
+                "the final answer."
+            ),
+        }.get(style, style)
         prompt = (
-            "You are the final fallback verifier for a table QA system.\n"
-            "Use only the provided evidence and candidate summaries.\n"
+            "You are the final high-risk verifier for a table QA system.\n"
+            "Recompute the answer independently from the supplied table evidence. "
+            "Do not trust the candidate summaries when they conflict with the table.\n"
+            "Use only the provided evidence, table text, answer contract, and candidate summaries.\n"
+            f"{style_instructions}\n"
             "Return JSON with keys answer, confidence, and reasoning_summary.\n"
+            "The answer field must obey the answer contract exactly.\n"
             "Return JSON only.\n\n"
             f"Question: {question}\n"
             f"Answer contract: {json.dumps(contract_payload, ensure_ascii=False)}\n"
@@ -225,7 +247,7 @@ class ThinkingSolver:
             normalized = normalize_contract_value(answer, answer_contract)
             is_valid, reason = validate_contract_value(normalized, answer_contract)
             return CandidateAnswer(
-                name="thinking",
+                name=f"thinking_{style}",
                 raw_answer=answer,
                 normalized_answer=normalized,
                 is_valid=is_valid,
@@ -235,7 +257,7 @@ class ThinkingSolver:
             )
         except Exception as exc:
             return CandidateAnswer(
-                name="thinking",
+                name=f"thinking_{style}",
                 raw_answer="",
                 normalized_answer="",
                 is_valid=False,
