@@ -55,6 +55,7 @@ def _metric_delta(before, after):
 
 def _append_jsonl_with_retry(path, item, attempts=5, delay_seconds=0.5):
     payload = json.dumps(item, ensure_ascii=False, default=_json_default) + "\n"
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     last_error = None
     for attempt in range(attempts):
         try:

@@ -63,6 +63,10 @@ def count_jsonl(path: Path) -> int:
         return sum(1 for line in f if line.strip())
 
 
+def safe_name(value: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in value).strip("_") or "model"
+
+
 def merge_outputs(reference_rows: List[Dict[str, Any]], shard_outputs: List[Path], merged_path: Path) -> None:
     by_id: Dict[str, Dict[str, Any]] = {}
     order = [str(row.get("id") or "") for row in reference_rows]
@@ -121,6 +125,7 @@ def main() -> None:
     output_root = Path(args.output_root).resolve()
     endpoints = endpoint_list(args.endpoints)
     tasks = task_list(args.tasks)
+    model_name_for_path = safe_name(args.model)
 
     env_key = args.api_key_env
     if not os.getenv(env_key):
@@ -142,6 +147,7 @@ def main() -> None:
             shard_output = output_root / "raw" / task / f"{task}_shard{index:02d}_out.jsonl"
             log_path = output_root / "logs" / task / f"{task}_shard{index:02d}.log"
             write_jsonl(shard_input, shard_rows)
+            shard_output.parent.mkdir(parents=True, exist_ok=True)
             shard_input_paths.append(shard_input)
             shard_output_paths.append(shard_output)
 
@@ -207,9 +213,9 @@ def main() -> None:
         if failures:
             raise RuntimeError(f"{task}: {len(failures)} shard process(es) failed: {failures}")
 
-        merged_path = output_root / "merged" / f"{task}_{args.model}.jsonl"
+        merged_path = output_root / "merged" / f"{task}_{model_name_for_path}.jsonl"
         merge_outputs(rows, shard_output_paths, merged_path)
-        eval_path = output_root / "eval" / f"{task}_{args.model}_eval.json"
+        eval_path = output_root / "eval" / f"{task}_{model_name_for_path}_eval.json"
         run_eval(repo_root, merged_path, eval_path)
         print(f"[run] merged: {merged_path}")
         print(f"[run] eval:   {eval_path}")
