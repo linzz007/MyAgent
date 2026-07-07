@@ -26,6 +26,7 @@ for index in "${!GROUP_ARRAY[@]}"; do
       \"model\": \"${SERVED_MODEL_NAME}\",
       \"messages\": [{\"role\": \"user\", \"content\": \"Return exactly: ok\"}],
       \"temperature\": 0,
-      \"max_tokens\": 8
+      \"max_tokens\": 8,
+      \"chat_template_kwargs\": {\"enable_thinking\": false}
     }" | python -m json.tool
 done

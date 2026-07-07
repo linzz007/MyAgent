@@ -151,6 +151,43 @@ class DeepSeekBackendTests(unittest.TestCase):
         self.assertEqual(request["model"], "provider-model-name")
         self.assertNotIn("extra_body", request)
 
+    def test_openai_compatible_qwen3_disables_thinking_by_default(self):
+        factory = RecordingClientFactory()
+        args = make_args(
+            model_provider="openai_compatible",
+            plan_model_name="qwen3-32b-local",
+            api_base="http://127.0.0.1:8000/v1",
+            api_key_env="LOCAL_VLLM_API_KEY",
+        )
+        with patch.dict(os.environ, {"LOCAL_VLLM_API_KEY": "EMPTY"}, clear=False):
+            llm_fn = build_llm_fn(args, openai_client_factory=factory)
+            llm_fn("question")
+
+        request = factory.client.chat.completions.calls[0]
+        self.assertEqual(
+            request["extra_body"],
+            {"chat_template_kwargs": {"enable_thinking": False}},
+        )
+
+    def test_openai_compatible_qwen3_can_enable_thinking_by_parameter(self):
+        factory = RecordingClientFactory()
+        args = make_args(
+            model_provider="openai_compatible",
+            plan_model_name="qwen3-32b-local",
+            api_base="http://127.0.0.1:8000/v1",
+            api_key_env="LOCAL_VLLM_API_KEY",
+            thinking="enabled",
+        )
+        with patch.dict(os.environ, {"LOCAL_VLLM_API_KEY": "EMPTY"}, clear=False):
+            llm_fn = build_llm_fn(args, openai_client_factory=factory)
+            llm_fn("question")
+
+        request = factory.client.chat.completions.calls[0]
+        self.assertEqual(
+            request["extra_body"],
+            {"chat_template_kwargs": {"enable_thinking": True}},
+        )
+
     def test_missing_api_key_fails_before_any_request(self):
         factory = RecordingClientFactory()
         with patch.dict(os.environ, {}, clear=True):

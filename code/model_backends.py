@@ -120,6 +120,10 @@ class ChatCompletionCallable:
         }
         if self.provider == "deepseek":
             request["extra_body"] = {"thinking": {"type": self.thinking}}
+        elif self.provider == "openai_compatible" and "qwen3" in self.model_name.lower():
+            request["extra_body"] = {
+                "chat_template_kwargs": {"enable_thinking": self.thinking == "enabled"}
+            }
         completion = self.client.chat.completions.create(**request)
         self.request_count += 1
         usage = getattr(completion, "usage", None)
