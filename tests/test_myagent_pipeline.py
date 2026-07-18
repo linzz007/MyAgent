@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 import sys
 import unittest
 
@@ -1804,6 +1805,151 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             "true",
         )
 
+    def test_tabfact_episode_order_shortcut_uses_series_order(self):
+        df = pd.DataFrame(
+            {
+                "no for series": [7, 10],
+                "title": ["the witchfinder", "sweet dreams"],
+                "original air date": ["7 november 2009", "28 november 2009"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_episode_order_answer(
+                "the sweet dream episode happen earlier in the series than the witchfinder",
+                df,
+            ),
+            "false",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_episode_order_answer(
+                "the sweet dream episode happen later in the series than the witchfinder",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_episode_credit_count_shortcut_counts_matching_people(self):
+        df = pd.DataFrame(
+            {
+                "title": ["a", "b", "c", "d"],
+                "directed by": ["david moore", "jeremy webb", "david moore", "david moore"],
+                "written by": ["x", "lucy watkins", "y", "z"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_episode_credit_count_answer(
+                "david moore direct 3 episode of series 2",
+                df,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_episode_credit_count_answer(
+                "lucy watkins only write 1 episode of series 2",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_goal_competition_count_shortcut_counts_goal_rows(self):
+        df = pd.DataFrame(
+            {
+                "goal": [1, 2, 3, 4],
+                "competition": ["friendly", "2006 fifa world cup", "friendly", "friendly"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_goal_competition_count_answer(
+                "rafael marquez score 3 goal in his career at international friendly competition",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_not_fewer_than_any_other_shortcut_compares_all_peers(self):
+        df = pd.DataFrame(
+            {
+                "player": ["vaea anitoni", "paul emerick", "todd clever"],
+                "tries": [26, 17, 11],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_not_fewer_than_any_other_answer(
+                "paul emerick do not have fewer tries than any other player",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_nonzero_metric_count_shortcut_checks_entity_and_count(self):
+        df = pd.DataFrame(
+            {
+                "player": ["chris wyles", "mike hercus", "david fee"],
+                "drop": [1, 4, 0],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_nonzero_metric_count_answer(
+                "chris wyles be 1 of the 2 player with drop during their time on the rugby team",
+                df,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_nonzero_metric_count_answer(
+                "chris wyles be the only player with drop during his time on the rugby team",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_max_metric_span_shortcut_uses_inclusive_year_span(self):
+        df = pd.DataFrame(
+            {
+                "player": ["chris wyles", "mike hercus"],
+                "span": ["2007 -", "2002 - 2009"],
+                "drop": [1, 4],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_max_metric_span_answer(
+                "the greatest number of drop from 1 player happen over the span of 8 year",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_goal_result_shortcut_checks_scoreless_and_loss_counts(self):
+        df = pd.DataFrame(
+            {
+                "date": ["24 june 2006", "11 june 2010", "30 october 2013"],
+                "score": ["1 - 0", "1 - 1", "1 - 0"],
+                "result": ["1 - 2 ( aet )", "1 - 1", "4 - 2"],
+                "competition": ["2006 fifa world cup", "2010 fifa world cup", "friendly"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_goal_result_answer(
+                "rafael marquez score a goal at the 2006 , but remain scoreless during the 2010 fifa world cup",
+                df,
+            ),
+            "false",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_goal_result_answer(
+                "mexico only lose 1 time in international competition when rafael marquez score a goal",
+                df,
+            ),
+            "true",
+        )
+
     def test_crt_consecutive_year_medalist_shortcut_checks_all_medal_columns(self):
         df = pd.DataFrame(
             {
@@ -2219,6 +2365,78 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertTrue(result.strong_verification_applied)
         self.assertIn("superlative_order", result.problem_tags)
         self.assertTrue(any("final high-risk verifier" in prompt for prompt in fake.prompts))
+
+    def test_tabfact_high_risk_label_does_not_auto_run_strong_verifier(self):
+        df = pd.DataFrame({"team": ["A", "B"], "wins": [3, 2]})
+        fake = FakePipelineLLM(semantic_score=0.9, rows=["A", "B"], cols=["team", "wins"])
+        tracker = LLMCallTracker(fake)
+        pipeline = TableQAPipeline(
+            router=RouterAgent(tracker),
+            planner=PlannerAgent(tracker),
+            calculator=Calculator(),
+            critic=CriticAgent(tracker),
+            final_answer_agent=FinalAnswerAgent(tracker),
+            enable_selective_collaboration=True,
+        )
+        state = TQASessionState(
+            question="team A has more wins than team B",
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="true_false",
+            answer_contract=infer_answer_contract(
+                "team A has more wins than team B",
+                answer_mode="true_false",
+                reasoning_required=True,
+            ),
+            dataset_profile="tabfact",
+        )
+        state.problem_tags = ["comparison", "closed_choice"]
+        state.risk_assessment = SimpleNamespace(level="high")
+
+        should_verify, reason, forced = pipeline._should_apply_strong_verification(
+            state,
+            SimpleNamespace(requires_fallback=False, reason="agreement"),
+        )
+
+        self.assertFalse(should_verify)
+        self.assertEqual(reason, "")
+        self.assertFalse(forced)
+
+    def test_tabfact_candidate_fallback_still_forces_strong_verifier(self):
+        df = pd.DataFrame({"team": ["A", "B"], "wins": [3, 2]})
+        fake = FakePipelineLLM(semantic_score=0.9, rows=["A", "B"], cols=["team", "wins"])
+        tracker = LLMCallTracker(fake)
+        pipeline = TableQAPipeline(
+            router=RouterAgent(tracker),
+            planner=PlannerAgent(tracker),
+            calculator=Calculator(),
+            critic=CriticAgent(tracker),
+            final_answer_agent=FinalAnswerAgent(tracker),
+            enable_selective_collaboration=True,
+        )
+        state = TQASessionState(
+            question="team A has more wins than team B",
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="true_false",
+            answer_contract=infer_answer_contract(
+                "team A has more wins than team B",
+                answer_mode="true_false",
+                reasoning_required=True,
+            ),
+            dataset_profile="tabfact",
+        )
+        state.problem_tags = ["comparison", "closed_choice"]
+        state.risk_assessment = SimpleNamespace(level="high")
+
+        should_verify, reason, forced = pipeline._should_apply_strong_verification(
+            state,
+            SimpleNamespace(requires_fallback=True, reason="candidate_disagreement"),
+        )
+
+        self.assertTrue(should_verify)
+        self.assertEqual(reason, "candidate_agreement:candidate_disagreement")
+        self.assertTrue(forced)
 
     def test_deterministic_shortcut_is_not_overwritten_by_wrong_verifier(self):
         df = pd.DataFrame(

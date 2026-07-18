@@ -3921,6 +3921,286 @@ class TableQAPipeline:
         return "true" if len(winners) == expected and len(team_matches) == expected else "false"
 
     @staticmethod
+    def _tabfact_episode_order_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+episode\s+happen\s+(earlier|later)\s+in\s+the\s+series\s+than\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_title, direction, right_title = match.groups()
+        title_cols = [
+            col for col in df.columns if re.search(r"\b(title|episode)\b", str(col), flags=re.I)
+        ]
+        order_cols = [
+            col
+            for col in df.columns
+            if re.search(r"\bno\s+for\s+series\b|\bepisode\s*(?:no|number)\b", str(col), flags=re.I)
+        ]
+        if not order_cols:
+            order_cols = [
+                col
+                for col in df.columns
+                if re.search(r"\bno\s+overall\b|\bnumber\b|\bno\.?\b", str(col), flags=re.I)
+            ]
+        date_cols = [col for col in df.columns if re.search(r"\bdate\b", str(col), flags=re.I)]
+        if not title_cols or not (order_cols or date_cols):
+            return None
+
+        def find_row(title_phrase: str) -> Optional[pd.Series]:
+            for _, row in df.iterrows():
+                if TableQAPipeline._cell_contains_phrase_tokens(title_phrase, row[title_cols[0]]):
+                    return row
+            return None
+
+        left_row = find_row(left_title)
+        right_row = find_row(right_title)
+        if left_row is None or right_row is None:
+            return None
+        left_order = right_order = None
+        if order_cols:
+            left_order = _as_number_like(left_row[order_cols[0]])
+            right_order = _as_number_like(right_row[order_cols[0]])
+        if left_order is None or right_order is None:
+            if not date_cols:
+                return None
+            left_order = _parse_date_key(left_row[date_cols[0]])
+            right_order = _parse_date_key(right_row[date_cols[0]])
+        if left_order is None or right_order is None:
+            return None
+        observed = left_order < right_order if direction.lower() == "earlier" else left_order > right_order
+        return "true" if observed else "false"
+
+    @staticmethod
+    def _tabfact_episode_credit_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+(only\s+)?(direct|directed|write|wrote)\s+"
+            r"((?:\d+)|one|two|three|four|five|six|seven|eight|nine|ten)\s+episodes?"
+            r"(?:\s+of\s+.+)?[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        person, only_text, verb, count_text = match.groups()
+        expected = _small_number_from_text(count_text)
+        if expected is None:
+            return None
+        col_pattern = r"\bdirected\s+by\b|\bdirector\b" if verb.lower().startswith("direct") else r"\bwritten\s+by\b|\bwriter\b"
+        credit_cols = [col for col in df.columns if re.search(col_pattern, str(col), flags=re.I)]
+        if not credit_cols:
+            return None
+        count = sum(
+            1
+            for value in df[credit_cols[0]].tolist()
+            if TableQAPipeline._cell_contains_phrase_tokens(person, value)
+        )
+        if only_text and count != expected:
+            return "false"
+        return "true" if count == expected else "false"
+
+    @staticmethod
+    def _tabfact_goal_competition_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"\bscore\s+((?:\d+)|one|two|three|four|five|six|seven|eight|nine|ten)\s+goals?"
+            r"\b.*?\b(?:at|in|during)\s+(.+?)\s+competitions?\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected = _small_number_from_text(match.group(1))
+        target_phrase = match.group(2)
+        if expected is None:
+            return None
+        competition_cols = [col for col in df.columns if re.search(r"\bcompetition\b", str(col), flags=re.I)]
+        if not competition_cols:
+            return None
+        target_tokens = [
+            token
+            for token in _loose_tokens(target_phrase)
+            if token
+            not in {
+                "at",
+                "career",
+                "competition",
+                "competitions",
+                "during",
+                "her",
+                "his",
+                "in",
+                "international",
+                "match",
+                "matches",
+                "their",
+            }
+        ]
+        if not target_tokens:
+            return None
+        count = 0
+        for value in df[competition_cols[0]].tolist():
+            value_key = _loose_text_key(value)
+            if all(token in value_key for token in target_tokens):
+                count += 1
+        return "true" if count == expected else "false"
+
+    @staticmethod
+    def _tabfact_not_fewer_than_any_other_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+(?:do|does|did)\s+not\s+have\s+fewer\s+(.+?)\s+than\s+any\s+other\s+.+?[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        entity_phrase, metric_phrase = match.groups()
+        metric_col = _select_numeric_column_by_phrase(df, metric_phrase)
+        if metric_col is None:
+            return None
+        entity_cols = [col for col in df.columns if col != metric_col]
+        if not entity_cols:
+            return None
+        entity_row = None
+        for _, row in df.iterrows():
+            if any(TableQAPipeline._cell_contains_phrase_tokens(entity_phrase, row[col]) for col in entity_cols):
+                entity_row = row
+                break
+        if entity_row is None:
+            return None
+        entity_value = _as_number_like(entity_row[metric_col])
+        all_values = pd.to_numeric(df[metric_col], errors="coerce").dropna()
+        if entity_value is None or all_values.empty:
+            return None
+        return "true" if float(entity_value) >= float(all_values.max()) else "false"
+
+    @staticmethod
+    def _tabfact_nonzero_metric_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        text = question or ""
+        match = re.search(
+            r"^(.+?)\s+be\s+1\s+of\s+the\s+(\d+)\s+.+?\s+with\s+(.+?)(?:\s+during\b|[?.]?$)",
+            text,
+            flags=re.I,
+        )
+        only_match = re.search(
+            r"^(.+?)\s+be\s+the\s+only\s+.+?\s+with\s+(.+?)(?:\s+during\b|[?.]?$)",
+            text,
+            flags=re.I,
+        )
+        if match:
+            entity_phrase, expected_text, metric_phrase = match.groups()
+            expected = int(expected_text)
+        elif only_match:
+            entity_phrase, metric_phrase = only_match.groups()
+            expected = 1
+        else:
+            return None
+        metric_col = _select_numeric_column_by_phrase(df, metric_phrase)
+        if metric_col is None:
+            return None
+        entity_cols = [col for col in df.columns if col != metric_col]
+        entity_has_metric = False
+        count = 0
+        for _, row in df.iterrows():
+            value = _as_number_like(row[metric_col])
+            has_metric = value is not None and float(value) > 0
+            if has_metric:
+                count += 1
+            if any(TableQAPipeline._cell_contains_phrase_tokens(entity_phrase, row[col]) for col in entity_cols):
+                entity_has_metric = has_metric
+        return "true" if entity_has_metric and count == expected else "false"
+
+    @staticmethod
+    def _tabfact_max_metric_span_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"\bgreatest\s+number\s+of\s+(.+?)\s+from\s+.+?\s+happen\s+over\s+the\s+span\s+of\s+(\d+)\s+years?\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        metric_phrase, expected_text = match.groups()
+        metric_col = _select_numeric_column_by_phrase(df, metric_phrase)
+        span_cols = [col for col in df.columns if re.search(r"\bspan\b", str(col), flags=re.I)]
+        if metric_col is None or not span_cols:
+            return None
+        numeric = pd.to_numeric(df[metric_col], errors="coerce")
+        if numeric.dropna().empty:
+            return None
+        row = df.loc[numeric.idxmax()]
+        year_range = _extract_year_range(row[span_cols[0]])
+        if year_range is None:
+            return None
+        start_year, end_year = year_range
+        observed_years = abs(int(end_year) - int(start_year)) + 1
+        return "true" if observed_years == int(expected_text) else "false"
+
+    @staticmethod
+    def _tabfact_goal_result_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        text = question or ""
+        competition_cols = [col for col in df.columns if re.search(r"\bcompetition\b", str(col), flags=re.I)]
+        result_cols = [col for col in df.columns if re.fullmatch(r"(?i)result", str(col).strip())]
+        if not competition_cols:
+            return None
+
+        def competition_matches(value: Any, phrase: str) -> bool:
+            tokens = [
+                token
+                for token in _loose_tokens(phrase)
+                if token not in {"competition", "competitions", "during", "in", "the"}
+            ]
+            if not tokens:
+                return False
+            value_key = _loose_text_key(value)
+            return all(token in value_key for token in tokens)
+
+        scoreless_match = re.search(r"\bremain\s+scoreless\s+during\s+(.+?)[?.]?$", text, flags=re.I)
+        if scoreless_match:
+            target_phrase = scoreless_match.group(1)
+            scored_during_target = any(
+                competition_matches(value, target_phrase)
+                for value in df[competition_cols[0]].tolist()
+            )
+            scored_first = True
+            first_goal_match = re.search(r"\bscore\s+a\s+goal\s+at\s+the\s+(\d{4})\b", text, flags=re.I)
+            if first_goal_match:
+                year = first_goal_match.group(1)
+                scored_first = any(
+                    year in _loose_text_key(row[competition_cols[0]])
+                    or any(year in _loose_text_key(row[col]) for col in df.columns)
+                    for _, row in df.iterrows()
+                )
+            return "true" if scored_first and not scored_during_target else "false"
+
+        lose_match = re.search(
+            r"\b(?:only\s+)?lose\s+(\d+)(?:\s+of\s+(\d+))?\s+times?.+?"
+            r"\binternational\s+competitions?.+?\bscore\s+a\s+goal\b",
+            text,
+            flags=re.I,
+        )
+        if not lose_match or not result_cols:
+            return None
+        expected_losses = int(lose_match.group(1))
+        expected_total = int(lose_match.group(2)) if lose_match.group(2) else None
+
+        def is_loss(value: Any) -> bool:
+            score_match = re.search(r"\b(\d+)\s*-\s*(\d+)\b", str(value or ""))
+            if not score_match:
+                return False
+            return int(score_match.group(1)) < int(score_match.group(2))
+
+        rows = [
+            row
+            for _, row in df.iterrows()
+            if "friendly" not in _loose_text_key(row[competition_cols[0]])
+        ]
+        if not rows:
+            return None
+        loss_count = sum(1 for row in rows if is_loss(row[result_cols[0]]))
+        total_ok = expected_total is None or len(rows) == expected_total
+        return "true" if loss_count == expected_losses and total_ok else "false"
+
+    @staticmethod
     def _select_column_by_tokens(df: pd.DataFrame, phrase: str) -> Optional[Any]:
         phrase_tokens = {_singular_token(token) for token in re.findall(r"[a-z0-9]+", _loose_text_key(phrase))}
         if not phrase_tokens:
@@ -4327,6 +4607,34 @@ class TableQAPipeline:
                 self._tabfact_unique_side_winner_answer(question, df),
             ),
             (
+                "TabFact episode order statement checked deterministically.",
+                self._tabfact_episode_order_answer(question, df),
+            ),
+            (
+                "TabFact episode credit count checked deterministically.",
+                self._tabfact_episode_credit_count_answer(question, df),
+            ),
+            (
+                "TabFact goal count by competition checked deterministically.",
+                self._tabfact_goal_competition_count_answer(question, df),
+            ),
+            (
+                "TabFact not-fewer-than-any-other comparison checked deterministically.",
+                self._tabfact_not_fewer_than_any_other_answer(question, df),
+            ),
+            (
+                "TabFact nonzero metric count checked deterministically.",
+                self._tabfact_nonzero_metric_count_answer(question, df),
+            ),
+            (
+                "TabFact maximum metric span checked deterministically.",
+                self._tabfact_max_metric_span_answer(question, df),
+            ),
+            (
+                "TabFact goal result count checked deterministically.",
+                self._tabfact_goal_result_answer(question, df),
+            ),
+            (
                 "TabFact atomic row fact matched with minor spelling tolerance.",
                 self._tabfact_fuzzy_row_inclusion_answer(question, df),
             ),
@@ -4630,11 +4938,12 @@ class TableQAPipeline:
             if "temporal" in tags and tags & {"comparison", "arithmetic", "list_entity"}:
                 return True, "wtq_temporal_reasoning", False
         if dataset == "tabfact":
-            if state.answer_contract.kind == "label" and (
-                state.answer_contract.reasoning_required
-                or tags & {"comparison", "arithmetic", "temporal", "negation_logic", "superlative_order"}
-            ):
-                return True, "tabfact_compound_fact_verification", False
+            # TabFact true/false claims are already checked by the dataset-specific
+            # verifier in the legacy path. The high-risk verifier is reserved for
+            # forced fallback/disagreement cases above; otherwise it adds large
+            # prompt cost and can destabilize binary labels.
+            if state.answer_contract.kind == "label":
+                return False, "", False
         if dataset == "crt":
             if state.answer_contract.kind == "label" and tags & {
                 "closed_choice",

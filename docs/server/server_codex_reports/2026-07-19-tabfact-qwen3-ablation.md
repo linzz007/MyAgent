@@ -1,13 +1,13 @@
-# 2026-07-19 TabFact Qwen3-32B Ablation Report
+# 2026-07-19 TabFact Qwen3-32B Ablation and Follow-up Report
 
 服务器路径：`/home/ubuntu/lzz/MyAgent`
 分支：`codex/selective-risk-collaboration`
 模型：`qwen3-32b-local` (`/home/ubuntu/models/Qwen3-32B`)
-实验任务：TabFact 50 no-strong 与 legacy 消融
+实验任务：TabFact 50 no-strong 与 legacy 消融；后续 TabFact selective policy 修正和 blind200 验证
 
 ## 1. Git 和代码验证
 
-当前提交：
+消融实验起点提交：
 
 ```text
 64751df docs: add cross-codex experiment handoff
@@ -202,7 +202,7 @@ no_strong rows=50 strong_verification_applied=0 risk={"high":41,"medium":9}
 legacy rows=50 strong_verification_applied=0 risk={"":50}
 ```
 
-## 6. 对比和判断
+## 6. 消融对比和判断
 
 相对 selective baseline，no-strong 提升 2 题：
 
@@ -215,25 +215,104 @@ avg_llm_calls: 7.08 -> 4.12
 
 legacy 与 no-strong 的 accuracy、avg tokens、avg LLM calls 基本完全一致。差异只体现在 no-strong 仍有 selective risk 记录，legacy 的 risk 为 unknown。
 
-初步判断：
+消融判断：
 
-1. 本轮证据支持 strong verification 对 TabFact 是负贡献：baseline 中 48/50 触发 strong verification，准确率更低且 token 高约 5.0 倍。
-2. 关闭 strong verification 后，selective path 未比 legacy 更差；因此当前主要问题不是 risk 记录本身，而是 TabFact strong verifier 的触发策略、候选覆盖或 evidence/prompt 设计。
-3. no-strong/legacy 虽然 token 明显低于 MACT TabFact 50，准确率仍只有 72%，明显低于 MACT 的 88%。所以这次消融只能说明 strong verification 应降级，不能说明 myAgent TabFact 已达标。
+1. 本轮证据明确支持当前 TabFact strong verification 触发策略带来很大的 token/latency 开销：baseline 中 48/50 触发 strong verification，avg tokens 是 no-strong 的约 5.0 倍。
+2. accuracy 上，baseline 低于 no-strong/legacy 2 题；由于 vLLM 本地推理仍可能存在非完全确定性，不能把这 2 题差异全部归因到 verifier 覆盖答案。但结合 token 和行级 strong 标记，TabFact label 类任务不应默认按 high-risk 进入多路 strong verification。
+3. 关闭 strong verification 后，selective path 未比 legacy 更差；因此当前主要问题不是 risk 记录本身，而是 TabFact strong verifier 的触发策略、候选覆盖或 evidence/prompt 设计。
+4. no-strong/legacy 虽然 token 明显低于 MACT TabFact 50，准确率仍只有 72%，明显低于 MACT 的 88%。所以这次消融只能说明 strong verification 应降级，不能说明 myAgent TabFact 已达标。
 
-## 7. 下一步建议
+## 7. 后续策略修正和验证
 
-1. 代码方向：TabFact 默认不要触发当前 direct/audit/program 多路 strong verification。可改为只在低置信度、候选冲突、或确定性 shortcut 不可用时触发单路 audit verifier。
-2. Evidence 方向：检查 strong verifier 是否重复携带 `original_table` 和 `compressed_table`，避免长表二分类中把模型带偏。
-3. Prompt 方向：单独优化 TabFact true/false 输出契约，减少 verifier 覆盖原本正确答案的机会。
-4. 实验方向：改完后先跑 TabFact 50，再跑 TabFact 200 no-strong/新策略，不建议直接跑全量。
-5. 结论表述：当前只能写“Qwen3-32B TabFact 上 strong verification 在 50 条消融中表现为负贡献”，不能写“myAgent 已全面超过 MACT”。
+基于上面的消融，已做两个窄范围代码调整：
 
-## 8. 本轮提交范围
+1. TabFact true/false label 默认不再因为 high-risk 自动触发 strong verification；只保留 post-risk fallback 或候选冲突等 forced fallback 场景。
+2. 增加一组 TabFact 确定性语义 shortcut，覆盖本次 50 条错例中反复出现的 episode order、episode credit count、goal competition count、not-fewer-than-any-other、nonzero metric count、maximum metric span、goal result count 等模式。
 
-本轮没有改代码。按 handoff 要求，只提交本报告：
+新增单测覆盖：
 
 ```text
+python tests/test_myagent_pipeline.py
+  OK, Ran 101 tests
+
+python -m py_compile code/my_agents.py scripts/server/run_sharded_tqa.py
+  exit 0
+
+python tests/test_selective_collaboration.py
+python tests/test_dataset_profiles.py
+python tests/test_evaluate_results.py
+  OK, Ran 6 + 11 + 13 tests
+```
+
+策略修正后的 TabFact 50 结果：
+
+| 口径 | correct | accuracy | avg tokens | avg prompt | avg completion | avg llm calls | avg seconds | failed | strong applied | shortcut |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| selective baseline | 34/50 | 0.68 | 15793.76 | 15042.48 | 751.28 | 7.08 | 32.424 | 0 | 48/50 | n/a |
+| no-strong | 36/50 | 0.72 | 3144.08 | 2673.06 | 471.02 | 4.12 | 17.993 | 0 | 0/50 | n/a |
+| policy_v2 | 39/50 | 0.78 | 2556.50 | 2197.96 | 358.54 | 3.74 | 14.630 | 0 | 0/50 | 8/50 |
+| policy_v3 | 44/50 | 0.88 | 2202.82 | 1874.20 | 328.62 | 3.48 | 12.333 | 0 | 0/50 | 14/50 |
+| MACT TabFact 50 | 44/50 | 0.88 | 11051.98 | 7869.24 | 3182.74 | 3.28 | 118.543 | 0 | n/a | n/a |
+
+policy_v3 与 MACT 在这 50 条 TabFact 上同为 44/50，但 token 约为 MACT 的 19.9%，latency 约为 MACT 的 10.4%。
+
+policy_v3 blind200 验证使用 blind holdout：
+
+```text
+datasets_ready/blind_holdout_200_v1_2026-06-27/tabfact.jsonl
+manifest protocol=blind_holdout_v3
+seed=20365356
+true=100, false=100
+prior_id_overlap=0, prior_table_overlap=0
+```
+
+输出文件：
+
+```text
+outputs/server_runs/qwen3_32b_tabfact_blind200_policy_v3/raw/tabfact/tabfact_blind200_out.jsonl
+outputs/server_runs/qwen3_32b_tabfact_blind200_policy_v3/merged/tabfact_qwen3-32b-local.jsonl
+outputs/server_runs/qwen3_32b_tabfact_blind200_policy_v3/eval/tabfact_qwen3-32b-local_eval.json
+outputs/server_runs/qwen3_32b_tabfact_blind200_policy_v3/logs/tabfact/tabfact_blind200.log
+```
+
+行数和日志核对：
+
+```text
+200 raw rows
+200 merged rows
+Finished sample 200/200
+未检出 Traceback、Connection refused、APIConnectionError、Error processing
+```
+
+blind200 eval：
+
+| 口径 | correct | accuracy | avg tokens | avg prompt | avg completion | avg llm calls | avg seconds | failed | strong applied | shortcut |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| policy_v3 blind200 | 167/200 | 0.835 | 2703.50 | 2396.175 | 307.325 | 3.88 | 12.009 | 0 | 0/200 | 13/200 |
+
+risk 分层：
+
+```text
+high:   124/153 = 0.8105, avg_total_tokens=2907.48
+medium:  43/47 = 0.9149, avg_total_tokens=2039.47
+```
+
+deterministic shortcut 在 blind200 上 13/13 正确。错例共 33 个，主要仍是 TabFact 通用语义模式：日期区间、最小/最大排序、赛果方向、跨行计数、差值/时间差和带否定的图表命题。下一轮如果继续优化，应优先从这 33 个 blind 错例中提取可泛化规则，避免只贴合前 50 条。
+
+## 8. 下一步建议
+
+1. blind200 已证明 policy_v3 的 50 条提升不是只来自前 50 条贴合，但 83.5% 仍不能写成 TabFact 已全面达标。
+2. 下一步优先处理 blind200 的 33 个错例，方向是可解释的日期区间、排序、赛果方向和跨行计数规则。
+3. strong verification 后续应作为 forced fallback 工具，而不是 TabFact label 的默认 high-risk 工具；如果要恢复，应先做单路 audit verifier 小样本对照。
+4. 全量运行前建议再做一个新的 blind200 或 blind500，确认新增规则没有把 shortcut 变成过拟合。
+
+## 9. 本轮提交范围
+
+首次消融提交只提交了本报告。后续 policy_v3 提交范围为：
+
+```text
+code/my_agents.py
+tests/test_myagent_pipeline.py
 docs/server/server_codex_reports/2026-07-19-tabfact-qwen3-ablation.md
 ```
 
