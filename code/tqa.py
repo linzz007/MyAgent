@@ -361,7 +361,7 @@ def main(args):
             print(f"Finished sample {trial}/{len(table_dataset)}")
         except Exception:
             print(traceback.format_exc())
-            break
+            raise
 
 
 if __name__ == "__main__":
