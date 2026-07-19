@@ -229,3 +229,71 @@ Qwen3 first-100 MACT quick pair -> 若通过 -> frozen150 Qwen3 paired formal ->
 不应写：
 
 > 当前所有模型都已经超过 MACT，或 Qwen2.5-3B 也具备正式实验价值。
+
+## 7. 已准备的 frozen150 正式输入
+
+本轮已经冻结一个 150/数据集的 table-diverse split：
+
+```text
+datasets_ready/frozen_qwen3_eval_150_2026-07-19/
+```
+
+生成命令：
+
+```bash
+cd /home/ubuntu/lzz/MyAgent
+source /home/ubuntu/miniconda3/etc/profile.d/conda.sh
+conda activate lzz-agent
+
+python code/freeze_blind_holdout.py \
+  --wtq_input datasets_ready/full/wtq_unseen.jsonl \
+  --tabfact_input datasets_ready/full/tabfact_test.jsonl \
+  --crt_input datasets_ready/full/crt.jsonl \
+  --output_dir datasets_ready/frozen_qwen3_eval_150_2026-07-19 \
+  --history_root outputs \
+  --history_root /home/ubuntu/lzz/MACT/outputs \
+  --sample_size 150 \
+  --seed 20260719
+```
+
+Manifest 摘要：
+
+| dataset | records | unique tables | eligible records | category counts | prior id overlap | prior table overlap | sha256 |
+|---|---:|---:|---:|---|---:|---:|---|
+| WTQ | 150 | 150 | 2,466 | `all=150` | 0 | 0 | `bc12791bf6bdb26cc51e02486ba88d3a4123e058f08d82fddb6e8111609789ea` |
+| TabFact | 150 | 150 | 10,702 | `false=75,true=75` | 0 | 0 | `3cbc3312929c6a23f5adf4a36321e4628046f794d0276700c91572d8a74ac46c` |
+| CRT | 150 | 150 | 502 | `yes_no=60,closed_other=30,general=60` | 0 | 0 | `46daa3ccc221aa0d581552cba74e5ccb05ed4ab2274fcae77f1ccb15105ad82d` |
+
+验证：
+
+```text
+wc -l datasets_ready/frozen_qwen3_eval_150_2026-07-19/*.jsonl
+  150 crt.jsonl
+  150 tabfact.jsonl
+  150 wtq.jsonl
+
+python -m json.tool datasets_ready/frozen_qwen3_eval_150_2026-07-19/manifest.json
+  ok
+```
+
+`run_sharded_tqa.py` 的 dataset override dry-run 已验证可以读取该 split 并生成三任务命令。正式 myAgent 运行命令：
+
+```bash
+cd /home/ubuntu/lzz/MyAgent
+source /home/ubuntu/miniconda3/etc/profile.d/conda.sh
+conda activate lzz-agent
+source configs/server/qwen3_32b_2gpu_local.env
+
+python scripts/server/run_sharded_tqa.py \
+  --repo-root . \
+  --tasks wtq,tabfact,crt \
+  --wtq-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl \
+  --tabfact-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/tabfact.jsonl \
+  --crt-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/crt.jsonl \
+  --endpoints http://127.0.0.1:8000/v1 \
+  --model "$SERVED_MODEL_NAME" \
+  --api-key-env LOCAL_VLLM_API_KEY \
+  --output-root outputs/server_runs/qwen3_32b_policy_v5_frozen150_20260719 \
+  --max-replan 2 \
+  --mact-avg-tokens 11460
+```

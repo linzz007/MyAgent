@@ -298,3 +298,65 @@ git push origin codex/selective-risk-collaboration
 ```
 
 Expected: ignored runtime env and outputs are not committed.
+
+### Task 7: Prepare Frozen Qwen3 Formal Split
+
+**Files:**
+- Create: `datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl`
+- Create: `datasets_ready/frozen_qwen3_eval_150_2026-07-19/tabfact.jsonl`
+- Create: `datasets_ready/frozen_qwen3_eval_150_2026-07-19/crt.jsonl`
+- Create: `datasets_ready/frozen_qwen3_eval_150_2026-07-19/manifest.json`
+- Modify: `docs/server/server_codex_reports/2026-07-19-model-gate-results.md`
+
+**Interfaces:**
+- Consumes: full adapted datasets and historical outputs.
+- Produces: a reproducible 150/数据集 table-diverse split with zero prior id/table overlap.
+
+- [x] **Step 1: Freeze the split**
+
+Run:
+
+```bash
+python code/freeze_blind_holdout.py \
+  --wtq_input datasets_ready/full/wtq_unseen.jsonl \
+  --tabfact_input datasets_ready/full/tabfact_test.jsonl \
+  --crt_input datasets_ready/full/crt.jsonl \
+  --output_dir datasets_ready/frozen_qwen3_eval_150_2026-07-19 \
+  --history_root outputs \
+  --history_root /home/ubuntu/lzz/MACT/outputs \
+  --sample_size 150 \
+  --seed 20260719
+```
+
+Expected: each dataset has 150 records and 150 unique tables; prior id/table overlap is 0.
+
+- [x] **Step 2: Verify row counts and manifest**
+
+Run:
+
+```bash
+wc -l datasets_ready/frozen_qwen3_eval_150_2026-07-19/*.jsonl
+python -m json.tool datasets_ready/frozen_qwen3_eval_150_2026-07-19/manifest.json
+```
+
+Expected: each JSONL has 150 rows; manifest parses as JSON.
+
+- [x] **Step 3: Verify runner dataset overrides with dry-run**
+
+Run:
+
+```bash
+python scripts/server/run_sharded_tqa.py \
+  --repo-root . \
+  --tasks wtq,tabfact,crt \
+  --wtq-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl \
+  --tabfact-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/tabfact.jsonl \
+  --crt-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/crt.jsonl \
+  --endpoints http://127.0.0.1:8000/v1 \
+  --model qwen3-32b-local \
+  --api-key-env LOCAL_VLLM_API_KEY \
+  --output-root /tmp/myagent_frozen150_dry_20260719 \
+  --dry-run
+```
+
+Expected: dry-run prints WTQ, TabFact, and CRT commands using the temporary shard paths.
