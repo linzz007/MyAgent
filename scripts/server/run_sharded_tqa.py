@@ -56,6 +56,19 @@ def task_list(raw: str) -> List[str]:
     return tasks
 
 
+def dataset_path_for_task(args: argparse.Namespace, repo_root: Path, task: str) -> Path:
+    overrides = {
+        "wtq": args.wtq_dataset,
+        "tabfact": args.tabfact_dataset,
+        "crt": args.crt_dataset,
+    }
+    raw_path = overrides.get(task) or TASK_DEFAULTS[task]
+    path = Path(raw_path)
+    if not path.is_absolute():
+        return repo_root / path
+    return path
+
+
 def count_jsonl(path: Path) -> int:
     if not path.exists():
         return 0
@@ -102,6 +115,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", default=".", help="Repository root on the server.")
     parser.add_argument("--tasks", default="wtq,tabfact,crt", help="Comma-separated tasks.")
+    parser.add_argument("--wtq-dataset", default="", help="Optional WTQ JSONL override.")
+    parser.add_argument("--tabfact-dataset", default="", help="Optional TabFact JSONL override.")
+    parser.add_argument("--crt-dataset", default="", help="Optional CRT JSONL override.")
     parser.add_argument("--endpoints", required=True, help="Comma-separated OpenAI-compatible base URLs ending with /v1.")
     parser.add_argument("--model", required=True, help="Served model name configured in vLLM.")
     parser.add_argument("--output-root", required=True, help="Directory for shards, logs, merged outputs, and eval files.")
@@ -132,7 +148,7 @@ def main() -> None:
         raise RuntimeError(f"Environment variable {env_key} is not set.")
 
     for task in tasks:
-        input_path = repo_root / TASK_DEFAULTS[task]
+        input_path = dataset_path_for_task(args, repo_root, task)
         rows = read_jsonl(input_path)
         if args.limit_per_task:
             rows = rows[: args.limit_per_task]

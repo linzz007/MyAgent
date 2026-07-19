@@ -16,9 +16,20 @@ from dataset_adapters import (  # noqa: E402
 )
 
 
+def dataset_root(*candidates: str) -> Path:
+    for candidate in candidates:
+        path = DATASET_ROOT / candidate
+        if path.exists():
+            return path
+    return DATASET_ROOT / candidates[0]
+
+
 class DatasetAdapterTests(unittest.TestCase):
     def test_wtq_records_include_mact_fields_and_table_text(self):
-        wtq_root = DATASET_ROOT / "WikiTableQuestions-master" / "WikiTableQuestions-master"
+        wtq_root = dataset_root(
+            "WikiTableQuestions-master/WikiTableQuestions-master",
+            "WikiTableQuestions",
+        )
 
         records = list(iter_wtq_records(wtq_root, split="training", limit=2))
 
@@ -47,7 +58,10 @@ class DatasetAdapterTests(unittest.TestCase):
         self.assertGreater(len(records[0]["table_text"]), 1)
 
     def test_tabfact_records_include_statement_label_and_source_table(self):
-        tabfact_root = DATASET_ROOT / "Table-Fact-Checking-master" / "Table-Fact-Checking-master"
+        tabfact_root = dataset_root(
+            "Table-Fact-Checking-master/Table-Fact-Checking-master",
+            "Table-Fact-Checking",
+        )
 
         records = list(iter_tabfact_records(tabfact_root, split="dev", limit=1))
 
@@ -61,7 +75,10 @@ class DatasetAdapterTests(unittest.TestCase):
         self.assertIn("süper lig", records[0]["table_text"][2][-1])
 
     def test_wtq_multi_answer_denotation_is_split_into_items(self):
-        wtq_root = DATASET_ROOT / "WikiTableQuestions-master" / "WikiTableQuestions-master"
+        wtq_root = dataset_root(
+            "WikiTableQuestions-master/WikiTableQuestions-master",
+            "WikiTableQuestions",
+        )
 
         records = list(
             iter_wtq_records(wtq_root, split="pristine-unseen-tables", limit=11)
@@ -75,7 +92,10 @@ class DatasetAdapterTests(unittest.TestCase):
         )
 
     def test_tabfact_restores_entities_hidden_by_processed_unk_tokens(self):
-        tabfact_root = DATASET_ROOT / "Table-Fact-Checking-master" / "Table-Fact-Checking-master"
+        tabfact_root = dataset_root(
+            "Table-Fact-Checking-master/Table-Fact-Checking-master",
+            "Table-Fact-Checking",
+        )
 
         record = next(iter_tabfact_records(tabfact_root, split="test", limit=1))
 
@@ -98,9 +118,10 @@ class DatasetAdapterTests(unittest.TestCase):
 
     def test_duplicate_table_headers_are_made_unique(self):
         table_path = (
-            DATASET_ROOT
-            / "WikiTableQuestions-master"
-            / "WikiTableQuestions-master"
+            dataset_root(
+                "WikiTableQuestions-master/WikiTableQuestions-master",
+                "WikiTableQuestions",
+            )
             / "csv"
             / "203-csv"
             / "826.csv"

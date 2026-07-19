@@ -5,11 +5,23 @@ import unittest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-MACT_CODE = PROJECT_ROOT.parent / "MACT-main" / "MACT-main" / "code"
 DATASET_ROOT = PROJECT_ROOT.parent / "dataset"
 sys.path.insert(0, str(PROJECT_ROOT / "code"))
 
 from dataset_adapters import iter_crt_records, iter_tabfact_records, iter_wtq_records  # noqa: E402
+
+
+def first_existing_root(*candidates: Path) -> Path:
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+MACT_CODE = first_existing_root(
+    PROJECT_ROOT.parent / "MACT-main" / "MACT-main" / "code",
+    PROJECT_ROOT.parent / "MACT" / "code",
+)
 
 
 def load_mact_table2df():
@@ -23,8 +35,14 @@ def load_mact_table2df():
 class MactSmokeTests(unittest.TestCase):
     def test_mact_utils_builds_dataframes_for_all_three_datasets(self):
         table2df = load_mact_table2df()
-        wtq_root = DATASET_ROOT / "WikiTableQuestions-master" / "WikiTableQuestions-master"
-        tabfact_root = DATASET_ROOT / "Table-Fact-Checking-master" / "Table-Fact-Checking-master"
+        wtq_root = first_existing_root(
+            DATASET_ROOT / "WikiTableQuestions-master" / "WikiTableQuestions-master",
+            DATASET_ROOT / "WikiTableQuestions",
+        )
+        tabfact_root = first_existing_root(
+            DATASET_ROOT / "Table-Fact-Checking-master" / "Table-Fact-Checking-master",
+            DATASET_ROOT / "Table-Fact-Checking",
+        )
         crt_root = DATASET_ROOT / "CRT-QA"
         records = {
             "wtq": next(iter_wtq_records(wtq_root, split="training", limit=1)),

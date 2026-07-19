@@ -262,6 +262,7 @@ def _candidate_crt_table_paths(
         / "all_csv"
         / table_id,
         crt_root.parent / "Table-Fact-Checking-master" / "data" / "all_csv" / table_id,
+        crt_root.parent / "Table-Fact-Checking" / "data" / "all_csv" / table_id,
     ]
     if table_dir is not None:
         paths.insert(0, Path(table_dir) / table_id)
