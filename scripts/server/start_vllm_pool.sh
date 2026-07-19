@@ -36,10 +36,10 @@ for index in "${!GROUP_ARRAY[@]}"; do
   fi
 
   echo "[vllm] starting ${MODEL_ID} on CUDA_VISIBLE_DEVICES=${group}, port=${port}, tp=${tp_size}"
-  (
-    export CUDA_VISIBLE_DEVICES="${group}"
-    export HF_HOME="${HF_HOME:-/data/hf}"
-    export HF_HUB_ENABLE_HF_TRANSFER="${HF_HUB_ENABLE_HF_TRANSFER:-1}"
+  setsid nohup env \
+    CUDA_VISIBLE_DEVICES="${group}" \
+    HF_HOME="${HF_HOME:-/data/hf}" \
+    HF_HUB_ENABLE_HF_TRANSFER="${HF_HUB_ENABLE_HF_TRANSFER:-1}" \
     vllm serve "${MODEL_ID}" \
       --host 0.0.0.0 \
       --port "${port}" \
@@ -49,8 +49,8 @@ for index in "${!GROUP_ARRAY[@]}"; do
       --max-model-len "${VLLM_MAX_MODEL_LEN}" \
       --gpu-memory-utilization "${VLLM_GPU_MEMORY_UTILIZATION}" \
       --dtype "${VLLM_DTYPE}" \
-      ${VLLM_EXTRA_ARGS}
-  ) > "${log_file}" 2>&1 &
+      ${VLLM_EXTRA_ARGS} \
+      > "${log_file}" 2>&1 < /dev/null &
   echo $! > "${pid_file}"
   echo "[vllm] pid $(cat "${pid_file}") -> ${log_file}"
 done
