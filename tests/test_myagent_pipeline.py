@@ -1950,6 +1950,309 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             "true",
         )
 
+    def test_tabfact_last_row_entity_shortcut_checks_table_order(self):
+        df = pd.DataFrame(
+            {
+                "team 1": ["siauliai", "triumph", "ask riga"],
+                "agg": ["136 - 167", "146 - 159", "142 - 137"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_last_row_entity_answer(
+                "ask riga be the last place in the competition in the basketball",
+                df,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_last_row_entity_answer(
+                "triumph be the last place in the competition in the basketball",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_condition_value_shortcut_matches_row_conditions(self):
+        df = pd.DataFrame(
+            {
+                "position in table": ["13th", "3rd", "10th"],
+                "manner of departure": ["resigned", "resigned", "resigned"],
+                "date of vacancy": ["20 february 2011", "26 february 2011", "28 february 2011"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_condition_value_answer(
+                "the date of vacancy when the position in the table be 10th and the manner of departure be resign be 28 february 2011",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_threshold_implication_shortcut_checks_matching_rows(self):
+        df = pd.DataFrame(
+            {
+                "employees (average / year)": [26538, 26554, 32363],
+                "net profit / loss (sek)": [1234000000, 4936000000, 418000000],
+                "basic eps (sek)": [3.87, 28.10, 1.06],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_threshold_implication_answer(
+                "when the net profit / loss (sek) be larger than 4935000000 , and a basic eps (sek) larger than 1.06 the number of employee (average / year) be larger than 4",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_same_side_score_comparison_uses_away_score(self):
+        df = pd.DataFrame(
+            {
+                "home team": ["melbourne", "carlton"],
+                "home team score": ["11.14 (80)", "8.11 (59)"],
+                "away team": ["north melbourne", "geelong"],
+                "away team score": ["10.12 (72)", "9.11 (65)"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_same_side_score_comparison_answer(
+                "geelong get a higher score than north melbourne as an away team",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_highest_shutout_score_shortcut_checks_entity_and_score(self):
+        df = pd.DataFrame(
+            {
+                "home team": ["burnley", "woking", "chester city"],
+                "score": ["2 - 0", "5 - 1", "4 - 0"],
+                "away team": ["stoke city", "merthyr tydfil", "leek town"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_highest_shutout_score_answer(
+                "chester city play the highest scoring shut out game : 4 to 0",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_entity_metric_comparison_shortcut_selects_loss_column(self):
+        df = pd.DataFrame(
+            {
+                "club": ["london broncos", "warrington wolves"],
+                "lost": [5, 6],
+                "points": [2, 0],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_entity_metric_comparison_answer(
+                "london bronco club have a lower number of loss than the warrington wolves club",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_entity_extreme_metric_shortcut_parses_uncertainty_values(self):
+        df = pd.DataFrame(
+            {
+                "name": ["ngc 1533", "ngc 1705", "ngc 1596"],
+                "redshift (km / s )": ["790 +/- 5", "633 +/- 6", "1510 +/- 8"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_entity_extreme_metric_answer(
+                "ngc 1705 have the smallest redshift at 633 kilometer per second plus or minus 6 kilometer per second",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_fuzzy_row_inclusion_ignores_relation_words(self):
+        df = pd.DataFrame(
+            {
+                "title": ["a fistful of secrets"],
+                "directed by": ["robert j. metoyer"],
+                "production code": ["2398204"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_fuzzy_row_inclusion_answer(
+                "robert j metoyer direct a fist full of secret (production code 2398204)",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_least_threshold_shortcut_checks_global_minimum(self):
+        df = pd.DataFrame(
+            {
+                "opponent": ["white sox", "white sox", "royals"],
+                "attendance": [40299, 746, 12533],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_least_threshold_answer(
+                "less than 1000 crowd attend the game against the white sox make it the least attended game",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_extreme_metric_belongs_shortcut_checks_owner_and_value(self):
+        built_df = pd.DataFrame(
+            {
+                "class": ["i4", "j1"],
+                "no built": [5, 1],
+            }
+        )
+        enrollment_df = pd.DataFrame(
+            {
+                "institution": ["oklahoma baptist university", "texas college"],
+                "enrollment": [1871, 600],
+            }
+        )
+        golf_df = pd.DataFrame(
+            {
+                "player": ["steve stricker", "colin montgomerie"],
+                "country": ["united states", "scotland"],
+                "score": ["70 + 69 = 139", "69 + 71 = 140"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_extreme_metric_belongs_answer(
+                "the lowest no built be class i4",
+                built_df,
+            ),
+            "false",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_extreme_metric_belongs_answer(
+                "the smallest enrollment belongs to oklahoma baptist university university at 1871",
+                enrollment_df,
+            ),
+            "false",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_extreme_metric_belongs_answer(
+                "steve stricker of united state have the lowest score among all the player",
+                golf_df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_threshold_count_shortcut_counts_numeric_score_column(self):
+        df = pd.DataFrame(
+            {
+                "away team": ["north melbourne", "st kilda", "richmond", "collingwood"],
+                "away team score": ["6.12 (48)", "10.11 (71)", "9.15 (69)", "10.14 (74)"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_threshold_count_answer(
+                "a total of 2 away team have an away team score higher than 10.00",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_first_n_rows_count_shortcut_uses_table_order(self):
+        df = pd.DataFrame(
+            {
+                "pick": [11, 47, 64, 80],
+                "college / junior / club team": [
+                    "london knights ( oha )",
+                    "cornwall royals ( oha )",
+                    "london knights ( oha )",
+                    "regina pats ( wchl )",
+                ],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_first_n_rows_count_answer(
+                "2 of the first 3 draft pick come from the london knight",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_entity_metric_threshold_shortcut_checks_episode_number(self):
+        df = pd.DataFrame(
+            {
+                "no in series": [147, 148, 159],
+                "title": ["wrong - way tanner", "tough love", "the test"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_entity_metric_threshold_answer(
+                "the episode number in the series the test be before 148.0",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_year_column_value_shortcut_matches_na_values(self):
+        df = pd.DataFrame(
+            {
+                "year": [2010, 2011],
+                "reader 's vote": ["peter doyle", "na"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_year_column_value_answer(
+                "in 2011 , n / a be the reader 's vote",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_game_result_score_shortcut_checks_opponent_win(self):
+        df = pd.DataFrame(
+            {
+                "game": [64, 65],
+                "team": ["miami", "orlando"],
+                "score": ["w 83 - 74 (ot)", "l 79 - 92 (ot)"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_game_result_score_answer(
+                "orlando win game 65 with a score of 79 - 92",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_date_metric_difference_shortcut_compares_week_later(self):
+        df = pd.DataFrame(
+            {
+                "date": ["september 18 , 1988", "september 25 , 1988"],
+                "attendance": [63990, 56012],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_date_metric_difference_answer(
+                "attendance on september 18 , 1988 be 7978 more than the game a week later",
+                df,
+            ),
+            "true",
+        )
+
     def test_crt_consecutive_year_medalist_shortcut_checks_all_medal_columns(self):
         df = pd.DataFrame(
             {

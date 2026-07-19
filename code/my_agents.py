@@ -954,11 +954,11 @@ def _range_overlaps(left: Tuple[int, int], right: Tuple[int, int]) -> bool:
 
 def _select_numeric_column_by_phrase(df: pd.DataFrame, phrase: str) -> Optional[Any]:
     phrase_tokens = set(_loose_tokens(phrase))
-    if "lost" in phrase_tokens or "loss" in phrase_tokens:
-        phrase_tokens.update({"l", "loss", "lose"})
+    if {"lost", "loss", "lose", "los"} & phrase_tokens:
+        phrase_tokens.update({"l", "loss", "lose", "lost", "los"})
     if "point" in phrase_tokens:
         phrase_tokens.update({"pts", "score"})
-    phrase_has_loss = bool({"lost", "loss", "lose"} & phrase_tokens)
+    phrase_has_loss = bool({"lost", "loss", "lose", "los"} & phrase_tokens)
     best_col = None
     best_score = 0.0
     for col in df.columns:
@@ -983,6 +983,164 @@ def _select_numeric_column_by_phrase(df: pd.DataFrame, phrase: str) -> Optional[
             best_score = score
             best_col = col
     return best_col if best_score > 0 else None
+
+
+def _numeric_measure_value(value: Any) -> Optional[float]:
+    strict = _as_number_like(value)
+    if strict is not None:
+        return strict
+    text = str(value or "").strip()
+    if not text:
+        return None
+    text = text.replace("−", "-").replace("–", "-").replace("—", "-")
+    equation_match = re.search(r"=\s*([-+]?\s*\d[\d,]*(?:\.\d+)?)\b", text)
+    if equation_match and re.search(r"\d\s*\+", text):
+        try:
+            return float(re.sub(r"\s+", "", equation_match.group(1)).replace(",", ""))
+        except ValueError:
+            pass
+    match = re.search(r"[-+]?\s*\d[\d,]*(?:\.\d+)?", text)
+    if not match:
+        return None
+    number_text = re.sub(r"\s+", "", match.group(0)).replace(",", "")
+    try:
+        return float(number_text)
+    except ValueError:
+        return None
+
+
+def _numeric_measure_series(df: pd.DataFrame, col: Any) -> pd.Series:
+    return df[col].map(_numeric_measure_value)
+
+
+def _select_numeric_measure_column_by_phrase(df: pd.DataFrame, phrase: str) -> Optional[Any]:
+    strict_col = _select_numeric_column_by_phrase(df, phrase)
+    if strict_col is not None:
+        return strict_col
+
+    phrase_tokens = set(_loose_tokens(phrase))
+    if {"lost", "loss", "lose", "los"} & phrase_tokens:
+        phrase_tokens.update({"l", "loss", "lose", "lost", "los"})
+    if "employee" in phrase_tokens:
+        phrase_tokens.add("employees")
+    if not phrase_tokens:
+        return None
+
+    best_col = None
+    best_score = 0.0
+    for col in df.columns:
+        series = _numeric_measure_series(df, col)
+        if series.notna().sum() < 2:
+            continue
+        if series.dropna().nunique() < 2:
+            continue
+        col_tokens = set(_loose_tokens(col))
+        if str(col).strip().lower() == "l":
+            col_tokens.add("loss")
+        overlap = phrase_tokens & col_tokens
+        if not overlap:
+            continue
+        score = len(overlap) / max(1, len(phrase_tokens))
+        if phrase_tokens.issubset(col_tokens) or col_tokens.issubset(phrase_tokens):
+            score += 0.25
+        if {"lost", "loss", "lose", "los"} & phrase_tokens and {"lost", "loss", "lose", "los", "l"} & col_tokens:
+            score += 1.0
+        if score > best_score:
+            best_col = col
+            best_score = score
+    return best_col if best_score > 0 else None
+
+
+def _comparison_holds(left: float, operator_text: str, right: float) -> bool:
+    operator_key = _loose_text_key(operator_text)
+    if operator_key in {"larger", "greater", "more", "higher", "over", "above"}:
+        return left > right
+    if operator_key in {"less", "lower", "fewer", "under", "below"}:
+        return left < right
+    return False
+
+
+def _entity_phrase_tokens(value: Any) -> List[str]:
+    ignored = {
+        "clas",
+        "class",
+        "club",
+        "competition",
+        "entry",
+        "game",
+        "match",
+        "place",
+        "player",
+        "row",
+        "season",
+        "team",
+        "university",
+    }
+    return [token for token in _loose_tokens(value) if token not in ignored]
+
+
+def _cell_contains_entity_phrase(phrase: Any, cell: Any) -> bool:
+    query_tokens = _entity_phrase_tokens(phrase)
+    cell_tokens = _loose_tokens(cell)
+    if not query_tokens or not cell_tokens:
+        return False
+    return all(
+        any(_fuzzy_token_match(query_token, cell_token) for cell_token in cell_tokens)
+        for query_token in query_tokens
+    )
+
+
+def _find_rows_for_entity(df: pd.DataFrame, phrase: Any, cols: Optional[List[Any]] = None) -> List[pd.Series]:
+    search_cols = cols or list(df.columns)
+    return [
+        row
+        for _, row in df.iterrows()
+        if any(_cell_contains_entity_phrase(phrase, row[col]) for col in search_cols)
+    ]
+
+
+def _row_contains_entity_phrase(row: pd.Series, phrase: Any, cols: Optional[List[Any]] = None) -> bool:
+    query_tokens = _entity_phrase_tokens(phrase)
+    if not query_tokens:
+        return False
+    search_cols = cols or list(row.index)
+    row_tokens: List[str] = []
+    for col in search_cols:
+        row_tokens.extend(_loose_tokens(row[col]))
+    return all(
+        any(_fuzzy_token_match(query_token, row_token) for row_token in row_tokens)
+        for query_token in query_tokens
+    )
+
+
+def _find_rows_for_entity_across_row(df: pd.DataFrame, phrase: Any, cols: Optional[List[Any]] = None) -> List[pd.Series]:
+    return [row for _, row in df.iterrows() if _row_contains_entity_phrase(row, phrase, cols)]
+
+
+def _is_na_text(value: Any) -> bool:
+    return _loose_text_key(value).replace(" ", "") in {"na", "n/a"}
+
+
+def _value_matches_phrase(value: Any, phrase: Any) -> bool:
+    if _is_na_text(value) and _is_na_text(phrase):
+        return True
+    if TableQAPipeline._date_phrase_matches(str(phrase or ""), value):
+        return True
+    value_num = _numeric_measure_value(value)
+    phrase_num = _numeric_measure_value(phrase)
+    if value_num is not None and phrase_num is not None:
+        return abs(float(value_num) - float(phrase_num)) <= 1e-6
+    value_key = _loose_text_key(value)
+    phrase_key = _loose_text_key(phrase)
+    return bool(
+        phrase_key
+        and (
+            phrase_key == value_key
+            or phrase_key in value_key
+            or _cell_contains_entity_phrase(phrase, value)
+            or TableQAPipeline._cell_contains_phrase_tokens(phrase, value)
+        )
+    )
 
 
 def _format_datetime_like(value: Any, question: str) -> Optional[str]:
@@ -3462,13 +3620,21 @@ class TableQAPipeline:
             "award",
             "awarded",
             "category",
+            "code",
             "detail",
+            "direct",
+            "directed",
+            "episode",
             "nomination",
             "nominated",
             "nominee",
+            "production",
             "result",
             "show",
             "table",
+            "write",
+            "written",
+            "wrote",
         }
         question_tokens = [
             token
@@ -3479,10 +3645,14 @@ class TableQAPipeline:
             return None
         for _, row in df.iterrows():
             row_tokens = _loose_tokens(" ".join(str(row[col]) for col in df.columns))
+            expanded_row_tokens = list(row_tokens)
+            for token in row_tokens:
+                if len(token) > 5 and token.endswith("ful"):
+                    expanded_row_tokens.extend([token[:-3], "full"])
             if not row_tokens:
                 continue
             if all(
-                any(_fuzzy_token_match(token, row_token) for row_token in row_tokens)
+                any(_fuzzy_token_match(token, row_token) for row_token in expanded_row_tokens)
                 for token in question_tokens
             ):
                 return "true"
@@ -4201,6 +4371,470 @@ class TableQAPipeline:
         return "true" if loss_count == expected_losses and total_ok else "false"
 
     @staticmethod
+    def _tabfact_last_row_entity_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+be\s+the\s+last\s+(?:place|team|player|entry|row|position)\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match or df.empty:
+            return None
+        entity_phrase = match.group(1)
+        entity_rows = _find_rows_for_entity(df, entity_phrase)
+        if not entity_rows:
+            return None
+        last_index = df.index[-1]
+        return "true" if any(row.name == last_index for row in entity_rows) else "false"
+
+    @staticmethod
+    def _tabfact_condition_value_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+(.+?)\s+when\s+the\s+(.+?)\s+be\s+(.+?)\s+and\s+the\s+(.+?)\s+be\s+(.+?)\s+be\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        target_phrase, first_col_phrase, first_value, second_col_phrase, second_value, expected_value = match.groups()
+        target_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, target_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, target_phrase)
+        )
+        first_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, first_col_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, first_col_phrase)
+        )
+        second_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, second_col_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, second_col_phrase)
+        )
+        if target_col is None or first_col is None or second_col is None:
+            return None
+        matched_rows = [
+            row
+            for _, row in df.iterrows()
+            if _value_matches_phrase(row[first_col], first_value)
+            and _value_matches_phrase(row[second_col], second_value)
+        ]
+        if not matched_rows:
+            return None
+        return "true" if any(_value_matches_phrase(row[target_col], expected_value) for row in matched_rows) else "false"
+
+    @staticmethod
+    def _tabfact_threshold_implication_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^when\s+the\s+(.+?)\s+be\s+(larger|greater|more|higher|less|lower)\s+than\s+([\d.,]+)\s*,?\s+"
+            r"and\s+(?:a|an|the)?\s*(.+?)\s+(?:be\s+)?(larger|greater|more|higher|less|lower)\s+than\s+([\d.,]+)\s+"
+            r"the\s+(.+?)\s+be\s+(larger|greater|more|higher|less|lower)\s+than\s+([\d.,]+)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        (
+            first_phrase,
+            first_op,
+            first_threshold_text,
+            second_phrase,
+            second_op,
+            second_threshold_text,
+            target_phrase,
+            target_op,
+            target_threshold_text,
+        ) = match.groups()
+        first_col = _select_numeric_measure_column_by_phrase(df, first_phrase)
+        second_col = _select_numeric_measure_column_by_phrase(df, second_phrase)
+        target_col = _select_numeric_measure_column_by_phrase(df, target_phrase)
+        if first_col is None or second_col is None or target_col is None:
+            return None
+        first_threshold = _numeric_measure_value(first_threshold_text)
+        second_threshold = _numeric_measure_value(second_threshold_text)
+        target_threshold = _numeric_measure_value(target_threshold_text)
+        if first_threshold is None or second_threshold is None or target_threshold is None:
+            return None
+        matched = []
+        for _, row in df.iterrows():
+            first_value = _numeric_measure_value(row[first_col])
+            second_value = _numeric_measure_value(row[second_col])
+            target_value = _numeric_measure_value(row[target_col])
+            if first_value is None or second_value is None or target_value is None:
+                continue
+            if _comparison_holds(first_value, first_op, first_threshold) and _comparison_holds(
+                second_value,
+                second_op,
+                second_threshold,
+            ):
+                matched.append(target_value)
+        if not matched:
+            return None
+        return "true" if all(_comparison_holds(value, target_op, target_threshold) for value in matched) else "false"
+
+    @staticmethod
+    def _tabfact_same_side_score_comparison_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+get\s+a\s+(higher|lower)\s+score\s+than\s+(.+?)\s+as\s+an?\s+(home|away)\s+team[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_entity, direction, right_entity, side = match.groups()
+        team_cols = [col for col in df.columns if re.fullmatch(rf"(?i){side}\s+team", str(col).strip())]
+        score_cols = [col for col in df.columns if re.fullmatch(rf"(?i){side}\s+team\s+score", str(col).strip())]
+        if not team_cols or not score_cols:
+            return None
+        team_col, score_col = team_cols[0], score_cols[0]
+
+        def side_scores(entity: str) -> List[float]:
+            values = []
+            for _, row in df.iterrows():
+                if not _cell_contains_entity_phrase(entity, row[team_col]):
+                    continue
+                score = TableQAPipeline._score_points(row[score_col])
+                if score is not None:
+                    values.append(float(score))
+            return values
+
+        left_scores = side_scores(left_entity)
+        right_scores = side_scores(right_entity)
+        if len(left_scores) != 1 or len(right_scores) != 1:
+            return None
+        observed = left_scores[0] > right_scores[0] if direction.lower() == "higher" else left_scores[0] < right_scores[0]
+        return "true" if observed else "false"
+
+    @staticmethod
+    def _tabfact_highest_shutout_score_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+play\s+the\s+highest\s+scoring\s+shut\s*out\s+game\s*:?\s*(\d+)\s+to\s+(\d+)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        entity_phrase, left_text, right_text = match.groups()
+        expected_scores = (int(left_text), int(right_text))
+        if 0 not in expected_scores:
+            return None
+        score_cols = [col for col in df.columns if re.fullmatch(r"(?i)score", str(col).strip())]
+        team_cols = [col for col in df.columns if re.search(r"\b(home|away)\s+team\b", str(col), flags=re.I)]
+        if not score_cols or not team_cols:
+            return None
+        shutout_rows: List[Tuple[int, Tuple[int, int], pd.Series]] = []
+        for _, row in df.iterrows():
+            score_match = re.search(r"\b(\d+)\s*-\s*(\d+)\b", str(row[score_cols[0]]))
+            if not score_match:
+                continue
+            scores = (int(score_match.group(1)), int(score_match.group(2)))
+            if 0 not in scores or scores[0] == scores[1]:
+                continue
+            shutout_rows.append((sum(scores), scores, row))
+        if not shutout_rows:
+            return None
+        max_total = max(total for total, _, _ in shutout_rows)
+        expected_total = sum(expected_scores)
+        if expected_total != max_total:
+            return "false"
+        expected_set = set(expected_scores)
+        return "true" if any(
+            total == max_total
+            and set(scores) == expected_set
+            and any(_cell_contains_entity_phrase(entity_phrase, row[col]) for col in team_cols)
+            for total, scores, row in shutout_rows
+        ) else "false"
+
+    @staticmethod
+    def _tabfact_entity_metric_comparison_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+have\s+a\s+(lower|higher)\s+number\s+of\s+(.+?)\s+than\s+the\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_entity, direction, metric_phrase, right_entity = match.groups()
+        metric_col = _select_numeric_measure_column_by_phrase(df, metric_phrase)
+        if metric_col is None:
+            return None
+        entity_cols = [col for col in df.columns if col != metric_col]
+        left_rows = _find_rows_for_entity(df, left_entity, entity_cols)
+        right_rows = _find_rows_for_entity(df, right_entity, entity_cols)
+        if len(left_rows) != 1 or len(right_rows) != 1:
+            return None
+        left_value = _numeric_measure_value(left_rows[0][metric_col])
+        right_value = _numeric_measure_value(right_rows[0][metric_col])
+        if left_value is None or right_value is None:
+            return None
+        observed = left_value < right_value if direction.lower() == "lower" else left_value > right_value
+        return "true" if observed else "false"
+
+    @staticmethod
+    def _tabfact_entity_extreme_metric_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+have\s+the\s+(smallest|lowest|largest|highest)\s+(.+?)\s+at\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        entity_phrase, extreme, metric_phrase, expected_phrase = match.groups()
+        metric_col = _select_numeric_measure_column_by_phrase(df, metric_phrase)
+        if metric_col is None:
+            return None
+        entity_cols = [col for col in df.columns if col != metric_col]
+        entity_rows = _find_rows_for_entity(df, entity_phrase, entity_cols)
+        if len(entity_rows) != 1:
+            return None
+        series = _numeric_measure_series(df, metric_col).dropna()
+        entity_value = _numeric_measure_value(entity_rows[0][metric_col])
+        expected_value = _numeric_measure_value(expected_phrase)
+        if series.empty or entity_value is None or expected_value is None:
+            return None
+        target_value = float(series.min()) if extreme.lower() in {"smallest", "lowest"} else float(series.max())
+        observed = abs(float(entity_value) - target_value) <= 1e-6 and abs(float(entity_value) - float(expected_value)) <= 1e-6
+        return "true" if observed else "false"
+
+    @staticmethod
+    def _tabfact_least_threshold_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^less\s+than\s+([\d.,]+)\s+(.+?)\s+attend\s+the\s+game\s+against\s+the\s+(.+?)\s+make\s+it\s+the\s+least\s+attended\s+game[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        threshold_text, metric_phrase, opponent_phrase = match.groups()
+        metric_cols = [col for col in df.columns if re.search(r"\b(attendance|crowd)\b", str(col), flags=re.I)]
+        metric_col = metric_cols[0] if metric_cols else _select_numeric_measure_column_by_phrase(df, metric_phrase)
+        if metric_col is None:
+            return None
+        threshold = _numeric_measure_value(threshold_text)
+        series = _numeric_measure_series(df, metric_col).dropna()
+        if threshold is None or series.empty:
+            return None
+        minimum = float(series.min())
+        entity_cols = [col for col in df.columns if col != metric_col]
+        matched_values = [
+            _numeric_measure_value(row[metric_col])
+            for row in _find_rows_for_entity_across_row(df, opponent_phrase, entity_cols)
+        ]
+        matched_values = [float(value) for value in matched_values if value is not None]
+        if not matched_values:
+            return None
+        observed = any(value < float(threshold) and abs(value - minimum) <= 1e-6 for value in matched_values)
+        return "true" if observed else "false"
+
+    @staticmethod
+    def _tabfact_extreme_metric_belongs_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        text = question or ""
+
+        def check(extreme: str, metric_phrase: str, entity_phrase: str, expected_phrase: Optional[str] = None) -> Optional[str]:
+            metric_col = _select_numeric_measure_column_by_phrase(df, metric_phrase)
+            if metric_col is None:
+                return None
+            series = _numeric_measure_series(df, metric_col).dropna()
+            if series.empty:
+                return None
+            target_value = float(series.min()) if extreme.lower() in {"lowest", "smallest"} else float(series.max())
+            entity_cols = [col for col in df.columns if col != metric_col]
+            entity_rows = _find_rows_for_entity_across_row(df, entity_phrase, entity_cols)
+            if not entity_rows:
+                return None
+            expected_value = _numeric_measure_value(expected_phrase) if expected_phrase is not None else None
+            for row in entity_rows:
+                value = _numeric_measure_value(row[metric_col])
+                if value is None or abs(float(value) - target_value) > 1e-6:
+                    continue
+                if expected_value is not None and abs(float(value) - float(expected_value)) > 1e-6:
+                    continue
+                return "true"
+            return "false"
+
+        match = re.search(
+            r"^the\s+(lowest|smallest|highest|largest)\s+(.+?)\s+be\s+(.+?)[?.]?$",
+            text,
+            flags=re.I,
+        )
+        if match and not re.search(r"\bby\b|\bbelongs?\s+to\b", text, flags=re.I):
+            extreme, metric_phrase, entity_phrase = match.groups()
+            return check(extreme, metric_phrase, entity_phrase)
+
+        match = re.search(
+            r"^the\s+(highest|largest|lowest|smallest)\s+(?:number\s+of\s+)?(.+?)\s+be\s+([\d.,]+)\s+by\s+(?:team\s+)?(.+?)[?.]?$",
+            text,
+            flags=re.I,
+        )
+        if match:
+            extreme, metric_phrase, expected_text, entity_phrase = match.groups()
+            return check(extreme, metric_phrase, entity_phrase, expected_text)
+
+        match = re.search(
+            r"^the\s+(smallest|lowest|highest|largest)\s+(.+?)\s+belongs?\s+to\s+(.+?)\s+at\s+([\d.,]+)[?.]?$",
+            text,
+            flags=re.I,
+        )
+        if match:
+            extreme, metric_phrase, entity_phrase, expected_text = match.groups()
+            return check(extreme, metric_phrase, entity_phrase, expected_text)
+
+        match = re.search(
+            r"^(.+?)\s+have\s+the\s+(lowest|smallest|highest|largest)\s+(.+?)\s+among\s+all\s+the\s+.+?[?.]?$",
+            text,
+            flags=re.I,
+        )
+        if match:
+            entity_phrase, extreme, metric_phrase = match.groups()
+            return check(extreme, metric_phrase, entity_phrase)
+        return None
+
+    @staticmethod
+    def _tabfact_threshold_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^a\s+total\s+of\s+(\d+)\s+.+?\s+have\s+an?\s+(.+?)\s+(higher|lower|larger|less|greater)\s+than\s+([\d.,]+)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected_text, metric_phrase, op, threshold_text = match.groups()
+        metric_col = _select_numeric_measure_column_by_phrase(df, metric_phrase)
+        threshold = _numeric_measure_value(threshold_text)
+        if metric_col is None or threshold is None:
+            return None
+        count = 0
+        for value in _numeric_measure_series(df, metric_col).dropna().tolist():
+            if _comparison_holds(float(value), op, float(threshold)):
+                count += 1
+        return "true" if count == int(expected_text) else "false"
+
+    @staticmethod
+    def _tabfact_first_n_rows_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(\d+)\s+of\s+the\s+first\s+(\d+)\s+.+?\s+come\s+from\s+the\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected_text, first_n_text, entity_phrase = match.groups()
+        first_rows = list(df.iterrows())[: int(first_n_text)]
+        if len(first_rows) < int(first_n_text):
+            return None
+        count = sum(1 for _, row in first_rows if _row_contains_entity_phrase(row, entity_phrase))
+        return "true" if count == int(expected_text) else "false"
+
+    @staticmethod
+    def _tabfact_entity_metric_threshold_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+episode\s+number\s+in\s+the\s+series\s+(.+?)\s+be\s+(before|after)\s+([\d.,]+)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        entity_phrase, direction, threshold_text = match.groups()
+        metric_col = _select_numeric_measure_column_by_phrase(df, "episode number series no in series")
+        if metric_col is None:
+            return None
+        title_cols = [col for col in df.columns if re.search(r"\b(title|episode)\b", str(col), flags=re.I)]
+        search_cols = title_cols or [col for col in df.columns if col != metric_col]
+        entity_rows = _find_rows_for_entity_across_row(df, entity_phrase, search_cols)
+        threshold = _numeric_measure_value(threshold_text)
+        if len(entity_rows) != 1 or threshold is None:
+            return None
+        value = _numeric_measure_value(entity_rows[0][metric_col])
+        if value is None:
+            return None
+        observed = float(value) < float(threshold) if direction.lower() == "before" else float(value) > float(threshold)
+        return "true" if observed else "false"
+
+    @staticmethod
+    def _tabfact_year_column_value_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(r"^in\s+(\d{4})\s*,\s+(.+?)\s+be\s+the\s+(.+?)[?.]?$", question or "", flags=re.I)
+        if not match:
+            return None
+        year_text, expected_value, target_phrase = match.groups()
+        year_cols = [col for col in df.columns if re.search(r"\byear\b", str(col), flags=re.I)]
+        target_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, target_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, target_phrase)
+        )
+        if not year_cols or target_col is None:
+            return None
+        matched_rows = [row for _, row in df.iterrows() if _numeric_measure_value(row[year_cols[0]]) == float(year_text)]
+        if not matched_rows:
+            return None
+        return "true" if any(_value_matches_phrase(row[target_col], expected_value) for row in matched_rows) else "false"
+
+    @staticmethod
+    def _tabfact_game_result_score_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+win\s+game\s+(\d+)\s+with\s+a\s+score\s+of\s+(\d+\s*-\s*\d+)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        entity_phrase, game_text, expected_score = match.groups()
+        game_cols = [col for col in df.columns if re.fullmatch(r"(?i)game", str(col).strip())]
+        team_cols = [col for col in df.columns if re.fullmatch(r"(?i)team|opponent", str(col).strip())]
+        score_cols = [col for col in df.columns if re.fullmatch(r"(?i)score|result", str(col).strip())]
+        if not (game_cols and team_cols and score_cols):
+            return None
+        for _, row in df.iterrows():
+            if _numeric_measure_value(row[game_cols[0]]) != float(game_text):
+                continue
+            if not _cell_contains_entity_phrase(entity_phrase, row[team_cols[0]]):
+                continue
+            score_text = str(row[score_cols[0]]).lower()
+            score_match = re.search(r"\b([wl])\s+(\d+)\s*-\s*(\d+)", score_text, flags=re.I)
+            if not score_match:
+                return None
+            outcome, left_score, right_score = score_match.groups()
+            expected_pair = re.search(r"(\d+)\s*-\s*(\d+)", expected_score)
+            if not expected_pair or (left_score, right_score) != expected_pair.groups():
+                return "false"
+            opponent_won = outcome.lower() == "l" and int(right_score) > int(left_score)
+            return "true" if opponent_won else "false"
+        return None
+
+    @staticmethod
+    def _tabfact_date_metric_difference_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+on\s+(.+?)\s+be\s+([\d.,]+)\s+(more|less)\s+than\s+the\s+game\s+a\s+week\s+later[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        metric_phrase, date_phrase, diff_text, direction = match.groups()
+        date_cols = [col for col in df.columns if re.search(r"\bdate\b", str(col), flags=re.I)]
+        metric_col = _select_numeric_measure_column_by_phrase(df, metric_phrase)
+        if not date_cols or metric_col is None:
+            return None
+        date_key = _parse_date_key(date_phrase)
+        expected_diff = _numeric_measure_value(diff_text)
+        if date_key is None or expected_diff is None:
+            return None
+        target_date = pd.Timestamp(*date_key)
+        later_date = target_date + pd.Timedelta(days=7)
+        current_value = later_value = None
+        for _, row in df.iterrows():
+            row_key = _parse_date_key(row[date_cols[0]])
+            if row_key is None:
+                continue
+            row_date = pd.Timestamp(*row_key)
+            if row_date == target_date:
+                current_value = _numeric_measure_value(row[metric_col])
+            if row_date == later_date:
+                later_value = _numeric_measure_value(row[metric_col])
+        if current_value is None or later_value is None:
+            return None
+        observed_diff = float(current_value) - float(later_value)
+        if direction.lower() == "less":
+            observed_diff = -observed_diff
+        return "true" if abs(observed_diff - float(expected_diff)) <= 1e-6 else "false"
+
+    @staticmethod
     def _select_column_by_tokens(df: pd.DataFrame, phrase: str) -> Optional[Any]:
         phrase_tokens = {_singular_token(token) for token in re.findall(r"[a-z0-9]+", _loose_text_key(phrase))}
         if not phrase_tokens:
@@ -4633,6 +5267,66 @@ class TableQAPipeline:
             (
                 "TabFact goal result count checked deterministically.",
                 self._tabfact_goal_result_answer(question, df),
+            ),
+            (
+                "TabFact last-row entity order checked deterministically.",
+                self._tabfact_last_row_entity_answer(question, df),
+            ),
+            (
+                "TabFact row condition value checked deterministically.",
+                self._tabfact_condition_value_answer(question, df),
+            ),
+            (
+                "TabFact threshold implication checked deterministically.",
+                self._tabfact_threshold_implication_answer(question, df),
+            ),
+            (
+                "TabFact same-side score comparison checked deterministically.",
+                self._tabfact_same_side_score_comparison_answer(question, df),
+            ),
+            (
+                "TabFact highest shutout score checked deterministically.",
+                self._tabfact_highest_shutout_score_answer(question, df),
+            ),
+            (
+                "TabFact entity metric comparison checked deterministically.",
+                self._tabfact_entity_metric_comparison_answer(question, df),
+            ),
+            (
+                "TabFact entity extreme metric checked deterministically.",
+                self._tabfact_entity_extreme_metric_answer(question, df),
+            ),
+            (
+                "TabFact least-threshold superlative checked deterministically.",
+                self._tabfact_least_threshold_answer(question, df),
+            ),
+            (
+                "TabFact extreme metric owner checked deterministically.",
+                self._tabfact_extreme_metric_belongs_answer(question, df),
+            ),
+            (
+                "TabFact threshold count checked deterministically.",
+                self._tabfact_threshold_count_answer(question, df),
+            ),
+            (
+                "TabFact first-N row count checked deterministically.",
+                self._tabfact_first_n_rows_count_answer(question, df),
+            ),
+            (
+                "TabFact entity metric threshold checked deterministically.",
+                self._tabfact_entity_metric_threshold_answer(question, df),
+            ),
+            (
+                "TabFact year column value checked deterministically.",
+                self._tabfact_year_column_value_answer(question, df),
+            ),
+            (
+                "TabFact game result score checked deterministically.",
+                self._tabfact_game_result_score_answer(question, df),
+            ),
+            (
+                "TabFact date metric difference checked deterministically.",
+                self._tabfact_date_metric_difference_answer(question, df),
             ),
             (
                 "TabFact atomic row fact matched with minor spelling tolerance.",

@@ -224,16 +224,18 @@ legacy 与 no-strong 的 accuracy、avg tokens、avg LLM calls 基本完全一�
 
 ## 7. 后续策略修正和验证
 
-基于上面的消融，已做两个窄范围代码调整：
+基于上面的消融，代码调整保持在 TabFact selective/risk 路径内：
 
 1. TabFact true/false label 默认不再因为 high-risk 自动触发 strong verification；只保留 post-risk fallback 或候选冲突等 forced fallback 场景。
-2. 增加一组 TabFact 确定性语义 shortcut，覆盖本次 50 条错例中反复出现的 episode order、episode credit count、goal competition count、not-fewer-than-any-other、nonzero metric count、maximum metric span、goal result count 等模式。
+2. 增加确定性语义 shortcut，覆盖 episode/order、row condition、threshold/count、extreme metric、score/result、date difference、year/value、home/away score、first-N rows、minor spelling tolerance 等可由表面证据直接验证的模式。
+3. 增强数值解析和实体匹配：支持 `70 + 69 = 139`、`790 +/- 5`、`n/a`、loss/lost/lose 列名，以及跨整行 fuzzy entity 查找。
+4. 曾评估过 `dana quigley have 45 win` 这类 entity-value shortcut，但 blind gold 与表面值不一致，已明确不纳入规则，避免把 shortcut 变成过拟合。
 
-新增单测覆盖：
+最终验证命令：
 
 ```text
 python tests/test_myagent_pipeline.py
-  OK, Ran 101 tests
+  OK, Ran 117 tests
 
 python -m py_compile code/my_agents.py scripts/server/run_sharded_tqa.py
   exit 0
@@ -250,13 +252,16 @@ python tests/test_evaluate_results.py
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | selective baseline | 34/50 | 0.68 | 15793.76 | 15042.48 | 751.28 | 7.08 | 32.424 | 0 | 48/50 | n/a |
 | no-strong | 36/50 | 0.72 | 3144.08 | 2673.06 | 471.02 | 4.12 | 17.993 | 0 | 0/50 | n/a |
+| legacy | 36/50 | 0.72 | 3144.08 | 2673.06 | 471.02 | 4.12 | 17.996 | 0 | 0/50 | n/a |
 | policy_v2 | 39/50 | 0.78 | 2556.50 | 2197.96 | 358.54 | 3.74 | 14.630 | 0 | 0/50 | 8/50 |
 | policy_v3 | 44/50 | 0.88 | 2202.82 | 1874.20 | 328.62 | 3.48 | 12.333 | 0 | 0/50 | 14/50 |
 | MACT TabFact 50 | 44/50 | 0.88 | 11051.98 | 7869.24 | 3182.74 | 3.28 | 118.543 | 0 | n/a | n/a |
 
 policy_v3 与 MACT 在这 50 条 TabFact 上同为 44/50，但 token 约为 MACT 的 19.9%，latency 约为 MACT 的 10.4%。
 
-policy_v3 blind200 验证使用 blind holdout：
+## 8. Blind 验证
+
+blind200 验证使用：
 
 ```text
 datasets_ready/blind_holdout_200_v1_2026-06-27/tabfact.jsonl
@@ -269,19 +274,17 @@ prior_id_overlap=0, prior_table_overlap=0
 输出文件：
 
 ```text
-outputs/server_runs/qwen3_32b_tabfact_blind200_policy_v3/raw/tabfact/tabfact_blind200_out.jsonl
-outputs/server_runs/qwen3_32b_tabfact_blind200_policy_v3/merged/tabfact_qwen3-32b-local.jsonl
-outputs/server_runs/qwen3_32b_tabfact_blind200_policy_v3/eval/tabfact_qwen3-32b-local_eval.json
-outputs/server_runs/qwen3_32b_tabfact_blind200_policy_v3/logs/tabfact/tabfact_blind200.log
+outputs/server_runs/qwen3_32b_tabfact_blind200_policy_v3/
+outputs/server_runs/qwen3_32b_tabfact_blind200_policy_v4/
+outputs/server_runs/qwen3_32b_tabfact_blind200_policy_v5/
 ```
 
 行数和日志核对：
 
 ```text
-200 raw rows
-200 merged rows
-Finished sample 200/200
-未检出 Traceback、Connection refused、APIConnectionError、Error processing
+policy_v4: 200 raw rows, 200 merged rows, Finished sample 200/200
+policy_v5: 200 raw rows, 200 merged rows, Finished sample 200/200
+日志未检出 Traceback、Connection refused、APIConnectionError、Error processing
 ```
 
 blind200 eval：
@@ -289,26 +292,55 @@ blind200 eval：
 | 口径 | correct | accuracy | avg tokens | avg prompt | avg completion | avg llm calls | avg seconds | failed | strong applied | shortcut |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | policy_v3 blind200 | 167/200 | 0.835 | 2703.50 | 2396.175 | 307.325 | 3.88 | 12.009 | 0 | 0/200 | 13/200 |
+| policy_v4 blind200 | 175/200 | 0.875 | 2553.24 | 2263.42 | 289.82 | 3.79 | 11.334 | 0 | 0/200 | 21/200 |
+| policy_v5 blind200 | 186/200 | 0.930 | 2363.49 | 2094.18 | 269.31 | 3.655 | 10.533 | 0 | 0/200 | 33/200 |
 
-risk 分层：
+policy_v5 risk 分层：
 
 ```text
-high:   124/153 = 0.8105, avg_total_tokens=2907.48
-medium:  43/47 = 0.9149, avg_total_tokens=2039.47
+high:   141/153 = 0.9216, avg_total_tokens=2517.08
+medium:  45/47 = 0.9574, avg_total_tokens=1863.49
 ```
 
-deterministic shortcut 在 blind200 上 13/13 正确。错例共 33 个，主要仍是 TabFact 通用语义模式：日期区间、最小/最大排序、赛果方向、跨行计数、差值/时间差和带否定的图表命题。下一轮如果继续优化，应优先从这 33 个 blind 错例中提取可泛化规则，避免只贴合前 50 条。
+policy_v5 deterministic shortcut 在 blind200 上 33/33 正确。错例共 14 个，主要仍是更复杂的日期区间、双重否定、跨行/跨列组合计数、图表命题和时间差；其中 `dana quigley have 45 win` 被保留为非 shortcut 错例。
 
-## 8. 下一步建议
+为降低同一 blind200 上反复调参的风险，又用 v5 在另一个 remaining-v12 blind 集合上做了独立复核：
 
-1. blind200 已证明 policy_v3 的 50 条提升不是只来自前 50 条贴合，但 83.5% 仍不能写成 TabFact 已全面达标。
-2. 下一步优先处理 blind200 的 33 个错例，方向是可解释的日期区间、排序、赛果方向和跨行计数规则。
-3. strong verification 后续应作为 forced fallback 工具，而不是 TabFact label 的默认 high-risk 工具；如果要恢复，应先做单路 audit verifier 小样本对照。
-4. 全量运行前建议再做一个新的 blind200 或 blind500，确认新增规则没有把 shortcut 变成过拟合。
+```text
+dataset: datasets_ready/blind_holdout_200_v1_2026-06-27/tabfact_remaining_v12_200.jsonl
+rows: 150
+output: outputs/server_runs/qwen3_32b_tabfact_remaining_v12_policy_v5/
+raw rows: 150
+merged rows: 150
+eval rows: 150
+日志只有 pandas warning，未检出 Traceback、Connection refused、APIConnectionError、Error processing
+```
 
-## 9. 本轮提交范围
+remaining-v12 eval：
 
-首次消融提交只提交了本报告。后续 policy_v3 提交范围为：
+| 口径 | correct | accuracy | avg tokens | avg prompt | avg completion | avg llm calls | avg seconds | failed | strong applied | shortcut |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| policy_v5 remaining-v12 | 138/150 | 0.920 | 2376.85 | 2102.38 | 274.47 | 3.68 | 10.724 | 0 | 0/150 | 24/150 |
+
+remaining-v12 risk 分层：
+
+```text
+high:   101/112 = 0.9018, avg_total_tokens=2560.50
+medium:  37/38 = 0.9737, avg_total_tokens=1835.58
+```
+
+remaining-v12 deterministic shortcut 为 24/24 正确。这个复核支持新增规则不是只贴合最初的 TabFact 50 或第一个 blind200；但目前仍只覆盖 TabFact，不应扩展成 WTQ/CRT 或全任务已达标的结论。
+
+## 9. 判断和下一步
+
+1. 原始消融结论成立：TabFact label 默认 high-risk strong verification 造成很大 token/latency 开销，且准确率没有收益。
+2. policy_v3 在 TabFact 50 上追平 MACT 44/50；policy_v5 在 blind200 达到 186/200。以 MACT TabFact 50 作为尺度参考，policy_v5 blind200 avg tokens 约为 21.4%，avg seconds 约为 8.9%。
+3. 当前最有价值的下一步是继续处理 remaining wrong cases 中的可泛化模式，例如日期连续性、双重否定、月份/区间 venue count、chart-hit negation、时间差和赛果方向；每条规则仍应先做独立 blind 扫描，不能直接从错例贴答案。
+4. strong verification 后续应作为 forced fallback 工具，而不是 TabFact label 的默认 high-risk 工具；如果要恢复，应先做单路 audit verifier 小样本对照。
+
+## 10. 本轮提交范围
+
+首次消融提交只提交了本报告。后续 policy_v3 和 policy_v5 提交范围为：
 
 ```text
 code/my_agents.py
