@@ -841,6 +841,50 @@ def _loose_text_key(value: Any) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _single_edit_distance_at_most_one(left: str, right: str) -> bool:
+    if abs(len(left) - len(right)) > 1:
+        return False
+    if left == right:
+        return True
+    if len(left) == len(right):
+        return sum(a != b for a, b in zip(left, right)) <= 1
+    if len(left) > len(right):
+        left, right = right, left
+    index_left = index_right = edits = 0
+    while index_left < len(left) and index_right < len(right):
+        if left[index_left] == right[index_right]:
+            index_left += 1
+            index_right += 1
+            continue
+        edits += 1
+        if edits > 1:
+            return False
+        index_right += 1
+    return True
+
+
+def _loose_text_matches_reference(value: Any, reference: str) -> bool:
+    value_key = _loose_text_key(value)
+    reference_key = _loose_text_key(reference)
+    if not value_key or not reference_key:
+        return False
+    if value_key == reference_key:
+        return True
+    if len(reference_key) >= 4 and reference_key in value_key:
+        return True
+    if len(value_key) >= 4 and value_key in reference_key:
+        return True
+    value_tokens = value_key.split()
+    reference_tokens = reference_key.split()
+    return any(
+        len(value_token) >= 5
+        and len(reference_token) >= 5
+        and _single_edit_distance_at_most_one(value_token, reference_token)
+        for value_token in value_tokens
+        for reference_token in reference_tokens
+    )
+
+
 def _loose_tokens(value: Any) -> List[str]:
     stopwords = {
         "a",
@@ -5044,6 +5088,124 @@ class TableQAPipeline:
         return rows[0][2]
 
     @staticmethod
+    def _wtq_reference_cell(df: pd.DataFrame, reference: str) -> Optional[Tuple[int, Any]]:
+        reference_key = _loose_text_key(reference)
+        if not reference_key:
+            return None
+        rows = TableQAPipeline._wtq_non_summary_rows(df).reset_index(drop=True)
+        for row_index, row in rows.iterrows():
+            for column in rows.columns:
+                cell_key = _loose_text_key(row[column])
+                if cell_key and (
+                    cell_key == reference_key
+                    or (len(reference_key) >= 4 and reference_key in cell_key)
+                    or (len(cell_key) >= 4 and cell_key in reference_key)
+                ):
+                    return row_index, column
+        return None
+
+    @staticmethod
+    def _wtq_after_reference_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        text = question or ""
+        count_match = re.search(
+            r"\bhow\s+many\s+.+?\s+(?:come|comes|came)\s+after\s+(.+?)[?.]?$",
+            text,
+            flags=re.I,
+        )
+        next_match = re.search(
+            r"\b(?:who|what)\s+(?:come|comes|came)\s+(?:in\s+)?after\s+(.+?)[?.]?$",
+            text,
+            flags=re.I,
+        )
+        if not count_match and not next_match:
+            return None
+        reference = (count_match or next_match).group(1).strip(" \t\r\n\"'")
+        cell = TableQAPipeline._wtq_reference_cell(df, reference)
+        if cell is None:
+            return None
+        row_index, column = cell
+        rows = TableQAPipeline._wtq_non_summary_rows(df).reset_index(drop=True)
+        if count_match:
+            return max(0, len(rows) - row_index - 1)
+        next_index = row_index + 1
+        if next_index >= len(rows):
+            return None
+        value = rows.loc[next_index, column]
+        return None if _is_missing_marker(value) else value
+
+    @staticmethod
+    def _wtq_zero_metric_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bhow\s+many\s+.+?\s+did\s+not\s+win\s+any\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        metric_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, match.group(1))
+            or TableQAPipeline._select_column_by_tokens(df, match.group(1))
+        )
+        if metric_col is None:
+            return None
+        count = 0
+        for value in TableQAPipeline._wtq_non_summary_rows(df)[metric_col].tolist():
+            number = _as_number_like(value)
+            if number is not None and abs(number) <= 1e-12:
+                count += 1
+        return count
+
+    @staticmethod
+    def _wtq_same_column_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bhow\s+many\s+times\s+is\s+the\s+(.+?)\s+the\s+same\s+as\s+the\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_phrase, right_phrase = match.groups()
+        left_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, left_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, left_phrase)
+        )
+        right_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, right_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, right_phrase)
+        )
+        if left_col is None or right_col is None or left_col == right_col:
+            return None
+        count = 0
+        for _, row in TableQAPipeline._wtq_non_summary_rows(df).iterrows():
+            left_key = _loose_text_key(row[left_col])
+            right_key = _loose_text_key(row[right_col])
+            if not left_key or not right_key:
+                continue
+            if left_key == right_key or left_key in right_key or right_key in left_key:
+                count += 1
+        return count
+
+    @staticmethod
+    def _wtq_contributor_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bhow\s+many\s+.+?\s+did\s+(.+?)\s+contribute\s+to\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        contributor = match.group(1).strip(" \t\r\n\"'")
+        count = 0
+        for _, row in TableQAPipeline._wtq_non_summary_rows(df).iterrows():
+            if any(
+                _loose_text_matches_reference(value, contributor)
+                for value in row.tolist()
+                if not _is_missing_marker(value)
+            ):
+                count += 1
+        return count
+
+    @staticmethod
     def _wtq_top_placing_competitor_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
         if not re.search(r"\btop\s+placing\s+competitor\b", question or "", flags=re.I):
             return None
@@ -5548,6 +5710,22 @@ class TableQAPipeline:
                 self._wtq_superlative_owner_answer(question, df),
             ),
             (
+                "WTQ after-reference row order answered deterministically.",
+                self._wtq_after_reference_answer(question, df),
+            ),
+            (
+                "WTQ zero metric rows counted deterministically.",
+                self._wtq_zero_metric_count_answer(question, df),
+            ),
+            (
+                "WTQ matching table columns counted deterministically.",
+                self._wtq_same_column_count_answer(question, df),
+            ),
+            (
+                "WTQ contributor rows counted deterministically.",
+                self._wtq_contributor_count_answer(question, df),
+            ),
+            (
                 "WTQ last requested table-column value selected deterministically.",
                 self._wtq_last_requested_column_answer(question, df),
             ),
@@ -5967,15 +6145,34 @@ class TableQAPipeline:
             )
             if protected_deterministic:
                 consensus = selected
+            wtq_unforced_verifier_conflict = (
+                result.dataset_profile == "wtq"
+                and not forced
+                and consensus is not None
+                and selected is not None
+                and selected.is_valid
+                and consensus.name.startswith("thinking_")
+                and answer_similarity(
+                    selected.normalized_answer,
+                    consensus.normalized_answer,
+                    result.answer_contract,
+                )
+                < 1.0
+            )
             accepted_consensus = False
             if consensus is not None and (
                 forced
-                or consensus.name == selected.name
-                or self._should_accept_strong_candidate(
-                    selected,
-                    consensus,
-                    result.answer_contract,
-                    forced=forced,
+                or (
+                    not wtq_unforced_verifier_conflict
+                    and (
+                        consensus.name == selected.name
+                        or self._should_accept_strong_candidate(
+                            selected,
+                            consensus,
+                            result.answer_contract,
+                            forced=forced,
+                        )
+                    )
                 )
             ):
                 accepted_consensus = True

@@ -1565,6 +1565,83 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(value, "Allianz Riviera")
 
+    def test_wtq_after_reference_shortcut_counts_following_rows(self):
+        df = pd.DataFrame(
+            {
+                "#": list(range(1, 7)),
+                "Title": ["Intro", "Seven", "Rollin Hard", "Harvest", "Sippin", "Red Mist"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_after_reference_answer(
+            'how many song come after "rollin hard"?',
+            df,
+        )
+
+        self.assertEqual(value, 3)
+
+    def test_wtq_after_reference_shortcut_returns_next_entity_in_same_column(self):
+        df = pd.DataFrame(
+            {
+                "Rank": ["1.", "1.", "1."],
+                "Athlete": ["Andriy Sokolovskyy", "Stefan Holm", "Andrey Tereshin"],
+                "2.15": ["o", "o", "o"],
+                "Result": ["2.27", "2.27", "2.27"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_after_reference_answer(
+            "who came in after stefan holm?",
+            df,
+        )
+
+        self.assertEqual(value, "Andrey Tereshin")
+
+    def test_wtq_zero_metric_shortcut_counts_rows_without_medals(self):
+        df = pd.DataFrame(
+            {
+                "Nation": ["Tunisia", "Algeria", "Croatia", "Total"],
+                "Silver": [0, 0, 3, 3],
+            }
+        )
+
+        value = TableQAPipeline._wtq_zero_metric_count_answer(
+            "how many countries did not win any silver medals?",
+            df,
+        )
+
+        self.assertEqual(value, 2)
+
+    def test_wtq_same_column_shortcut_counts_contained_matching_values(self):
+        df = pd.DataFrame(
+            {
+                "Winner": ["A", "B", "C"],
+                "Race leader": ["A", "B D", "D"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_same_column_count_answer(
+            "how many times is the winner the same as the race leader?",
+            df,
+        )
+
+        self.assertEqual(value, 2)
+
+    def test_wtq_contributor_shortcut_allows_single_edit_name_typo(self):
+        df = pd.DataFrame(
+            {
+                "Title": ["Song A", "Song B", "Song C"],
+                "Lyricist": ["Shailendra", "Hasrat Jaipuri", "Shailendra"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_contributor_count_answer(
+            "how many songs on this soundtrack did shailenra contribute to?",
+            df,
+        )
+
+        self.assertEqual(value, 2)
+
     def test_wtq_top_placing_competitor_shortcut_uses_lowest_rank(self):
         df = pd.DataFrame({"Place": [2, "Semifinal (1st)"], "Competitor": ["Runner B", "Runner A"]})
 
@@ -2819,6 +2896,50 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             if candidate.name.startswith("thinking_")
         ]
         self.assertEqual([candidate.name for candidate in thinking_candidates], ["thinking_direct"])
+
+    def test_wtq_nonforced_verifier_does_not_overwrite_conflicting_valid_code(self):
+        df = pd.DataFrame(
+            {
+                "Show": ["A", "B", "C", "D", "E", "F", "G", "H"],
+                "Episodes": [2, 3, 4, 5, 6, 7, 8, 9],
+            }
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.9,
+            rows=["A", "B", "C", "D", "E", "F", "G", "H"],
+            cols=["Episodes"],
+            planner_outputs=[
+                "[PLAN]\n"
+                "Step1: Count rows whose episode count is more than 1.\n"
+                "[CODE]\n"
+                "final_answer_value = int((df['Episodes'] > 1).sum())\n"
+            ],
+            thinking_output=(
+                '{"answer":5,"confidence":0.95,'
+                '"reasoning_summary":"incorrectly missed three qualifying shows"}'
+            ),
+        )
+        tracker = LLMCallTracker(fake)
+        pipeline = TableQAPipeline(
+            router=RouterAgent(tracker),
+            planner=PlannerAgent(tracker),
+            calculator=Calculator(),
+            critic=CriticAgent(tracker),
+            final_answer_agent=FinalAnswerAgent(tracker),
+            enable_selective_collaboration=True,
+        )
+        state = TQASessionState(
+            question="in how many tv shows did the actor appear in more than 1 episode?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.final_value, 8)
+        self.assertTrue(result.strong_verification_applied)
+        self.assertEqual(result.agreement_decision.reason, "valid_candidates_disagree")
 
     def test_tabfact_high_risk_label_does_not_auto_run_strong_verifier(self):
         df = pd.DataFrame({"team": ["A", "B"], "wins": [3, 2]})
