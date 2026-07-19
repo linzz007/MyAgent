@@ -97,6 +97,17 @@ class FakePipelineLLM:
         return "20"
 
 
+class CompleteAwareFakeLLM:
+    def __init__(self):
+        self.calls = []
+
+    def complete(self, prompt: str, temperature: float = 0.0, max_tokens=None) -> str:
+        self.calls.append(
+            {"prompt": prompt, "temperature": temperature, "max_tokens": max_tokens}
+        )
+        return "done"
+
+
 class MyAgentPipelineSmokeTests(unittest.TestCase):
     @staticmethod
     def _pipeline(fake_llm, enable_multi_view_validation=False):
@@ -138,6 +149,48 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertLess(result.compression_info["compression_ratio"], 1.0)
         self.assertEqual(tracker.snapshot()["llm_call_count"], 2)
 
+    def test_llm_tracker_complete_forwards_local_completion_budget(self):
+        fake = CompleteAwareFakeLLM()
+        tracker = LLMCallTracker(fake)
+
+        output = tracker.complete("verify", temperature=0.0, max_tokens=512)
+
+        self.assertEqual(output, "done")
+        self.assertEqual(fake.calls[0]["max_tokens"], 512)
+        self.assertEqual(tracker.snapshot()["llm_call_count"], 1)
+
+    def test_scalar_normalization_extracts_single_value_series(self):
+        df = pd.DataFrame({"Season": ["1989-1990 Season", "1990-1991 Season"]})
+        fake = FakePipelineLLM(semantic_score=0.05, rows=["1990-1991 Season"], cols=["Season"])
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="what was the next tie listed after the 1989-1990 season?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+        state.final_value = pd.Series(["1990-1991 Season"])
+
+        self.assertTrue(pipeline._normalize_and_validate(state))
+        self.assertEqual(state.final_value, "1990-1991 Season")
+        self.assertEqual(state.final_answer, "1990-1991 Season")
+
+    def test_scalar_normalization_rejects_multi_value_series_without_crashing(self):
+        df = pd.DataFrame({"Season": ["1989-1990 Season", "1990-1991 Season"]})
+        fake = FakePipelineLLM(semantic_score=0.05, rows=["1990-1991 Season"], cols=["Season"])
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="what was the next tie listed after the 1989-1990 season?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+        state.final_value = pd.Series(["1990-1991 Season", "1990-1991 Season"])
+
+        self.assertFalse(pipeline._normalize_and_validate(state))
+        self.assertEqual(state.final_value, ["1990-1991 Season", "1990-1991 Season"])
+        self.assertIn("one scalar", state.contract_validation["reason"])
+
     def test_state_infers_entity_list_answer_contract(self):
         df = pd.DataFrame({"Team": ["Alpha", "Beta"], "Races": [13, 14]})
 
@@ -171,6 +224,17 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, "2")
+
+    def test_wtq_difference_between_canonicalizes_negative_numeric_delta(self):
+        df = pd.DataFrame({"Player": ["first", "fourth"], "Balls": [10, 4]})
+
+        value = _canonicalize_wtq_scalar(
+            -6,
+            df,
+            "what is the difference in balls between the first and fourth players?",
+        )
+
+        self.assertEqual(value, 6)
 
     def test_crt_combination_scalar_is_reordered_by_table_column_order(self):
         df = pd.DataFrame(
@@ -1455,6 +1519,52 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertEqual(result.final_answer, "diams")
         self.assertNotIn("direct table QA extractor", "\n".join(fake.prompts))
 
+    def test_wtq_last_on_chart_shortcut_returns_target_entity_column(self):
+        df = pd.DataFrame(
+            {
+                "Event": ["100 m", "200 m", "4x400 m relay"],
+                "Time": ["10.20", "20.50", "One hour"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_last_row_entity_answer(
+            "which event is last on the chart",
+            df,
+        )
+
+        self.assertEqual(value, "4x400 m relay")
+
+    def test_wtq_superlative_owner_shortcut_excludes_election_summary_rows(self):
+        df = pd.DataFrame(
+            {
+                "Party": ["Conservative", "Labour", "Majority", "Turnout"],
+                "Candidate": ["Patrick McLoughlin", "Stephen Clamp", "Majority", "Turnout"],
+                "Votes": ["24,280", "16,910", "7,370", "50,589"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_superlative_owner_answer(
+            "which candidate has the most votes?",
+            df,
+        )
+
+        self.assertEqual(value, "Patrick McLoughlin")
+
+    def test_wtq_superlative_owner_shortcut_returns_entity_for_last_opened(self):
+        df = pd.DataFrame(
+            {
+                "Stadium": ["Stade de France", "Allianz Riviera", "Stade Chaban-Delmas"],
+                "Opened": ["1998", "2013", "1938"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_superlative_owner_answer(
+            "which stadium was the last to be opened?",
+            df,
+        )
+
+        self.assertEqual(value, "Allianz Riviera")
+
     def test_wtq_top_placing_competitor_shortcut_uses_lowest_rank(self):
         df = pd.DataFrame({"Place": [2, "Semifinal (1st)"], "Competitor": ["Runner B", "Runner A"]})
 
@@ -2668,6 +2778,47 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertTrue(result.strong_verification_applied)
         self.assertIn("superlative_order", result.problem_tags)
         self.assertTrue(any("final high-risk verifier" in prompt for prompt in fake.prompts))
+
+    def test_wtq_nonforced_strong_verifier_uses_direct_style_only(self):
+        df = pd.DataFrame(
+            {
+                "Country": ["A", "B"],
+                "Silver": [0, 1],
+            }
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.9,
+            rows=["A", "B"],
+            cols=["Country", "Silver"],
+            thinking_output=(
+                '{"answer":1,"confidence":0.92,'
+                '"reasoning_summary":"one country has zero silver medals"}'
+            ),
+        )
+        tracker = LLMCallTracker(fake)
+        pipeline = TableQAPipeline(
+            router=RouterAgent(tracker),
+            planner=PlannerAgent(tracker),
+            calculator=Calculator(),
+            critic=CriticAgent(tracker),
+            final_answer_agent=FinalAnswerAgent(tracker),
+            enable_selective_collaboration=True,
+        )
+        state = TQASessionState(
+            question="how many countries did not win any silver medals?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        result = pipeline.run(state)
+
+        thinking_candidates = [
+            candidate
+            for candidate in result.candidate_answers
+            if candidate.name.startswith("thinking_")
+        ]
+        self.assertEqual([candidate.name for candidate in thinking_candidates], ["thinking_direct"])
 
     def test_tabfact_high_risk_label_does_not_auto_run_strong_verifier(self):
         df = pd.DataFrame({"team": ["A", "B"], "wins": [3, 2]})

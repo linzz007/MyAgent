@@ -86,6 +86,69 @@ def to_sequence(value: Any) -> List[str]:
     return [text]
 
 
+def _first_json_object(text: str) -> Dict[str, Any]:
+    raw = (text or "").strip()
+    if not raw:
+        raise json.JSONDecodeError("empty response", raw, 0)
+    try:
+        payload = json.loads(raw)
+        if isinstance(payload, dict):
+            return payload
+    except json.JSONDecodeError:
+        pass
+
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, flags=re.I | re.S)
+    if fenced:
+        payload = json.loads(fenced.group(1))
+        if isinstance(payload, dict):
+            return payload
+
+    match = re.search(r"\{.*\}", raw, flags=re.S)
+    if match:
+        payload = json.loads(match.group(0))
+        if isinstance(payload, dict):
+            return payload
+    raise json.JSONDecodeError("no JSON object found", raw, 0)
+
+
+def _truncate_text(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    omitted = len(text) - max_chars
+    return f"{text[:max_chars]}... [truncated {omitted} chars]"
+
+
+def _compact_prompt_value(value: Any, *, max_string: int = 2500, max_items: int = 24, depth: int = 0) -> Any:
+    if isinstance(value, str):
+        return _truncate_text(value, max_string)
+    if isinstance(value, dict):
+        if depth >= 4:
+            return _truncate_text(json.dumps(value, ensure_ascii=False, default=str), max_string)
+        return {
+            str(key): _compact_prompt_value(
+                item,
+                max_string=max_string,
+                max_items=max_items,
+                depth=depth + 1,
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        items = [
+            _compact_prompt_value(
+                item,
+                max_string=max_string,
+                max_items=max_items,
+                depth=depth + 1,
+            )
+            for item in list(value)[:max_items]
+        ]
+        if len(value) > max_items:
+            items.append(f"... [truncated {len(value) - max_items} items]")
+        return items
+    return value
+
+
 def answer_similarity(left: Any, right: Any, answer_contract) -> float:
     left_norm = normalize_contract_value(left, answer_contract)
     right_norm = normalize_contract_value(right, answer_contract)
@@ -195,8 +258,19 @@ class ThinkingSolver:
 
     def _call_llm(self, prompt: str) -> str:
         if hasattr(self.llm, "complete"):
-            return self.llm.complete(prompt, temperature=0.0)
+            return self.llm.complete(prompt, temperature=0.0, max_tokens=512)
         return self.llm(prompt)
+
+    @staticmethod
+    def _candidate_prompt_payload(candidate: CandidateAnswer) -> Dict[str, Any]:
+        return {
+            "name": candidate.name,
+            "answer": _compact_prompt_value(candidate.normalized_answer, max_string=600),
+            "is_valid": bool(candidate.is_valid),
+            "confidence": float(candidate.confidence or 0.0),
+            "reasoning_summary": _truncate_text(str(candidate.reasoning_summary or ""), 600),
+            "failure": _truncate_text(str(candidate.failure or ""), 300),
+        }
 
     def solve(
         self,
@@ -209,7 +283,11 @@ class ThinkingSolver:
         contract_payload = (
             answer_contract.as_dict() if hasattr(answer_contract, "as_dict") else dict(answer_contract)
         )
-        candidate_payload = [candidate.to_dict() for candidate in candidates]
+        candidate_payload = [
+            self._candidate_prompt_payload(candidate)
+            for candidate in candidates
+        ]
+        evidence_payload = _compact_prompt_value(evidence, max_string=1400, max_items=16)
         style_instructions = {
             "direct": (
                 "Use a direct recomputation path. Identify the exact rows and columns "
@@ -238,11 +316,11 @@ class ThinkingSolver:
             "Return JSON only.\n\n"
             f"Question: {question}\n"
             f"Answer contract: {json.dumps(contract_payload, ensure_ascii=False)}\n"
-            f"Evidence: {json.dumps(evidence, ensure_ascii=False, default=str)}\n"
+            f"Evidence: {json.dumps(evidence_payload, ensure_ascii=False, default=str)}\n"
             f"Candidates: {json.dumps(candidate_payload, ensure_ascii=False, default=str)}\n"
         )
         try:
-            payload = json.loads(self._call_llm(prompt))
+            payload = _first_json_object(self._call_llm(prompt))
             answer = payload.get("answer", "")
             normalized = normalize_contract_value(answer, answer_contract)
             is_valid, reason = validate_contract_value(normalized, answer_contract)

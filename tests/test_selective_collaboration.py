@@ -20,9 +20,11 @@ class FakeLLM:
     def __init__(self, text):
         self.text = text
         self.calls = []
+        self.call_kwargs = []
 
-    def complete(self, prompt, temperature=0.0):
+    def complete(self, prompt, temperature=0.0, max_tokens=None):
         self.calls.append(prompt)
+        self.call_kwargs.append({"temperature": temperature, "max_tokens": max_tokens})
         return self.text
 
 
@@ -74,6 +76,50 @@ class SelectiveCollaborationTests(unittest.TestCase):
         self.assertEqual(candidate.normalized_answer, "true")
         self.assertTrue(candidate.is_valid)
         self.assertIn("Return JSON", llm.calls[0])
+        self.assertEqual(llm.call_kwargs[0]["max_tokens"], 512)
+
+    def test_thinking_solver_extracts_json_from_fenced_response(self):
+        llm = FakeLLM(
+            "```json\n"
+            + json.dumps({"answer": "false", "confidence": 0.8, "reasoning_summary": "checked rows"})
+            + "\n```"
+        )
+        solver = ThinkingSolver(llm)
+        candidate = solver.solve(
+            question="A has 3 wins.",
+            evidence={"candidate_rows": []},
+            candidates=[],
+            answer_contract=infer_answer_contract("A has 3 wins.", answer_mode="true_false"),
+        )
+
+        self.assertEqual(candidate.normalized_answer, "false")
+        self.assertTrue(candidate.is_valid)
+
+    def test_thinking_solver_compacts_large_prompt_payloads(self):
+        llm = FakeLLM(json.dumps({"answer": "true", "confidence": 0.7, "reasoning_summary": "checked rows"}))
+        solver = ThinkingSolver(llm)
+        long_program = "final_answer_value = 'x'\n" + ("#" * 5000)
+        solver.solve(
+            question="A has 3 wins.",
+            evidence={"original_table": "row\n" + ("cell " * 3000)},
+            candidates=[
+                CandidateAnswer(
+                    name="code",
+                    raw_answer="true",
+                    normalized_answer="true",
+                    is_valid=True,
+                    reasoning_summary="reason " * 400,
+                    executable_program=long_program,
+                    confidence=0.7,
+                )
+            ],
+            answer_contract=infer_answer_contract("A has 3 wins.", answer_mode="true_false"),
+        )
+
+        prompt = llm.calls[0]
+        self.assertNotIn(long_program, prompt)
+        self.assertLess(len(prompt), 6500)
+        self.assertIn("truncated", prompt)
 
 
 if __name__ == "__main__":

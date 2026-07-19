@@ -69,6 +69,7 @@ def _wtq_normalize(value: Any) -> str:
     text = re.sub(r"[‘’´`]", "'", text)
     text = re.sub(r"[“”]", '"', text)
     text = re.sub(r"[‐‑‒–—−]", "-", text)
+    text = text.replace('\\"', '"').replace("\\'", "'").strip("\\")
     while True:
         previous = text
         text = re.sub(r"((?<!^)\[[^\]]*\]|\[\d+\]|[•♦†‡*#+])*$", "", text.strip())
@@ -78,6 +79,7 @@ def _wtq_normalize(value: Any) -> str:
             break
     if text.endswith("."):
         text = text[:-1]
+    text = text.strip(" \t\r\n\"'\\")
     return re.sub(r"\s+", " ", text).lower().strip()
 
 
@@ -91,6 +93,8 @@ def _wtq_number(value: Any) -> float | None:
 
 
 def _wtq_item_key(value: Any) -> tuple[str, Any]:
+    if isinstance(value, bool):
+        return ("string", "yes" if value else "no")
     number = _wtq_number(value)
     if number is not None:
         return ("number", round(number, 9))

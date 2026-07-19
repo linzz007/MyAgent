@@ -188,6 +188,25 @@ class DeepSeekBackendTests(unittest.TestCase):
             {"chat_template_kwargs": {"enable_thinking": True}},
         )
 
+    def test_openai_compatible_complete_can_override_max_tokens_per_call(self):
+        factory = RecordingClientFactory()
+        args = make_args(
+            model_provider="openai_compatible",
+            plan_model_name="qwen3-32b-local",
+            api_base="http://127.0.0.1:8000/v1",
+            api_key_env="LOCAL_VLLM_API_KEY",
+            max_tokens=2048,
+        )
+        with patch.dict(os.environ, {"LOCAL_VLLM_API_KEY": "EMPTY"}, clear=False):
+            llm_fn = build_llm_fn(args, openai_client_factory=factory)
+            llm_fn.complete("verify", temperature=0.0, max_tokens=512)
+            llm_fn("normal")
+
+        requests = factory.client.chat.completions.calls
+        self.assertEqual(requests[0]["max_tokens"], 512)
+        self.assertEqual(requests[1]["max_tokens"], 2048)
+        self.assertEqual(llm_fn.snapshot()["request_count"], 2)
+
     def test_missing_api_key_fails_before_any_request(self):
         factory = RecordingClientFactory()
         with patch.dict(os.environ, {}, clear=True):

@@ -110,12 +110,18 @@ class ChatCompletionCallable:
         self.prompt_tokens = 0
         self.completion_tokens = 0
 
-    def __call__(self, prompt: str) -> str:
+    def _complete_chat(
+        self,
+        prompt: str,
+        *,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
         request = {
             "model": self.model_name,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
+            "temperature": self.temperature if temperature is None else temperature,
+            "max_tokens": self.max_tokens if max_tokens is None else max_tokens,
             "stream": False,
         }
         if self.provider == "deepseek":
@@ -130,6 +136,22 @@ class ChatCompletionCallable:
         self.prompt_tokens += int(getattr(usage, "prompt_tokens", 0) or 0)
         self.completion_tokens += int(getattr(usage, "completion_tokens", 0) or 0)
         return _require_text_response(completion)
+
+    def __call__(self, prompt: str) -> str:
+        return self._complete_chat(prompt)
+
+    def complete(
+        self,
+        prompt: str,
+        *,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+    ) -> str:
+        return self._complete_chat(
+            prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
     def snapshot(self) -> dict[str, int]:
         return {

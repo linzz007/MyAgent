@@ -186,6 +186,26 @@ class LLMCallTracker:
         self.completion_tokens += estimate_text_tokens(output)
         return output
 
+    def complete(
+        self,
+        prompt: str,
+        *,
+        temperature: float = 0.0,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        self.call_count += 1
+        self.prompt_tokens += estimate_text_tokens(prompt)
+        if hasattr(self.llm_fn, "complete"):
+            output = self.llm_fn.complete(
+                prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        else:
+            output = self.llm_fn(prompt)
+        self.completion_tokens += estimate_text_tokens(output)
+        return output
+
     def snapshot(self) -> Dict[str, int]:
         return {
             "llm_call_count": self.call_count,
@@ -1250,6 +1270,13 @@ def _canonicalize_wtq_scalar(value: Any, df: pd.DataFrame, question: str) -> Any
         numeric = _as_number_like(value)
         if (
             numeric is not None
+            and numeric < 0
+            and re.search(r"\bdifference\b.*\bbetween\b", question_text, flags=re.I)
+        ):
+            delta = abs(numeric)
+            return int(delta) if float(delta).is_integer() else delta
+        if (
+            numeric is not None
             and re.search(r"\bhow long\b", question_text, flags=re.I)
             and re.search(r"\b(?:year|years|season|after\s+\d{4})\b", question_text, flags=re.I)
         ):
@@ -1264,6 +1291,12 @@ def _canonicalize_wtq_scalar(value: Any, df: pd.DataFrame, question: str) -> Any
     candidate = re.sub(r"\s+", " ", value).strip()
     candidate_number = _as_number_like(candidate)
     if candidate_number is not None:
+        if (
+            candidate_number < 0
+            and re.search(r"\bdifference\b.*\bbetween\b", question_text, flags=re.I)
+        ):
+            delta = abs(candidate_number)
+            return str(int(delta) if float(delta).is_integer() else delta)
         if (
             re.search(r"\bhow long\b", question_text, flags=re.I)
             and re.search(r"\b(?:year|years|season|after\s+\d{4})\b", question_text, flags=re.I)
@@ -1358,6 +1391,30 @@ def _canonicalize_crt_scalar(
         if key in {"west", "western"}:
             return "western hemisphere"
     return value
+
+
+def _coerce_pandas_answer_value(value: Any) -> Any:
+    if isinstance(value, pd.Series):
+        items = [
+            item.item() if hasattr(item, "item") else item
+            for item in value.dropna().tolist()
+        ]
+        if len(items) == 1:
+            return items[0]
+        return items
+    if isinstance(value, pd.DataFrame):
+        return value.to_dict(orient="records")
+    return value
+
+
+def _is_empty_answer_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, (list, tuple, set, dict)):
+        return len(value) == 0
+    return False
 
 
 def _strip_entity_metadata(value: Any) -> Any:
@@ -2836,6 +2893,7 @@ class TableQAPipeline:
             state.final_value,
             state.answer_contract,
         )
+        state.final_value = _coerce_pandas_answer_value(state.final_value)
         if (
             state.dataset_profile == "wtq"
             and state.answer_contract.kind == "scalar"
@@ -2845,6 +2903,7 @@ class TableQAPipeline:
                 state.original_df,
                 state.question,
             )
+            state.final_value = _coerce_pandas_answer_value(state.final_value)
         if (
             state.dataset_profile == "crt"
             and state.answer_contract.kind == "scalar"
@@ -2854,12 +2913,13 @@ class TableQAPipeline:
                 state.question,
                 state.original_df,
             )
+            state.final_value = _coerce_pandas_answer_value(state.final_value)
         valid, reason = validate_contract_value(
             state.final_value,
             state.answer_contract,
         )
         state.contract_validation = {"valid": valid, "reason": reason}
-        if valid and state.final_value not in (None, ""):
+        if valid and not _is_empty_answer_value(state.final_value):
             if state.answer_contract.kind in {"list", "tuple"}:
                 state.final_answer = json.dumps(state.final_value, ensure_ascii=False)
             elif state.answer_contract.kind in {"scalar", "label"}:
@@ -4852,6 +4912,138 @@ class TableQAPipeline:
         return best_col if best_score else None
 
     @staticmethod
+    def _wtq_entity_column(df: pd.DataFrame, phrase: str, *, exclude: Optional[set[Any]] = None) -> Optional[Any]:
+        exclude = exclude or set()
+        col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, phrase)
+            or TableQAPipeline._select_column_by_tokens(df, phrase)
+        )
+        if col is not None and col not in exclude:
+            return col
+
+        skipped_names = {
+            "rank",
+            "place",
+            "position",
+            "pos",
+            "#",
+            "no",
+            "no.",
+            "number",
+            "%",
+            "±%",
+            "+/-",
+        }
+        for candidate in df.columns:
+            if candidate in exclude:
+                continue
+            name = str(candidate).strip().lower()
+            if name in skipped_names:
+                continue
+            values = [value for value in df[candidate].tolist() if not _is_missing_marker(value)]
+            if not values:
+                continue
+            numeric_count = sum(1 for value in values if _as_number_like(value) is not None)
+            if numeric_count < len(values):
+                return candidate
+        return None
+
+    @staticmethod
+    def _wtq_non_summary_rows(df: pd.DataFrame) -> pd.DataFrame:
+        summary_keys = {
+            "majority",
+            "turnout",
+            "total",
+            "totals",
+            "overall",
+            "swing",
+            "hold",
+        }
+
+        def is_summary_row(row: pd.Series) -> bool:
+            keys = [_loose_text_key(value) for value in row.tolist()]
+            keys = [key for key in keys if key]
+            if not keys:
+                return True
+            if any(key in summary_keys for key in keys):
+                return True
+            return any(re.search(r"\b(?:majority|turnout|total|overall)\b", key) for key in keys)
+
+        kept = df[[not is_summary_row(row) for _, row in df.iterrows()]]
+        return kept if not kept.empty else df
+
+    @staticmethod
+    def _wtq_last_row_entity_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\b(?:which|what)\s+(.+?)\s+(?:is|was|were|are)\s+last\s+"
+            r"(?:on|in)\s+(?:the\s+)?(?:chart|table)\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        target_col = TableQAPipeline._wtq_entity_column(df, match.group(1))
+        if target_col is None:
+            return None
+        values = [
+            value
+            for value in TableQAPipeline._wtq_non_summary_rows(df)[target_col].tolist()
+            if not _is_missing_marker(value) and _loose_text_key(value)
+        ]
+        return values[-1] if values else None
+
+    @staticmethod
+    def _wtq_superlative_owner_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        text = question or ""
+        first_match = re.search(
+            r"\b(?:which|what)\s+(.+?)\s+(?:has|have|had|earned|won)\s+"
+            r"(?:the\s+)?(most|least|highest|lowest|largest|smallest)\s+(.+?)[?.]?$",
+            text,
+            flags=re.I,
+        )
+        opened_match = re.search(
+            r"\b(?:which|what)\s+(.+?)\s+(?:was|were|is|are)\s+"
+            r"(?:the\s+)?(last|latest|first|earliest)\s+to\s+be\s+(.+?)[?.]?$",
+            text,
+            flags=re.I,
+        )
+        if first_match:
+            owner_phrase, direction, metric_phrase = first_match.groups()
+        elif opened_match:
+            owner_phrase, direction, metric_phrase = opened_match.groups()
+        else:
+            return None
+
+        metric_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
+        )
+        if metric_col is None:
+            return None
+        owner_col = TableQAPipeline._wtq_entity_column(
+            df,
+            owner_phrase,
+            exclude={metric_col},
+        )
+        if owner_col is None:
+            return None
+
+        ascending = direction.lower() in {"least", "lowest", "smallest", "first", "earliest"}
+        rows: List[Tuple[float, int, Any]] = []
+        for order, (_, row) in enumerate(TableQAPipeline._wtq_non_summary_rows(df).iterrows()):
+            owner_value = row[owner_col]
+            if _is_missing_marker(owner_value) or not _loose_text_key(owner_value):
+                continue
+            metric_value = _as_number_like(row[metric_col])
+            if metric_value is None:
+                continue
+            rows.append((metric_value, order, owner_value))
+        if not rows:
+            return None
+        rows.sort(key=lambda item: (item[0], item[1]), reverse=not ascending)
+        return rows[0][2]
+
+    @staticmethod
     def _wtq_top_placing_competitor_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
         if not re.search(r"\btop\s+placing\s+competitor\b", question or "", flags=re.I):
             return None
@@ -5348,6 +5540,14 @@ class TableQAPipeline:
                 self._wtq_no_more_than_once_answer(question, df),
             ),
             (
+                "WTQ last chart/table entity selected deterministically.",
+                self._wtq_last_row_entity_answer(question, df),
+            ),
+            (
+                "WTQ superlative owner selected from metric column deterministically.",
+                self._wtq_superlative_owner_answer(question, df),
+            ),
+            (
                 "WTQ last requested table-column value selected deterministically.",
                 self._wtq_last_requested_column_answer(question, df),
             ),
@@ -5729,7 +5929,10 @@ class TableQAPipeline:
                 verification_reason,
             )
             strong_candidates: List[CandidateAnswer] = []
-            for style in self.verification_styles:
+            verification_styles = self.verification_styles
+            if result.dataset_profile == "wtq" and not forced:
+                verification_styles = ["direct"]
+            for style in verification_styles:
                 thinking = self.thinking_solver_factory().solve(
                     question=result.question,
                     evidence=verification_evidence,
@@ -5802,6 +6005,16 @@ class TableQAPipeline:
                         if protected_deterministic
                         else "strong_verification_consensus"
                     ),
+                )
+            elif result.deterministic_shortcut_applied and selected is not None and not forced:
+                result.agreement_decision = AgreementDecision(
+                    selected=selected,
+                    candidates=all_candidates,
+                    agreement=True,
+                    requires_fallback=False,
+                    disagreement=post_decision.disagreement,
+                    verification_gap=post_decision.verification_gap,
+                    reason="deterministic_shortcut_preserved",
                 )
             else:
                 result.agreement_decision = post_decision

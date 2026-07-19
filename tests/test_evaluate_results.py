@@ -45,6 +45,16 @@ class EvaluateResultsTests(unittest.TestCase):
 
         self.assertTrue(dataset_accuracy(row))
 
+    def test_wtq_string_normalization_removes_stray_escape_quotes(self):
+        row = {
+            "source_dataset": "wtq",
+            "final_value": '\\Home Again\\""',
+            "answer": ["Home Again"],
+            "answer_canonical": ["Home Again"],
+        }
+
+        self.assertTrue(dataset_accuracy(row))
+
     def test_wtq_target_matches_raw_string_or_canonical_number(self):
         raw_string_match = {
             "source_dataset": "wtq",
@@ -58,6 +68,23 @@ class EvaluateResultsTests(unittest.TestCase):
         self.assertTrue(dataset_accuracy(raw_string_match))
         self.assertTrue(dataset_accuracy(canonical_number_match))
         self.assertFalse(dataset_accuracy(wrong_format))
+
+    def test_wtq_boolean_predictions_match_yes_no_denotations(self):
+        yes_row = {
+            "source_dataset": "wtq",
+            "final_value": True,
+            "answer": ["yes"],
+            "answer_canonical": ["yes"],
+        }
+        no_row = {
+            "source_dataset": "wtq",
+            "final_value": False,
+            "answer": ["no"],
+            "answer_canonical": ["no"],
+        }
+
+        self.assertTrue(dataset_accuracy(yes_row))
+        self.assertTrue(dataset_accuracy(no_row))
 
     def test_tabfact_uses_canonical_binary_accuracy(self):
         true_row = {
