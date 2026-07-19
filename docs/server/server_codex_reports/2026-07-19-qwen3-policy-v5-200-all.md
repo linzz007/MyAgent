@@ -6,6 +6,8 @@
 模型：`qwen3-32b-local` (`/home/ubuntu/models/Qwen3-32B`)
 任务：当前 myAgent policy v5 在 WTQ / TabFact / CRT 各 200 条同口径验证
 
+> 2026-07-20 update: 本报告中的 MACT 对比是相对已有 Qwen3 MACT 50/数据集参考，不是同 frozen split 的正式配对结论。后续 frozen WTQ100 paired 诊断显示当前 Qwen3 policy v5 不能直接宣称严格超过 MACT；见 `docs/server/server_codex_reports/2026-07-20-qwen3-paired-diagnostic-and-plan.md`。
+
 ## 1. 结论
 
 当前 myAgent 在三数据集合计 600 条上的 primary accuracy 为 **429/600 = 71.50%**。相对当前可用的 Qwen3 MACT 50/数据集参考基线 **100/150 = 66.67%**，总体准确率高 **+4.83 个百分点**。
