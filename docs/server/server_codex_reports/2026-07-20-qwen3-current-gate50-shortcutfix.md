@@ -296,34 +296,93 @@ Paired：
 - TabFact token 明显低于 MACT，约为 MACT 的 `25.20%`。
 - 不继续追 `tabfact-test-3120`，因为当前目的不是继续优先优化 TabFact，而是通过 gate 后转向 CRT/更大样本。
 
-## 10. Current gate status
+## 10. CRT MACT paired
 
-把最新 WTQ shortcutfix、TabFact shortcutfix 与本轮 current-code CRT all-gate 组合：
+CRT MACT frozen first50 one-by-one 已完成。第一次运行在权限/上下文切换后只写出 1/50，随后用 `--resume` 从已有输出继续，最终 50/50 完整。
+
+输出：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_current_gate50/crt_mact.jsonl
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_current_gate50/crt_mact_eval.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_current_gate50/logs/crt_onebyone.log
+
+initial START: 2026-07-20 09:19:24 CST
+resume START:  2026-07-20 16:11:05 CST
+resume END:    2026-07-20 18:35:42 CST
+resume real:   144m37.172s
+```
+
+完整性：
+
+| item | rows |
+|---|---:|
+| MACT output | 50 |
+| myAgent merged | 50 |
+| MACT eval num_samples | 50 |
+| failed | 0 |
+| missing | 0 |
+
+日志扫描未检出 `Traceback`、`BadRequestError`、`context length`、`Connection refused`、`APIConnectionError`、`Exception` 或 `failed`。
+
+CRT shortcutfix/current vs MACT frozen first50：
+
+| system | correct | acc | avg tokens | avg prompt | avg completion | avg calls | avg seconds | failed | missing |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| myAgent current CRT | 34/50 | 0.680 | 12,920.72 | 12,398.98 | 521.74 | 6.08 | 31.467 | 0 | 0 |
+| MACT one-by-one | 31/50 | 0.620 | 12,998.10 | 8,286.86 | 4,711.24 | 4.08 | 175.769 | 0 | 0 |
+
+Paired：
+
+| both correct | myAgent only | MACT only | both wrong | McNemar p | token ratio |
+|---:|---:|---:|---:|---:|---:|
+| 26 | 8 | 5 | 11 | 0.5811 | 0.9940 |
+
+判断：
+
+- CRT strict frozen first50 已超过 MACT：`34/50` vs `31/50`。
+- CRT token 与 MACT 基本持平，ratio `0.9940`，但平均耗时明显低：`31.467s` vs `175.769s`。
+- 这意味着 Qwen3 Gate-50 的最后一个 strict paired 缺口已经补齐。
+
+## 11. Current gate status
+
+把最新 WTQ shortcutfix、TabFact shortcutfix 与 CRT strict paired 组合：
 
 | dataset | myAgent correct | acc | avg tokens | strict MACT status |
 |---|---:|---:|---:|---|
 | WTQ | 41/50 | 0.820 | 6,246.82 | strict paired tied MACT 41/50, token ratio 0.6038 |
 | TabFact | 49/50 | 0.980 | 2,631.46 | strict paired beats MACT 48/50, token ratio 0.2520 |
-| CRT | 34/50 | 0.680 | 12,920.72 | strict frozen MACT not yet run |
-| Overall current view | 124/150 | 0.827 | 7,266.33 | CRT pending |
+| CRT | 34/50 | 0.680 | 12,920.72 | strict paired beats MACT 31/50, token ratio 0.9940 |
+| Overall strict Gate-50 | 124/150 | 0.827 | 7,266.33 | passes MACT 120/150, token ratio 0.6452 |
 
-WTQ+TabFact strict paired subtotal：
+Strict Gate-50 subtotal：
 
 | system | correct | avg tokens |
 |---|---:|---:|
-| myAgent | 90/100 | 4,439.14 |
-| MACT | 89/100 | 10,394.57 |
+| myAgent | 124/150 | 7,266.33 |
+| MACT | 120/150 | 11,262.41 |
 
-WTQ+TabFact token ratio：`0.4271`。
+Aggregate paired：
 
-当前不能写成“三数据集 strict paired 全面超过 MACT”，因为 CRT MACT frozen first50 还没跑。可以写成：
+| both correct | myAgent only | MACT only | both wrong | McNemar p | token ratio |
+|---:|---:|---:|---:|---:|---:|
+| 109 | 15 | 11 | 15 | 0.5572 | 0.6452 |
+
+当前可以写成：
 
 ```text
-在 Qwen3-32B frozen first50 gate 中，myAgent 已在 WTQ 追平 MACT、在 TabFact 超过 MACT，
-且两者合计 token 约为 MACT 的 42.7%。CRT 仍需同 frozen split MACT one-by-one gate。
+在 Qwen3-32B frozen first50 strict paired gate 中，myAgent 在 WTQ 追平 MACT，
+在 TabFact 和 CRT 超过 MACT；三数据集合计 124/150 vs MACT 120/150，
+平均 token 约为 MACT 的 64.5%，平均耗时约为 MACT 的 15.8%。
 ```
 
-## 11. Recommended experiment plan
+限制：
+
+- 这是 Gate-50 小样本，不是正式全量实验。
+- McNemar p 不显著，结论应写成“Gate-50 通过、值得扩大样本”，不要写成统计显著全面优于 MACT。
+- CRT token 只是略低于 MACT，不像 WTQ/TabFact 那样明显降低；后续扩大样本时要继续观察 CRT token。
+
+## 12. Recommended experiment plan
 
 不要跑全量，也不要现在直接跑 4,344/12,779/728 全数据集。建议采用 staged gate：
 
@@ -332,36 +391,14 @@ WTQ+TabFact token ratio：`0.4271`。
 3. `Formal sampled experiment`：正式写专家/专利材料时，用分层抽样而不是全量：按 dataset、risk level、route type、shortcut/non-shortcut 分层，固定 seed，报告 raw/merged/eval 行数、failed/missing、accuracy、token、耗时、paired McNemar/CI。
 4. `Full dataset optional`：全量只作为最终附录或后台长期任务，不作为每次模型筛选必须项。
 
-当前下一条最有价值的服务器命令是 CRT frozen50 MACT one-by-one：
+当前建议：
 
-```bash
-python scripts/server/run_mact_one_by_one.py \
-  --mact-root /home/ubuntu/lzz/MACT \
-  --dataset-path datasets_ready/frozen_qwen3_eval_150_2026-07-19/crt.jsonl \
-  --output-path /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_current_gate50/crt_mact.jsonl \
-  --log-path /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_current_gate50/logs/crt_onebyone.log \
-  --task crt \
-  --plan-model-name "$SERVED_MODEL_NAME" \
-  --code-model-name "$SERVED_MODEL_NAME" \
-  --model-provider openai_compatible \
-  --api-base http://127.0.0.1:8000/v1 \
-  --api-key-env LOCAL_VLLM_API_KEY \
-  --thinking disabled \
-  --temperature 0 \
-  --max-tokens 2048 \
-  --api-timeout 180 \
-  --api-max-retries 5 \
-  --plan-sample 1 \
-  --code-sample 1 \
-  --max-step 3 \
-  --max-actual-step 3 \
-  --limit 50 \
-  --temp-dir /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_current_gate50/tmp
-```
+1. Qwen3-32B 已通过 Gate-50，可以进入 `Gate-100` 或 `Gate-200`。
+2. 先不要继续在 TabFact 上微调；下一步更有价值的是用同一个 Gate-50 split 测 1-2 个候选模型。
+3. 候选模型筛选时只跑 myAgent first；如果模型 myAgent Gate-50 低于当前 Qwen3-32B 或 token 明显高，再跳过 MACT 对照。
+4. 正式专利实验建议采用 `200/数据集` 或 `300/数据集` 的分层样本作为主表，全量作为可选后台附录。
 
-如果 CRT frozen50 MACT `<=34/50`，当前 Qwen3 Gate-50 可判定三数据集总体通过；如果 `>34/50`，先不要继续换模型大跑，优先诊断 CRT 的 paired diff。
-
-## 12. Additional verification
+## 13. Additional verification
 
 TabFact shortcutfix 后补充通过：
 
