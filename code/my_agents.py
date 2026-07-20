@@ -3796,6 +3796,351 @@ class TableQAPipeline:
         return "true" if count == expected else "false"
 
     @staticmethod
+    def _tabfact_score_threshold_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(\d+)\s+games?\s+have\s+a\s+score\s+of\s+"
+            r"(?:more|greater|higher)\s+than\s+(\d+)\s+points?[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected, threshold = (int(text) for text in match.groups())
+        score_cols = [col for col in df.columns if re.search(r"\b(?:score|result)\b", str(col), flags=re.I)]
+        if not score_cols:
+            return None
+        count = 0
+        for _, row in df.iterrows():
+            pair = TableQAPipeline._score_pair(row[score_cols[0]])
+            if pair is not None and (pair[0] > threshold or pair[1] > threshold):
+                count += 1
+        return "true" if count == expected else "false"
+
+    @staticmethod
+    def _tabfact_same_metric_value_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(\d+)\s+.+?\s+have\s+the\s+same\s+amount\s+of\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected_text, metric_phrase = match.groups()
+        metric_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
+        )
+        if metric_col is None:
+            return None
+        counts: Dict[str, int] = {}
+        for value in df[metric_col].tolist():
+            key = _loose_text_key(value)
+            if not key:
+                continue
+            counts[key] = counts.get(key, 0) + 1
+        expected = int(expected_text)
+        return "true" if any(count == expected for count in counts.values()) else "false"
+
+    @staticmethod
+    def _tabfact_match_type_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(\d+)\s+out\s+of\s+the\s+(\d+)\s+match(?:es)?\s+be\s+a\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected_text, total_text, target_phrase = match.groups()
+        match_cols = [col for col in df.columns if re.fullmatch(r"(?i)match", str(col).strip())]
+        competition_cols = [col for col in df.columns if re.search(r"\bcompetition\b", str(col), flags=re.I)]
+        if not match_cols or not competition_cols:
+            return None
+        match_col = match_cols[0]
+        competition_col = competition_cols[0]
+        numbered_rows = [
+            row
+            for _, row in df.iterrows()
+            if re.fullmatch(r"\s*\d+(?:\.0+)?\s*", str(row[match_col] or ""))
+        ]
+        if len(numbered_rows) != int(total_text):
+            return "false"
+        count = sum(
+            1
+            for row in numbered_rows
+            if TableQAPipeline._cell_contains_phrase_tokens(target_phrase, row[competition_col])
+        )
+        return "true" if count == int(expected_text) else "false"
+
+    @staticmethod
+    def _tabfact_final_record_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+.+?\s+season\s+end\b.+?\s+with\s+a\s+(\d+\s*-\s*\d+)\s+record[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected = re.sub(r"\s+", "", match.group(1))
+        record_cols = [col for col in df.columns if re.fullmatch(r"(?i)record", str(col).strip())]
+        if not record_cols:
+            return None
+        records = []
+        for value in df[record_cols[0]].tolist():
+            record_match = re.search(r"\b(\d+)\s*-\s*(\d+)\b", str(value))
+            if record_match:
+                records.append(f"{record_match.group(1)}-{record_match.group(2)}")
+        if not records:
+            return None
+        return "true" if records[-1] == expected else "false"
+
+    @staticmethod
+    def _tabfact_swept_date_series_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+.+?\s+swept\s+the\s+(.+?)\s+in\s+the\s+(\d+)\s+game\s+series\s+"
+            r"from\s+(.+?)\s+to\s+(.+?)(?:\s+in\b|[?.]?$)",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        opponent_phrase, expected_count_text, start_phrase, end_phrase = match.groups()
+        date_cols = [col for col in df.columns if re.fullmatch(r"(?i)date", str(col).strip())]
+        opponent_cols = [col for col in df.columns if re.search(r"\bopponent\b|\bteam\b", str(col), flags=re.I)]
+        record_cols = [col for col in df.columns if re.fullmatch(r"(?i)record", str(col).strip())]
+        if not date_cols or not opponent_cols or not record_cols:
+            return None
+
+        months = {
+            "january": 1,
+            "jan": 1,
+            "february": 2,
+            "feb": 2,
+            "march": 3,
+            "mar": 3,
+            "april": 4,
+            "apr": 4,
+            "may": 5,
+            "june": 6,
+            "jun": 6,
+            "july": 7,
+            "jul": 7,
+            "august": 8,
+            "aug": 8,
+            "september": 9,
+            "sep": 9,
+            "october": 10,
+            "oct": 10,
+            "november": 11,
+            "nov": 11,
+            "december": 12,
+            "dec": 12,
+        }
+
+        def month_day(value: Any, default_month: Optional[int] = None) -> Optional[Tuple[int, int]]:
+            text = str(value or "").lower()
+            match_month_day = re.search(
+                r"\b("
+                + "|".join(re.escape(month) for month in months)
+                + r")\s+(\d{1,2})(?:st|nd|rd|th)?\b",
+                text,
+            )
+            if match_month_day:
+                return months[match_month_day.group(1)], int(match_month_day.group(2))
+            match_day = re.search(r"\b(\d{1,2})(?:st|nd|rd|th)?\b", text)
+            if match_day and default_month is not None:
+                return default_month, int(match_day.group(1))
+            return None
+
+        def record_pair(value: Any) -> Optional[Tuple[int, int]]:
+            record_match = re.search(r"\b(\d+)\s*-\s*(\d+)\b", str(value))
+            if not record_match:
+                return None
+            return int(record_match.group(1)), int(record_match.group(2))
+
+        start = month_day(start_phrase)
+        if start is None:
+            return None
+        end = month_day(end_phrase, default_month=start[0])
+        if end is None or start[0] != end[0]:
+            return None
+        start_day, end_day = start[1], end[1]
+        expected_count = int(expected_count_text)
+        opponent_tokens = {
+            token
+            for token in _loose_tokens(opponent_phrase)
+            if len(token) >= 4
+        }
+
+        rows = list(df.iterrows())
+        matched: List[Tuple[int, pd.Series]] = []
+        for position, (_, row) in enumerate(rows):
+            current_date = month_day(row[date_cols[0]])
+            if current_date is None or current_date[0] != start[0]:
+                continue
+            if not (start_day <= current_date[1] <= end_day):
+                continue
+            row_opponent_tokens = set(_loose_tokens(row[opponent_cols[0]]))
+            if opponent_tokens and not (opponent_tokens & row_opponent_tokens):
+                continue
+            matched.append((position, row))
+        if len(matched) != expected_count:
+            return "false"
+
+        wins = 0
+        for position, row in matched:
+            current_record = record_pair(row[record_cols[0]])
+            if current_record is None:
+                return None
+            previous_record = None
+            for prev_position in range(position - 1, -1, -1):
+                previous_record = record_pair(rows[prev_position][1][record_cols[0]])
+                if previous_record is not None:
+                    break
+            if previous_record is None:
+                return None
+            if current_record[0] == previous_record[0] + 1 and current_record[1] == previous_record[1]:
+                wins += 1
+        return "true" if wins == expected_count else "false"
+
+    @staticmethod
+    def _tabfact_state_draft_only_player_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+be\s+the\s+only\s+player\s+from\s+(.+?)\s+on\s+the\s+team\b"
+            r".*?\b1st\s+round\s+draft\s+pick\s+(\d{4})[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        player_phrase, state_phrase, draft_year = match.groups()
+        state_abbrev = {
+            "alabama": "al",
+            "alaska": "ak",
+            "arizona": "az",
+            "arkansas": "ar",
+            "california": "ca",
+            "colorado": "co",
+            "connecticut": "ct",
+            "delaware": "de",
+            "florida": "fl",
+            "georgia": "ga",
+            "hawaii": "hi",
+            "idaho": "id",
+            "illinois": "il",
+            "indiana": "in",
+            "iowa": "ia",
+            "kansas": "ks",
+            "kentucky": "ky",
+            "louisiana": "la",
+            "maine": "me",
+            "maryland": "md",
+            "massachusetts": "ma",
+            "michigan": "mi",
+            "minnesota": "mn",
+            "mississippi": "ms",
+            "missouri": "mo",
+            "montana": "mt",
+            "nebraska": "ne",
+            "nevada": "nv",
+            "new hampshire": "nh",
+            "new jersey": "nj",
+            "new mexico": "nm",
+            "new york": "ny",
+            "north carolina": "nc",
+            "north dakota": "nd",
+            "ohio": "oh",
+            "oklahoma": "ok",
+            "oregon": "or",
+            "pennsylvania": "pa",
+            "rhode island": "ri",
+            "south carolina": "sc",
+            "south dakota": "sd",
+            "tennessee": "tn",
+            "texas": "tx",
+            "utah": "ut",
+            "vermont": "vt",
+            "virginia": "va",
+            "washington": "wa",
+            "west virginia": "wv",
+            "wisconsin": "wi",
+            "wyoming": "wy",
+        }.get(_loose_text_key(state_phrase))
+        if state_abbrev is None:
+            return None
+        player_cols = [col for col in df.columns if re.search(r"\bplayer\b|\bname\b", str(col), flags=re.I)]
+        hometown_cols = [col for col in df.columns if re.search(r"\bhometown\b|\bhome town\b|\bbirthplace\b", str(col), flags=re.I)]
+        draft_cols = [col for col in df.columns if re.search(r"\bdraft\b", str(col), flags=re.I)]
+        if not player_cols or not hometown_cols or not draft_cols:
+            return None
+        player_col = player_cols[0]
+        hometown_col = hometown_cols[0]
+        draft_col = draft_cols[0]
+
+        def from_state(value: Any) -> bool:
+            text = str(value or "").lower()
+            return bool(re.search(rf"(?:,\s*|\b){re.escape(state_abbrev)}\b", text))
+
+        state_rows = [row for _, row in df.iterrows() if from_state(row[hometown_col])]
+        target_rows = [
+            row
+            for row in state_rows
+            if _cell_contains_entity_phrase(player_phrase, row[player_col])
+        ]
+        if len(target_rows) != 1:
+            return None
+        draft_text = str(target_rows[0][draft_col]).lower()
+        is_first_round_year = bool(
+            re.search(r"\b1st\s+round\b", draft_text)
+            and re.search(rf"\b{re.escape(draft_year)}\b", draft_text)
+        )
+        return "true" if len(state_rows) == 1 and is_first_round_year else "false"
+
+    @staticmethod
+    def _tabfact_location_most_between_years_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+host\s+the\s+most\b.+?\bin\s+between\s+(\d{4})\s+and\s+(\d{4})[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        location_phrase, start_text, end_text = match.groups()
+        year_location_cols = [col for col in df.columns if re.search(r"\byear\b.*\blocation\b", str(col), flags=re.I)]
+        year_cols = [col for col in df.columns if re.fullmatch(r"(?i)year", str(col).strip())]
+        location_cols = [col for col in df.columns if re.fullmatch(r"(?i)location|host|venue|city", str(col).strip())]
+        start_year = int(start_text)
+        end_year = int(end_text)
+        counts: Dict[str, int] = {}
+
+        if year_location_cols:
+            for value in df[year_location_cols[0]].tolist():
+                text = str(value or "").strip()
+                year_match = re.match(r"(\d{4})\s+(.+)$", text)
+                if not year_match:
+                    continue
+                year = int(year_match.group(1))
+                if start_year <= year <= end_year:
+                    location = _loose_text_key(year_match.group(2))
+                    counts[location] = counts.get(location, 0) + 1
+        elif year_cols and location_cols:
+            for _, row in df.iterrows():
+                year_value = _numeric_measure_value(row[year_cols[0]])
+                if year_value is None:
+                    continue
+                year = int(year_value)
+                if start_year <= year <= end_year:
+                    location = _loose_text_key(row[location_cols[0]])
+                    counts[location] = counts.get(location, 0) + 1
+        else:
+            return None
+
+        target_key = _loose_text_key(location_phrase)
+        if not counts or target_key not in counts:
+            return "false"
+        max_count = max(counts.values())
+        return "true" if counts[target_key] == max_count and max_count > 0 else "false"
+
+    @staticmethod
     def _tabfact_overtime_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
         match = re.search(r"\b(?:go|went)\s+into\s+overtime\s+in\s+(\d+)\s+games?\b", question or "", flags=re.I)
         if not match:
@@ -3990,6 +4335,14 @@ class TableQAPipeline:
         if not match:
             return None
         return float(match.group(1)) + float(match.group(2))
+
+    @staticmethod
+    def _score_pair(value: Any) -> Optional[Tuple[float, float]]:
+        text = str(value or "")
+        match = re.search(r"\b(\d+)\s*-\s*(\d+)\b", text)
+        if not match:
+            return None
+        return float(match.group(1)), float(match.group(2))
 
     @staticmethod
     def _date_phrase_matches(phrase: str, value: Any) -> bool:
@@ -5553,6 +5906,34 @@ class TableQAPipeline:
             (
                 "TabFact team score threshold count checked deterministically.",
                 self._tabfact_team_score_count_answer(question, df),
+            ),
+            (
+                "TabFact score threshold count checked deterministically.",
+                self._tabfact_score_threshold_count_answer(question, df),
+            ),
+            (
+                "TabFact duplicate metric value count checked deterministically.",
+                self._tabfact_same_metric_value_count_answer(question, df),
+            ),
+            (
+                "TabFact match type count checked deterministically.",
+                self._tabfact_match_type_count_answer(question, df),
+            ),
+            (
+                "TabFact final season record checked deterministically.",
+                self._tabfact_final_record_answer(question, df),
+            ),
+            (
+                "TabFact swept date series checked deterministically.",
+                self._tabfact_swept_date_series_answer(question, df),
+            ),
+            (
+                "TabFact player state and draft claim checked deterministically.",
+                self._tabfact_state_draft_only_player_answer(question, df),
+            ),
+            (
+                "TabFact location majority in year range checked deterministically.",
+                self._tabfact_location_most_between_years_answer(question, df),
             ),
             (
                 "TabFact overtime game count checked deterministically.",

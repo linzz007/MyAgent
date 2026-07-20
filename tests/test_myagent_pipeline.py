@@ -1852,6 +1852,146 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(value, "true")
 
+    def test_tabfact_score_threshold_count_without_team_name(self):
+        df = pd.DataFrame(
+            {
+                "score": [
+                    "8 - 6",
+                    "3 - 2 (10)",
+                    "13 - 4",
+                    "12 - 3",
+                    "6 - 4",
+                ]
+            }
+        )
+
+        value = TableQAPipeline._tabfact_score_threshold_count_answer(
+            "2 game have a score of more than 10 point",
+            df,
+        )
+
+        self.assertEqual(value, "true")
+
+    def test_tabfact_same_metric_value_count_shortcut_counts_duplicate_values(self):
+        df = pd.DataFrame(
+            {
+                "team": [
+                    "auckland aces",
+                    "northern districts",
+                    "canterbury wizards",
+                    "central districts stags",
+                    "otago volts",
+                ],
+                "bonus points": ["2", "1", "1", "1", "1"],
+            }
+        )
+
+        value = TableQAPipeline._tabfact_same_metric_value_count_answer(
+            "4 team have the same amount of bonus point",
+            df,
+        )
+
+        self.assertEqual(value, "true")
+
+    def test_tabfact_match_type_count_shortcut_ignores_section_rows(self):
+        df = pd.DataFrame(
+            {
+                "match": [
+                    "sweden 1995 fifa women's world cup final",
+                    "1",
+                    "2",
+                    "atlanta 1996 olympic women's football tournament",
+                    "3",
+                ],
+                "competition": [
+                    "sweden 1995 fifa women's world cup final",
+                    "group match",
+                    "gold medal match",
+                    "atlanta 1996 olympic women's football tournament",
+                    "semifinal",
+                ],
+            }
+        )
+
+        value = TableQAPipeline._tabfact_match_type_count_answer(
+            "1 out of the 3 match be a gold medal match",
+            df,
+        )
+
+        self.assertEqual(value, "true")
+
+    def test_tabfact_final_record_shortcut_uses_last_valid_record(self):
+        df = pd.DataFrame(
+            {
+                "week": ["week", "15", "16"],
+                "record": ["record", "2 - 13", "2 - 14"],
+            }
+        )
+
+        value = TableQAPipeline._tabfact_final_record_answer(
+            "the 1985 tampa bay buccaneers season end their 1985 season with a 2 - 13 record",
+            df,
+        )
+
+        self.assertEqual(value, "false")
+
+    def test_tabfact_state_draft_only_player_shortcut_uses_state_abbreviation(self):
+        df = pd.DataFrame(
+            {
+                "player": ["chris mills", "billy owens"],
+                "hometown": ["los angeles , ca", "carlisle , pa"],
+                "nba draft": [
+                    "1st round - 22nd pick of 1993 draft ( cavs )",
+                    "1st round - 3rd pick of 1991 draft ( kings )",
+                ],
+            }
+        )
+
+        value = TableQAPipeline._tabfact_state_draft_only_player_answer(
+            "chris mill be the only player from california on the team and end up be a 1st round draft pick 1993",
+            df,
+        )
+
+        self.assertEqual(value, "true")
+
+    def test_tabfact_location_most_between_years_shortcut_counts_locations(self):
+        df = pd.DataFrame(
+            {
+                "year location": [
+                    "2009 wakayama",
+                    "2008 yokohama",
+                    "2007 chiba",
+                    "2006 yokohama",
+                    "2005 yokohama",
+                    "2004 kobe",
+                ]
+            }
+        )
+
+        value = TableQAPipeline._tabfact_location_most_between_years_answer(
+            "kobe host the most list of ittf pro tour winners in between 2004 and 2009",
+            df,
+        )
+
+        self.assertEqual(value, "false")
+
+    def test_tabfact_swept_date_series_shortcut_uses_record_progression(self):
+        df = pd.DataFrame(
+            {
+                "date": ["june 14", "june 15", "june 16", "june 17"],
+                "opponent": ["angels", "athletics", "athletics", "athletics"],
+                "score": ["10 - 2", "6 - 0", "3 - 2", "10 - 9"],
+                "record": ["18 - 46", "19 - 46", "20 - 46", "21 - 46"],
+            }
+        )
+
+        value = TableQAPipeline._tabfact_swept_date_series_answer(
+            "the blue jays swept the oakland athletics in the 3 game series from june 15 to 17th in 1979 toronto blue jays season",
+            df,
+        )
+
+        self.assertEqual(value, "true")
+
     def test_tabfact_overtime_count_and_win_difference_shortcuts(self):
         overtime_df = pd.DataFrame({"score": ["2 - 2 ot", "1 - 0", "3 - 3 ot"]})
         race_df = pd.DataFrame({"winner": ["dick johnson", "john bowe", "dick johnson"]})
