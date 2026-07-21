@@ -15,8 +15,10 @@
 3. 本轮修复 5 个通用 WTQ 模式：`difference of` 负数规约、`last <column> on <year>` 年份过滤、`listed for the last <owner>` 目标列选择、`which album has most sales` owner 列从 details 回退到 title、显式候选 `A or B` 的 superlative 只在候选内比较。
 4. targeted5 rerun 从旧错误样本全部修正为 `5/5 = 1.0000`。
 5. WTQ blind200 first50 aggregate 从 `33/50 = 0.6600` 提升到 `34/50 = 0.6800`，avg token 基本不变。
+6. WTQ blind200 full200 从 `126/200 = 0.6300` 提升到 `131/200 = 0.6550`；逐行比较显示净增 5 条正确、没有丢失正确样本。
+7. WTQ frozen150 guard 与上一版完全一致：`114/150 = 0.7600`，逐行预测变化为 0，因此 frozen150 strict paired 主证据保持 `342/450 = 0.7600` vs MACT `330/450 = 0.7333`，token ratio `0.6161`。
 
-这不是 full blind200 结论。当前证据支持提交一个低风险 WTQ shortcutfix2，并建议下一步只重跑 WTQ blind200 full200 或 frozen150 WTQ，而不是扩大到三数据集 full。
+当前证据支持把 `997f51f Fix WTQ blind shortcut edge cases` 作为低风险 WTQ shortcutfix2：blind200 有净收益，frozen150 主证据无回退。下一步不需要继续优先优化 TabFact，也不建议跑三数据集 full 作为日常迭代。
 
 ## 2. Root Cause
 
@@ -215,11 +217,196 @@ nu-2897: old 40.15 -> new 21.0, incorrect -> correct
 
 因此 first50 aggregate 没有观察到副作用。
 
-## 7. Current Status and Next Step
+## 7. WTQ Blind200 Full200 Rerun
 
-当前阶段建议：
+命令：
 
-1. 提交本轮 low-risk WTQ shortcutfix2。
-2. 下一步不要跑 full 三数据集；先跑 WTQ blind200 full200 或 frozen150 WTQ 单数据集验证。如果 WTQ 单数据集稳定提升且不伤 frozen150 acceptance，再考虑三数据集正式 paired。
-3. 继续保留 frozen150 strict paired 作为当前可写专家材料的主证据：`342/450 = 0.7600` vs MACT `330/450 = 0.7333`，token ratio `0.6161`。
-4. blind200 当前不能作为严格 MACT 对比主结论，因为没有同 split Qwen3 MACT。
+```bash
+RUN_ROOT=outputs/server_runs/qwen3_32b_current_blind200_wtq200_shortcutfix2_20260721
+time python scripts/server/run_sharded_tqa.py \
+  --repo-root . \
+  --tasks wtq \
+  --wtq-dataset datasets_ready/blind_holdout_200_v1_2026-06-27/wtq.jsonl \
+  --endpoints http://127.0.0.1:8000/v1 \
+  --model "$SERVED_MODEL_NAME" \
+  --api-key-env LOCAL_VLLM_API_KEY \
+  --output-root "$RUN_ROOT" \
+  --max-replan 2 \
+  --mact-avg-tokens 11539.45
+```
+
+计时：
+
+```text
+START: 2026-07-21 17:29:01 CST
+END:   2026-07-21 18:22:11 CST
+real:  53m09.694s
+```
+
+完整性：
+
+| item | value |
+|---|---:|
+| raw rows | 200 |
+| merged rows | 200 |
+| eval samples | 200 |
+| log tail | `Finished sample 200/200` |
+| failed | 0 |
+| missing | 0 |
+
+Eval：
+
+| run | correct | accuracy | exact match | avg tokens | avg prompt | avg completion | avg calls | avg seconds | failed | missing |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| old blind200 | 126/200 | 0.6300 | 0.6150 | 6,227.31 | 5,844.84 | 382.47 | 4.865 | 15.947s | 0 | 0 |
+| shortcutfix2 blind200 | 131/200 | 0.6550 | 0.6400 | 6,226.93 | 5,844.72 | 382.21 | 4.865 | 15.939s | 0 | 0 |
+
+逐行差异：
+
+| metric | value |
+|---|---:|
+| old rows / new rows | 200 / 200 |
+| old correct / new correct | 126 / 131 |
+| old correct lost | 0 |
+| new correct gained | 5 |
+| changed predictions/correctness | 5 |
+
+净增正确样本：
+
+| id | old answer | new answer | gold | reason |
+|---|---|---|---|---|
+| `nu-2012` | album details text | `The Remixes` | `The Remixes` | owner column fallback to title |
+| `nu-2897` | `40.15` | `21.0` | `21.00` | last-column with year filter |
+| `nu-3977` | `-18.0` | `18` | `18` | absolute difference normalization |
+| `nu-4318` | `Mljet` | `Tiree` | `Tiree` | restrict superlative to explicit candidates |
+| `nu-644` | `10.0` | `November 5` | `November 5` | target column for `listed for the last round` |
+
+日志错误扫描无命中：
+
+```text
+Traceback
+BadRequestError
+context length
+Connection refused
+APIConnectionError
+Exception
+ERROR
+Error processing
+```
+
+## 8. WTQ Frozen150 Guard
+
+目的：验证 shortcutfix2 没有破坏当前 strict paired 主证据。
+
+命令：
+
+```bash
+RUN_ROOT=outputs/server_runs/qwen3_32b_wtq_frozen150_shortcutfix2_guard_20260721
+time python scripts/server/run_sharded_tqa.py \
+  --repo-root . \
+  --tasks wtq \
+  --wtq-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl \
+  --endpoints http://127.0.0.1:8000/v1 \
+  --model "$SERVED_MODEL_NAME" \
+  --api-key-env LOCAL_VLLM_API_KEY \
+  --output-root "$RUN_ROOT" \
+  --max-replan 2 \
+  --mact-avg-tokens 11539.45
+```
+
+文件时间：
+
+```text
+shard/log created: 2026-07-21 18:23:26 CST
+eval written:       2026-07-21 19:04:28 CST
+observed wall:      about 41m02s
+```
+
+完整性和 eval：
+
+| item | value |
+|---|---:|
+| raw rows | 150 |
+| merged rows | 150 |
+| eval samples | 150 |
+| correct | 114/150 |
+| primary accuracy | 0.7600 |
+| exact match | 0.7400 |
+| avg tokens | 6,185.47 |
+| avg prompt tokens | 5,790.19 |
+| avg completion tokens | 395.29 |
+| avg calls | 4.733 |
+| avg seconds | 16.401 |
+| failed | 0 |
+| missing | 0 |
+
+与上一版 `outputs/server_runs/qwen3_32b_wtq_frozen150_shortcutfix_20260721` 逐行比较：
+
+| metric | value |
+|---|---:|
+| old rows / new rows | 150 / 150 |
+| old correct / new correct | 114 / 114 |
+| old correct lost | 0 |
+| new correct gained | 0 |
+| changed predictions/correctness | 0 |
+
+因此 frozen150 strict paired 总表保持不变：
+
+| scope | myAgent | MACT | accuracy delta | token ratio | accepted |
+|---|---:|---:|---:|---:|---|
+| frozen150 strict paired | 342/450 = 0.7600 | 330/450 = 0.7333 | +2.67 pp | 0.6161 | yes |
+
+## 9. Current Status and Experiment Plan
+
+当前问题状态：
+
+| problem | current status |
+|---|---|
+| vLLM not ready / `Connection refused` | Not reproduced in current blind200 or frozen150 guard. |
+| shard silently exits / missing output | Not reproduced; raw/merged/eval row counts complete. |
+| context length / API errors | Not reproduced by log scan. |
+| TabFact weak early result | No longer priority: current blind200 TabFact is `185/200 = 0.9250` with avg tokens `2,426.89`. |
+| WTQ split sensitivity | Still present: blind200 is `131/200 = 0.6550`, frozen150 is `114/150 = 0.7600`. Use small targeted WTQ diagnostics rather than full runs. |
+
+Current-code blind200 三数据集组合：
+
+| dataset | correct | accuracy | avg tokens | avg seconds | failed | missing |
+|---|---:|---:|---:|---:|---:|---:|
+| WTQ shortcutfix2 | 131/200 | 0.6550 | 6,226.93 | 15.939s | 0 | 0 |
+| TabFact current | 185/200 | 0.9250 | 2,426.89 | 10.755s | 0 | 0 |
+| CRT current | 137/200 | 0.6850 | 10,838.25 | 24.899s | 0 | 0 |
+| Overall | 453/600 | 0.7550 | 6,497.36 | 17.198s | 0 | 0 |
+
+可写进专家材料的稳妥表述：
+
+```text
+在 Qwen3-32B 本地同模型、同 frozen150 split、同 evaluator 的 strict paired 评估中，
+myAgent 三数据集合计 342/450，超过 MACT 的 330/450；平均 API token 为 MACT 的 61.6%，
+且 myAgent failed/missing 为 0。current-code blind200 压力测试三数据集合计 453/600，
+failed/missing 仍为 0，支持工程链路稳定和总体性能可用，但 blind200 不是同 split MACT 配对结论。
+```
+
+不建议写成：
+
+```text
+当前版本已经在 full WTQ/TabFact/CRT 上稳定、统计显著、全面超过 MACT。
+```
+
+正式实验不建议全量跑。服务器当前 full 数据为 WTQ `4,344`、TabFact `12,779`、CRT `728`，而且磁盘当前约 `3.2G` 可用、`99%` 使用率，直接多模型 full run 风险很高。推荐固定 gate：
+
+| stage | scope | run | go/no-go |
+|---|---|---|---|
+| Smoke | 20/数据集 | myAgent only | failed/missing 必须为 0；日志无 connection/context error |
+| Gate-50 | frozen first50/数据集 | myAgent only | overall 接近当前 Qwen3，token 不高于 MACT `0.75x` 太多 |
+| Frozen150 strict paired | 150/数据集 | 只给 1-2 个候选模型跑 myAgent + MACT | overall >= MACT，至少 2 个数据集 >= MACT，token <= 0.75 MACT，failed <= 2% |
+| Formal sample | 200 或 300/数据集 | 最终模型 strict paired | 写专家/专利主表 |
+| Ablation | 50 或 100/数据集 | `legacy`、`no-strong`、`no deterministic shortcuts`、`max-replan 0/1/2` | 只解释机制贡献，不扩 full |
+| Full dataset | optional | 最终模型后台补跑 | 只作背景补充，不阻塞主结论 |
+
+执行建议：
+
+1. 先清理或归档旧 `outputs/server_runs`，保留 eval/report 和关键 merged 文件，避免磁盘满。
+2. 每个新模型先跑 Smoke，再跑 Gate-50；Gate-50 不接近当前 Qwen3-32B 就停止。
+3. 只让最有希望的 1-2 个模型进入 frozen150 strict paired。
+4. 正式主表用 strict paired sample，不用 full dataset 作为日常验收。
+5. 消融只用固定 50/100 子集，确保能解释风险评分、强校验、确定性 shortcut、replan 的贡献。

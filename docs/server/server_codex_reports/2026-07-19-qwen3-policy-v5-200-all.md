@@ -8,7 +8,7 @@
 
 > 2026-07-20 update: 本报告中的 MACT 对比是相对已有 Qwen3 MACT 50/数据集参考，不是同 frozen split 的正式配对结论。后续 frozen WTQ100 paired 诊断显示当前 Qwen3 policy v5 不能直接宣称严格超过 MACT；见 `docs/server/server_codex_reports/2026-07-20-qwen3-paired-diagnostic-and-plan.md`。
 
-> 2026-07-21 update: 本文件新增当前分支 HEAD 的 blind200 三数据集验证。当前 HEAD 为 `a1f60c4b865caa06022b852c7da9565a3cdc6de8`，包含用户指定的 `33663ab42366000fd94bc884f0f3d200d71bf756` 之后的 WTQ shortcutfix 和报告提交。若需要“精确 checkout 到 33663ab”的复现实验，应另起 worktree；本节回答的是“当前 myAgent 是否仍符合阶段要求”。
+> 2026-07-21 update: 本文件新增当前分支 HEAD 的 blind200 三数据集验证。当前 HEAD 为 `997f51f Fix WTQ blind shortcut edge cases`，包含用户指定的 `33663ab42366000fd94bc884f0f3d200d71bf756` 之后的 WTQ shortcutfix、shortcutfix2 和报告提交。若需要“精确 checkout 到 33663ab”的复现实验，应另起 worktree；本节回答的是“当前 myAgent 是否仍符合阶段要求”。
 
 ## 0. 2026-07-21 Current Blind200 Rerun
 
@@ -26,9 +26,9 @@
 性能判断要分两层：
 
 1. **当前阶段验收的主证据仍是 frozen150 strict paired**：myAgent `342/450 = 0.7600`，MACT `330/450 = 0.7333`；myAgent 平均 token 为 MACT 的 `61.61%`，满足 `compare_blind_results.py` 的 acceptance criteria。
-2. **本轮 blind200 只能作为 current-code 泛化压力测试**：myAgent 三数据集合计 `448/600 = 0.7467`，平均 total tokens `6,497.48`，failed/missing 为 0。由于服务器本地没有同一 blind200 split 的 Qwen3 MACT 输出，不能只基于 blind200 写成“严格同口径超过 MACT”。若和已完成 frozen150 MACT 均值粗略比较，blind200 myAgent token 为 MACT 的 `56.31%`，仍明显更低。
+2. **本轮 blind200 只能作为 current-code 泛化压力测试**：myAgent 三数据集合计 `453/600 = 0.7550`，平均 total tokens `6,497.36`，failed/missing 为 0。由于服务器本地没有同一 blind200 split 的 Qwen3 MACT 输出，不能只基于 blind200 写成“严格同口径超过 MACT”。若和已完成 frozen150 MACT 均值粗略比较，blind200 myAgent token 为 MACT 的 `56.31%`，仍明显更低。
 
-风险点：WTQ blind200 为 `126/200 = 0.6300`，低于 frozen150 shortcutfix 的 `114/150 = 0.7600`，说明 WTQ 仍有 split 敏感性。TabFact 和 CRT 当前没有优先级更高的问题：TabFact `185/200 = 0.9250`，CRT `137/200 = 0.6850`。
+风险点：WTQ blind200 在 shortcutfix2 后为 `131/200 = 0.6550`，仍低于 frozen150 的 `114/150 = 0.7600`，说明 WTQ 仍有 split 敏感性。TabFact 和 CRT 当前没有优先级更高的问题：TabFact `185/200 = 0.9250`，CRT `137/200 = 0.6850`。
 
 ### 0.2 运行命令
 
@@ -90,10 +90,10 @@ rg -n "Traceback|BadRequestError|context length|Connection refused|APIConnection
 
 | dataset | correct | primary accuracy | exact match | avg total tokens | avg prompt | avg completion | avg calls | avg elapsed | failed | missing |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| WTQ | 126/200 | 0.6300 | 0.6150 | 6,227.31 | 5,844.84 | 382.47 | 4.865 | 15.947s | 0 | 0 |
+| WTQ | 131/200 | 0.6550 | 0.6400 | 6,226.93 | 5,844.72 | 382.21 | 4.865 | 15.939s | 0 | 0 |
 | TabFact | 185/200 | 0.9250 | 0.9250 | 2,426.89 | 2,151.77 | 275.12 | 3.685 | 10.755s | 0 | 0 |
 | CRT | 137/200 | 0.6850 | 0.6900 | 10,838.25 | 10,252.10 | 586.15 | 5.625 | 24.899s | 0 | 0 |
-| Overall | 448/600 | 0.7467 | - | 6,497.48 | 6,082.90 | 414.58 | 4.725 | 17.200s | 0 | 0 |
+| Overall | 453/600 | 0.7550 | - | 6,497.36 | 6,082.86 | 414.49 | 4.725 | 17.198s | 0 | 0 |
 
 ### 0.5 与 MACT 的当前判断
 
@@ -107,14 +107,14 @@ docs/server/server_codex_reports/2026-07-21-wtq-shortcutfix-frozen150.md
 | scope | myAgent | MACT | accuracy delta | token ratio | accepted |
 |---|---:|---:|---:|---:|---|
 | frozen150 strict paired | 342/450 = 0.7600 | 330/450 = 0.7333 | +2.67 pp | 0.6161 | yes |
-| current blind200 myAgent only | 448/600 = 0.7467 | no same-split MACT | not strict | 0.5631 vs frozen150 MACT avg | not applicable |
+| current blind200 myAgent only | 453/600 = 0.7550 | no same-split MACT | not strict | 0.5631 vs frozen150 MACT avg | not applicable |
 
 可以写进专家材料的稳妥版本：
 
 ```text
 在 Qwen3-32B 本地同模型、同 frozen150 split、同 evaluator 的 strict paired 评估中，
 myAgent 三数据集合计 342/450，超过 MACT 的 330/450；平均 API token 为 MACT 的 61.6%，
-且 myAgent failed/missing 为 0。随后 current-code blind200 压力测试三数据集合计 448/600，
+且 myAgent failed/missing 为 0。随后 current-code blind200 压力测试三数据集合计 453/600，
 failed/missing 仍为 0，说明当前工程链路稳定，但 WTQ 在不同 split 上仍存在波动。
 ```
 
@@ -132,7 +132,8 @@ WTQ blind200 当前是主要风险：
 
 | split/run | WTQ accuracy | avg tokens | note |
 |---|---:|---:|---|
-| current blind200 | 126/200 = 0.6300 | 6,227.31 | 本轮压力测试 |
+| current blind200 shortcutfix2 | 131/200 = 0.6550 | 6,226.93 | 本轮压力测试；较旧 blind200 净增 5 条正确 |
+| shortcutfix2 frozen150 guard | 114/150 = 0.7600 | 6,185.47 | 与上一版 frozen150 完全无预测变化，当前 strict paired 主证据保持不变 |
 | shortcutfix frozen150 | 114/150 = 0.7600 | 6,185.50 | 当前 strict paired 主证据 |
 | old first200 policy v5 | 134/200 = 0.6700 | 11,317.45 | 旧 first-N run，不是 blind200 |
 
