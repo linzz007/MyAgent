@@ -22,6 +22,21 @@ VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
 
 mkdir -p logs/server pids/server
 
+port_is_listening() {
+  local port="$1"
+  python - "${port}" <<'PY'
+import socket
+import sys
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.settimeout(0.5)
+try:
+    sys.exit(0 if sock.connect_ex(("127.0.0.1", int(sys.argv[1]))) == 0 else 1)
+finally:
+    sock.close()
+PY
+}
+
 IFS=';' read -ra GROUP_ARRAY <<< "${GPU_GROUPS}"
 for index in "${!GROUP_ARRAY[@]}"; do
   group="${GROUP_ARRAY[$index]}"
@@ -32,6 +47,14 @@ for index in "${!GROUP_ARRAY[@]}"; do
 
   if [[ -f "${pid_file}" ]] && kill -0 "$(cat "${pid_file}")" 2>/dev/null; then
     echo "[vllm] port ${port} already has running pid $(cat "${pid_file}")"
+    continue
+  fi
+  if [[ -f "${pid_file}" ]]; then
+    echo "[vllm] removing stale pid $(cat "${pid_file}") for port ${port}"
+    rm -f "${pid_file}"
+  fi
+  if port_is_listening "${port}"; then
+    echo "[vllm] port ${port} already has a listener but no live pid file; skipping start"
     continue
   fi
 
