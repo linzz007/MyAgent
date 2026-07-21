@@ -1684,6 +1684,177 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(value, 68)
 
+    def test_wtq_how_long_roster_count_keeps_numeric_count(self):
+        df = pd.DataFrame({"Player": list("ABC"), "Date": ["1 January 2010"] * 3})
+
+        value = _canonicalize_wtq_scalar(
+            3,
+            df,
+            "how long is the roster for the 2010 woodlands wellington fc season?",
+        )
+
+        self.assertEqual(value, 3)
+
+    def test_wtq_only_metric_value_shortcut_returns_entity(self):
+        df = pd.DataFrame(
+            {
+                "Pos": [1, 2, 3],
+                "Name": ["Justin Wilson", "Sébastien Bourdais", "Jan Heylen"],
+                "Grid": [2, 1, 7],
+            }
+        )
+
+        value = TableQAPipeline._wtq_only_metric_value_answer(
+            "the only grid with 1",
+            df,
+        )
+
+        self.assertEqual(value, "Sébastien Bourdais")
+
+    def test_wtq_listed_after_cell_shortcut_reads_row_major_next_year(self):
+        df = pd.DataFrame(
+            {
+                "May 20-21 118": ["May 20, 2012"],
+                "March 9 120": ["March 9, 2016"],
+                "December 25-26 122": ["December 26, 2019"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_listed_after_cell_answer(
+            "what is the year listed after 2012?",
+            df,
+        )
+
+        self.assertEqual(value, "2016")
+
+    def test_wtq_usage_count_shortcut_counts_items_in_matching_usage_cell(self):
+        df = pd.DataFrame(
+            {
+                "Common name": ["Arjun"],
+                "Characteristics, Usage and Status": [
+                    "It is heavy and strong. It has such uses as beams, rafters, and posts."
+                ],
+            }
+        )
+
+        value = TableQAPipeline._wtq_usage_count_answer(
+            "how many uses are listed for the arjun tree?",
+            df,
+        )
+
+        self.assertEqual(value, 3)
+
+    def test_wtq_occurrence_count_shortcut_counts_mentions_across_cells(self):
+        df = pd.DataFrame(
+            {
+                "Band": ["Gary Numan"],
+                "Image": [
+                    "Guns N' Roses Sweet Child o' Mine; Guns N' Roses Paradise City; Guns N' Roses Nightrain"
+                ],
+            }
+        )
+
+        value = TableQAPipeline._wtq_occurrence_count_answer(
+            "how many times is guns n' roses listed?",
+            df,
+        )
+
+        self.assertEqual(value, 3)
+
+    def test_wtq_ordinal_position_count_shortcut_includes_parenthesized_qualifiers(self):
+        df = pd.DataFrame({"Position": ["13th (q)", "7th", "10th (q)", "11th", "3rd"]})
+
+        value = TableQAPipeline._wtq_ordinal_position_count_answer(
+            "how many times was a position of at least 10th place or better earned?",
+            df,
+        )
+
+        self.assertEqual(value, 3)
+
+    def test_wtq_extreme_metric_lookup_shortcut_returns_requested_column(self):
+        df = pd.DataFrame(
+            {
+                "Crater": ["B", "T"],
+                "Latitude": ["9.0° N", "7.0° N"],
+                "Diameter": ["62 km", "15 km"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_extreme_metric_lookup_answer(
+            "what is the latitude of the crater with the smallest diameter?",
+            df,
+        )
+
+        self.assertEqual(value, "7.0° N")
+
+    def test_wtq_first_status_entity_shortcut_returns_first_evicted_person(self):
+        df = pd.DataFrame(
+            {
+                "Celebrity": ["Winner", "Regina Do Santos", "Other"],
+                "Status": ["Winner", "1st / 14th Evicted", "2nd Evicted"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_first_status_entity_answer(
+            "who was the first person to get evicted?",
+            df,
+        )
+
+        self.assertEqual(value, "Regina Do Santos")
+
+    def test_wtq_stated_left_count_shortcut_subtracts_question_counts(self):
+        value = TableQAPipeline._wtq_stated_left_count_answer(
+            "there were seven keels laid before the month of july in 1918, two were expended as targets, how many were left?",
+            pd.DataFrame({"Designation": ["PE-1"]}),
+        )
+
+        self.assertEqual(value, 5)
+
+    def test_wtq_release_date_gap_shortcut_returns_month_difference(self):
+        df = pd.DataFrame(
+            {
+                "Release date": ["February 2011", "June 2011"],
+                "Album Title": ["I Love You", "Bida Best Hits Da Best"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_release_date_gap_answer(
+            "how long were the release dates between bida best hits da best and i love you?",
+            df,
+        )
+
+        self.assertEqual(value, "4 months")
+
+    def test_wtq_only_column_threshold_shortcut_returns_row_label(self):
+        df = pd.DataFrame(
+            {
+                "decimal128": [128, 12288],
+                "Format": ["Total size (bits)", "Exponent range"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_only_column_threshold_answer(
+            "name the only format with a decimal 128 value above 10,000.",
+            df,
+        )
+
+        self.assertEqual(value, "Exponent range")
+
+    def test_wtq_last_placing_entity_shortcut_uses_largest_rank(self):
+        df = pd.DataFrame(
+            {
+                "Rank": ["1", "40"],
+                "Diver": ["Winner", "Hsu Shi-Han"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_last_placing_entity_answer(
+            "what diver came in last?",
+            df,
+        )
+
+        self.assertEqual(value, "Hsu Shi-Han")
+
     def test_wtq_chart_threshold_shortcut_counts_unique_values(self):
         df = pd.DataFrame({"Builder": ["A", "B", "C", "C"]})
 
