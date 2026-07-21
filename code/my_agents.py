@@ -1315,7 +1315,7 @@ def _canonicalize_wtq_scalar(value: Any, df: pd.DataFrame, question: str) -> Any
         if (
             numeric is not None
             and numeric < 0
-            and re.search(r"\bdifference\b.*\bbetween\b", question_text, flags=re.I)
+            and re.search(r"\bdifference\b", question_text, flags=re.I)
         ):
             delta = abs(numeric)
             return int(delta) if float(delta).is_integer() else delta
@@ -1338,7 +1338,7 @@ def _canonicalize_wtq_scalar(value: Any, df: pd.DataFrame, question: str) -> Any
     if candidate_number is not None:
         if (
             candidate_number < 0
-            and re.search(r"\bdifference\b.*\bbetween\b", question_text, flags=re.I)
+            and re.search(r"\bdifference\b", question_text, flags=re.I)
         ):
             delta = abs(candidate_number)
             return str(int(delta) if float(delta).is_integer() else delta)
@@ -5372,6 +5372,41 @@ class TableQAPipeline:
         return kept if not kept.empty else df
 
     @staticmethod
+    def _wtq_explicit_or_options(question: str) -> List[str]:
+        text = re.sub(r"\s+", " ", question or "").strip(" ?.")
+        if "," not in text or not re.search(r"\bor\b", text, flags=re.I):
+            return []
+        option_text = text.split(",", 1)[1]
+        parts = [
+            part.strip(" \t\r\n\"'")
+            for part in re.split(r"\s*,\s*|\s+\bor\s+", option_text, flags=re.I)
+            if part.strip(" \t\r\n\"'")
+        ]
+        return parts if len(parts) >= 2 else []
+
+    @staticmethod
+    def _wtq_prefer_entity_owner_column(
+        df: pd.DataFrame,
+        owner_col: Any,
+        *,
+        exclude: Optional[set[Any]] = None,
+    ) -> Any:
+        exclude = exclude or set()
+        owner_key = _loose_text_key(owner_col)
+        if not re.search(r"\b(?:detail|details|description|info|information|notes)\b", owner_key):
+            return owner_col
+        for candidate in df.columns:
+            if candidate == owner_col or candidate in exclude:
+                continue
+            candidate_key = _loose_text_key(candidate)
+            if candidate_key not in {"title", "name"} and not candidate_key.endswith(" title"):
+                continue
+            values = [value for value in df[candidate].tolist() if not _is_missing_marker(value)]
+            if values and sum(1 for value in values if _as_number_like(value) is not None) < len(values):
+                return candidate
+        return owner_col
+
+    @staticmethod
     def _wtq_last_row_entity_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
         match = re.search(
             r"\b(?:which|what)\s+(.+?)\s+(?:is|was|were|are)\s+last\s+"
@@ -5413,6 +5448,9 @@ class TableQAPipeline:
         else:
             return None
 
+        explicit_options = TableQAPipeline._wtq_explicit_or_options(text)
+        if explicit_options and "," in metric_phrase:
+            metric_phrase = metric_phrase.split(",", 1)[0]
         metric_col = (
             TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
             or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
@@ -5426,18 +5464,46 @@ class TableQAPipeline:
         )
         if owner_col is None:
             return None
+        owner_col = TableQAPipeline._wtq_prefer_entity_owner_column(
+            df,
+            owner_col,
+            exclude={metric_col},
+        )
 
         ascending = direction.lower() in {"least", "lowest", "smallest", "first", "earliest"}
         rows: List[Tuple[float, int, Any]] = []
+        matched_option_keys: set[str] = set()
+        option_keys = [_loose_text_key(option) for option in explicit_options]
         for order, (_, row) in enumerate(TableQAPipeline._wtq_non_summary_rows(df).iterrows()):
             owner_value = row[owner_col]
-            if _is_missing_marker(owner_value) or not _loose_text_key(owner_value):
+            owner_key = _loose_text_key(owner_value)
+            if _is_missing_marker(owner_value) or not owner_key:
                 continue
+            matched_option = ""
+            if option_keys:
+                matched_option = next(
+                    (
+                        option_key
+                        for option_key in option_keys
+                        if option_key
+                        and (
+                            option_key == owner_key
+                            or option_key in owner_key
+                            or (len(owner_key) >= 4 and owner_key in option_key)
+                        )
+                    ),
+                    "",
+                )
+                if not matched_option:
+                    continue
+                matched_option_keys.add(matched_option)
             metric_value = _as_number_like(row[metric_col])
             if metric_value is None:
                 continue
             rows.append((metric_value, order, owner_value))
         if not rows:
+            return None
+        if option_keys and len(matched_option_keys) < min(2, len(option_keys)):
             return None
         rows.sort(key=lambda item: (item[0], item[1]), reverse=not ascending)
         return rows[0][2]
@@ -5879,6 +5945,39 @@ class TableQAPipeline:
 
     @staticmethod
     def _wtq_last_requested_column_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        listed_match = re.search(
+            r"\bwhat\s+is\s+the\s+(.+?)\s+listed\s+for\s+the\s+last\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if listed_match:
+            target_phrase, owner_phrase = listed_match.groups()
+            target_col = TableQAPipeline._select_column_by_semantic_tokens(df, target_phrase)
+            if target_col is None:
+                target_col = TableQAPipeline._select_column_by_tokens(df, target_phrase)
+            owner_col = TableQAPipeline._select_column_by_semantic_tokens(df, owner_phrase)
+            if owner_col is None:
+                owner_col = TableQAPipeline._select_column_by_tokens(df, owner_phrase)
+            if target_col is not None and owner_col is not None:
+                ranked_rows: List[Tuple[float, int, pd.Series]] = []
+                fallback_rows: List[Tuple[int, pd.Series]] = []
+                for order, (_, row) in enumerate(TableQAPipeline._wtq_non_summary_rows(df).iterrows()):
+                    owner_value = row[owner_col]
+                    if _is_missing_marker(owner_value):
+                        continue
+                    fallback_rows.append((order, row))
+                    owner_number = _numeric_measure_value(owner_value)
+                    if owner_number is not None:
+                        ranked_rows.append((owner_number, order, row))
+                selected_row: Optional[pd.Series] = None
+                if ranked_rows:
+                    selected_row = sorted(ranked_rows, key=lambda item: (item[0], item[1]))[-1][2]
+                elif fallback_rows:
+                    selected_row = fallback_rows[-1][1]
+                if selected_row is not None:
+                    value = selected_row[target_col]
+                    return None if _is_missing_marker(value) else value
+
         match = re.search(
             r"\blast\s+(.+?)(?:\s+that\b|\s+which\b|\s+who\b|\s+in\b|\?|$)",
             question or "",
@@ -5892,9 +5991,27 @@ class TableQAPipeline:
         target_col = TableQAPipeline._select_column_by_semantic_tokens(df, target_phrase)
         if target_col is None:
             return None
+        rows = TableQAPipeline._wtq_non_summary_rows(df)
+        year_match = re.search(r"\b(?:on|in|for)\s+(\d{4})\b", question or "", flags=re.I)
+        if year_match:
+            year_cols = [
+                col
+                for col in rows.columns
+                if re.search(r"\byear\b", str(col), flags=re.I)
+            ]
+            if year_cols:
+                year = float(year_match.group(1))
+                filtered = rows[
+                    [
+                        _numeric_measure_value(value) == year
+                        for value in rows[year_cols[0]].tolist()
+                    ]
+                ]
+                if not filtered.empty:
+                    rows = filtered
         values = [
             value
-            for value in df[target_col].tolist()
+            for value in rows[target_col].tolist()
             if not _is_missing_marker(value) and _loose_text_key(value)
         ]
         return values[-1] if values else None

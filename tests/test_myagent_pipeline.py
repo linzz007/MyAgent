@@ -236,6 +236,17 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(value, 6)
 
+    def test_wtq_difference_of_canonicalizes_negative_numeric_delta(self):
+        df = pd.DataFrame({"Team": ["JSU"], "Score JSU": [6], "Score TU": [24]})
+
+        value = _canonicalize_wtq_scalar(
+            -18,
+            df,
+            "what is the difference of the jsu and tu scores in 2001",
+        )
+
+        self.assertEqual(value, 18)
+
     def test_crt_combination_scalar_is_reordered_by_table_column_order(self):
         df = pd.DataFrame(
             {
@@ -1565,6 +1576,37 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(value, "Allianz Riviera")
 
+    def test_wtq_superlative_owner_shortcut_uses_title_column_for_album_sales(self):
+        df = pd.DataFrame(
+            {
+                "Title": ["The Remixes", "The Remixes II"],
+                "Album details": ["Released: 1997", "Released: 1998"],
+                "Sales": [640000, 300000],
+            }
+        )
+
+        value = TableQAPipeline._wtq_superlative_owner_answer(
+            "which album has the most sales?",
+            df,
+        )
+
+        self.assertEqual(value, "The Remixes")
+
+    def test_wtq_superlative_owner_shortcut_restricts_explicit_or_candidates(self):
+        df = pd.DataFrame(
+            {
+                "Island": ["Mljet", "Ærø", "Tiree", "Kasos"],
+                "Area (km²)": [100, 88, 78, 66],
+            }
+        )
+
+        value = TableQAPipeline._wtq_superlative_owner_answer(
+            "which island has the most area, tiree or kasos?",
+            df,
+        )
+
+        self.assertEqual(value, "Tiree")
+
     def test_wtq_after_reference_shortcut_counts_following_rows(self):
         df = pd.DataFrame(
             {
@@ -1893,6 +1935,38 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             ),
             "Team Bigazzi SRL",
         )
+
+    def test_wtq_last_requested_column_filters_year_qualifier(self):
+        df = pd.DataFrame(
+            {
+                "Year": [2008, 2008, 2011],
+                "Event": ["60 m", "200 m", "4x100 m"],
+                "Notes": [6.81, 21.00, 40.15],
+            }
+        )
+
+        value = TableQAPipeline._wtq_last_requested_column_answer(
+            "what is the last note on 2008",
+            df,
+        )
+
+        self.assertEqual(value, 21.00)
+
+    def test_wtq_last_listed_owner_returns_requested_column(self):
+        df = pd.DataFrame(
+            {
+                "Round": [1, 2, 10],
+                "Date": ["May 21", "June 4", "November 5"],
+                "Circuit": ["Sears Point", "Westwood", "Mexico City"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_last_requested_column_answer(
+            "what is the date listed for the last round?",
+            df,
+        )
+
+        self.assertEqual(value, "November 5")
 
     def test_tabfact_only_set_equality_shortcut_checks_unique_entities(self):
         df = pd.DataFrame(
