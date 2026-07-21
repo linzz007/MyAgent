@@ -2,7 +2,7 @@
 
 服务器路径：`/home/ubuntu/lzz/MyAgent`
 分支：`codex/selective-risk-collaboration`
-当前提交：`88598c7 Record WTQ shortcutfix2 validations`
+基线提交：`680f35b Record current experiment plan`
 目标：继续排查当前实验问题，筛选可超过 MACT 的模型，并给出不跑 full 多天的正式实验路径。
 
 ## 1. Current Verdict
@@ -24,6 +24,7 @@
 4. 当前主证据足够支持阶段 gate：Qwen3-32B frozen150 strict paired 为 myAgent `342/450 = 0.7600` vs MACT `330/450 = 0.7333`，token ratio `0.6161`，myAgent failed/missing 为 `0`。
 5. 不能写成“所有模型都超过 MACT”或“full dataset 已经稳定全面超过 MACT”；目前只有 Qwen3-32B 是主候选。
 6. 本轮发现并修复了一个 vLLM 管理脚本风险：`pids/server/vllm_8000.pid` 已 stale，但 port `8000` 仍有真实 Qwen3-32B listener。`start_vllm_pool.sh` 已增加 stale pid + live port 检查，避免在已有服务上重复启动。
+7. 已补跑 blind200 same-split MACT smoke5：WTQ/TabFact/CRT 各 5 条均完整落盘，wrapper returncode 全为 0，未检出连接、context length 或 API 错误。同 ID paired smoke 为 myAgent `14/15` vs MACT `10/15`，myAgent 平均 token 为 MACT 的 `0.7400`，平均耗时为 MACT 的 `0.1562`。这只能证明正式 paired 路径可跑，不能替代 full paired 结论。
 
 ## 2. Current Resource Constraints
 
@@ -183,6 +184,17 @@ datasets_ready/blind_holdout_200_v1_2026-06-27/crt.jsonl
 
 这不是五天级别，但仍然是长跑。建议只在磁盘和服务状态确认后，用 `tmux` 或明确后台脚本执行，并全程 `--resume`。
 
+本轮实际 MACT smoke5 重新估计：
+
+| dataset | wall for 5 | row-level avg sec/sample | blind200 projected wall |
+|---|---:|---:|---:|
+| WTQ | 10m15s | 120.99s | about 6.8h |
+| TabFact | 7m10s | 84.02s | about 4.8h |
+| CRT | 12m08s | 143.48s | about 8.1h |
+| Total sequential | 29m33s | 116.16s overall | about 19.7h |
+
+如果只跑 blind50 paired，大约 4.9h；blind100 paired 大约 9.9h。多模型场景不应每个模型都跑 full paired，应先用 myAgent-only Gate-50/150 淘汰，再只给进入候选的模型补 MACT paired。
+
 ### Option B: New Model Screening
 
 若用户提供或允许下载新模型，流程固定为：
@@ -271,4 +283,120 @@ Qwen3-32B 在 frozen150 strict paired 中以 342/450 对 330/450 超过 MACT，
 所有模型都超过 MACT。
 blind200 已严格证明超过 MACT。
 full 数据集已经完成。
+```
+
+## 7. Blind200 MACT Smoke5
+
+目的：验证当前 Qwen3-32B 服务、MACT one-by-one wrapper、blind200 输入、同 ID 对齐和 evaluator 口径是否可以支撑后续 formal paired run。
+
+运行目录：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_smoke5_20260721
+```
+
+输入：
+
+```text
+datasets_ready/blind_holdout_200_v1_2026-06-27/wtq.jsonl
+datasets_ready/blind_holdout_200_v1_2026-06-27/tabfact.jsonl
+datasets_ready/blind_holdout_200_v1_2026-06-27/crt.jsonl
+```
+
+运行方式：`scripts/server/run_mact_one_by_one.py`，Qwen3-32B local vLLM，`--limit 5 --resume`，`--thinking disabled`，`--max-step 3 --max-actual-step 3`。
+
+落盘完整性：
+
+| output | rows |
+|---|---:|
+| `wtq_mact_smoke5.jsonl` | 5 |
+| `tabfact_mact_smoke5.jsonl` | 5 |
+| `crt_mact_smoke5.jsonl` | 5 |
+| total | 15 |
+
+MACT smoke evaluator summary:
+
+| dataset | correct | accuracy | avg tokens | avg seconds | failed | missing | mismatches |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| WTQ | 4/5 | 0.8000 | 9,705.80 | 120.995s | 0 | 0 | 1 |
+| TabFact | 4/5 | 0.8000 | 8,300.60 | 84.020s | 0 | 0 | 1 |
+| CRT | 2/5 | 0.4000 | 11,089.60 | 143.478s | 0 | 0 | 3 |
+| Overall | 10/15 | 0.6667 | 9,698.67 | 116.165s | 0 | 0 | 5 |
+
+同 ID myAgent vs MACT smoke:
+
+| dataset | ids | myAgent | MACT | myAgent avg tokens | MACT avg tokens | token ratio | myAgent avg sec | MACT avg sec |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| WTQ | `nu-2923, nu-58, nu-1874, nu-4342, nu-2772` | 5/5 | 4/5 | 5,049.80 | 9,705.80 | 0.5203 | 11.335s | 120.995s |
+| TabFact | `tabfact-test-6439, tabfact-test-11416, tabfact-test-3557, tabfact-test-1176, tabfact-test-2658` | 5/5 | 4/5 | 2,026.00 | 8,300.60 | 0.2441 | 9.859s | 84.020s |
+| CRT | `crt-601, crt-419, crt-391, crt-387, crt-543` | 4/5 | 2/5 | 14,456.60 | 11,089.60 | 1.3036 | 33.246s | 143.478s |
+| Overall | 15 matched rows | 14/15 | 10/15 | 7,177.47 | 9,698.67 | 0.7400 | 18.147s | 116.165s |
+
+Paired disagreement:
+
+| dataset | both correct | myAgent only | MACT only | neither |
+|---|---:|---:|---:|---:|
+| WTQ | 4 | 1 | 0 | 0 |
+| TabFact | 4 | 1 | 0 | 0 |
+| CRT | 2 | 2 | 0 | 1 |
+| Overall | 10 | 4 | 0 | 1 |
+
+Log scan:
+
+```text
+Traceback / context length / Connection refused / APIConnectionError / ERROR: none found
+wrapper returncode: 15/15 are returncode=0
+MACT internal trial halted: 2/15 rows (WTQ 1, CRT 1), with output rows still preserved
+```
+
+结论：
+
+1. 之前的服务启动问题当前没有复现；Qwen3-32B endpoint 能连续支撑 MACT WTQ/TabFact/CRT smoke。
+2. MACT formal paired path 可执行，建议正式长跑继续使用 one-by-one + `--resume`，并保留 wrapper returncode、internal halted、eval mismatch、failed/missing 四类诊断。
+3. 15 条 smoke 上 myAgent 同时更准、更省 token、更快，但样本太小，只能作为 pipeline evidence 和成本估计，不应写成正式性能结论。
+
+## 8. Practical Formal Experiment Plan
+
+当前项目可以进入 staged formal evaluation，但不建议对每个模型直接 full 600 paired。推荐方案：
+
+| stage | scope | expected cost | pass rule | output |
+|---|---|---:|---|---|
+| S0 service smoke | each model, 1-2 samples per dataset | minutes | healthcheck ok, no missing rows | service readiness |
+| S1 myAgent Gate-50 | 50 per dataset, myAgent-only | short | no failed/missing; overall near or above MACT Gate-50 | model shortlist |
+| S2 myAgent Gate-150 | frozen150, myAgent-only unless already done | medium | beats/near MACT with clear token advantage | candidate confirmation |
+| S3 paired core | same IDs, 50 per dataset against MACT | about 4.9h for Qwen3-32B MACT | myAgent >= MACT and token lower | expert-ready paired table |
+| S4 paired expansion | same IDs, 100 per dataset | about 9.9h | only if S3 passes and more evidence needed | stronger paired appendix |
+| S5 full blind200 paired | 200 per dataset | about 19.7h | only final selected model | final main table if compute budget allows |
+
+专家/专利材料建议写法：
+
+```text
+先以 Qwen3-32B frozen150 strict paired 作为当前主证据；
+blind200 myAgent-only 作为稳定性和泛化压力测试；
+blind200 MACT smoke5 作为正式 paired pipeline 可执行性的运行记录；
+后续正式报告只对入围模型补 blind50/100 paired，而不是对所有模型 full paired。
+```
+
+下一次最稳的命令策略：
+
+```text
+1. healthcheck Qwen3-32B endpoint
+2. run MACT one-by-one with --resume and per-dataset output/log
+3. after each dataset: wc -l, evaluate_results.py, grep error patterns
+4. paired compare only matched IDs
+5. append report before expanding sample size
+```
+
+当前是否符合要求：
+
+```text
+符合“进入正式 staged evaluation”的要求：
+- Qwen3-32B 是唯一已通过 strict paired stage gate 的本地候选；
+- current myAgent blind200 三数据集 600 条已完整、无 failed/missing；
+- MACT blind200 same-split smoke5 已验证可跑；
+- token 优势在 frozen150 和 smoke15 总体仍明显存在。
+
+尚不符合“blind200 strict paired 已正式证明超过 MACT”的要求：
+- blind200 MACT 目前只跑了 smoke5，不是 full paired；
+- 若专家材料需要 blind200 paired 主表，至少补 blind50/100 paired，再决定是否 full200。
 ```
