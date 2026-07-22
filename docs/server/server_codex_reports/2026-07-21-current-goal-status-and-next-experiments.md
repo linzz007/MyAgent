@@ -549,6 +549,14 @@ Rows remain WTQ 54/100, TabFact 50/100, CRT 50/100 before relaunch.
 | TabFact | 50/100 | 0 | 0 | `tabfact-test-11867` | not started for core100 tail |
 | CRT | 50/100 | 0 | 0 | `crt-279` | not started for core100 tail |
 
+2026-07-23 00:24:15 CST WTQ resume checkpoint:
+
+| dataset | MACT rows | failed | missing | last id | runner |
+|---|---:|---:|---:|---|---|
+| WTQ | 70/100 | 1 | 1 | `nu-2232` | active pid `318083` |
+| TabFact | 50/100 | 0 | 0 | `tabfact-test-11867` | not started for core100 tail |
+| CRT | 50/100 | 0 | 0 | `crt-279` | not started for core100 tail |
+
 下一步恢复策略：
 
 1. 先提交并推送 MyAgent 流程文档和 MACT 54/50/50 结果检查点。
