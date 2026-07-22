@@ -400,3 +400,79 @@ blind200 MACT smoke5 作为正式 paired pipeline 可执行性的运行记录；
 - blind200 MACT 目前只跑了 smoke5，不是 full paired；
 - 若专家材料需要 blind200 paired 主表，至少补 blind50/100 paired，再决定是否 full200。
 ```
+
+## 9. Blind50 Core Paired Final
+
+用户要求本轮流程文档实时更新，并且测试结果必须保存到 MACT 文件夹、防止服务器数据丢失。本轮已建立 MACT 侧 live ledger，并将中间 checkpoint 与最终结果多次推送到 MACT GitHub。
+
+MACT run directory:
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_core50_20260722
+```
+
+MACT live ledger:
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_core50_20260722/LIVE_LEDGER.md
+```
+
+MACT GitHub final sync:
+
+```text
+repo: git@github.com:linzz007/MACT.git
+branch: main
+commit: d630184 Record Qwen3 blind core50 final results
+```
+
+核心产物：
+
+| file | purpose |
+|---|---|
+| `wtq_mact_core50.jsonl` | WTQ first50 MACT raw outputs |
+| `tabfact_mact_core50.jsonl` | TabFact first50 MACT raw outputs |
+| `crt_mact_core50.jsonl` | CRT first50 MACT raw outputs |
+| `*_mact_core50_eval.json` | per-dataset evaluator summary |
+| `*_mact_core50_paired.json` | same-ID myAgent vs MACT paired details |
+| `*_mact_core50_errors.jsonl` | evaluator anomaly rows, not only execution failures |
+| `overall_mact_core50_summary.json` | final 150-row paired summary |
+| `logs/*_mact_core50.log` | raw MACT logs and diagnostics |
+
+运行完整性：
+
+| dataset | rows | wall time | MACT failed | MACT missing | critical error |
+|---|---:|---:|---:|---:|---|
+| WTQ | 50/50 | 92m58s | 1 | 1 | `nu-4299` context length |
+| TabFact | 50/50 | 79m09s | 0 | 0 | none |
+| CRT | 50/50 | 125m58s | 0 | 0 | none |
+| Overall | 150/150 | 4h58m04s | 1 | 1 | 1 row |
+
+Per-dataset paired result:
+
+| dataset | myAgent | MACT | accuracy delta | myAgent avg tokens | MACT avg tokens | token ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| WTQ | 34/50 = 0.6800 | 41/50 = 0.8200 | -14.00 pp | 5,775.70 | 10,579.62 | 0.546 |
+| TabFact | 48/50 = 0.9600 | 49/50 = 0.9800 | -2.00 pp | 2,445.44 | 10,441.52 | 0.234 |
+| CRT | 42/50 = 0.8400 | 29/50 = 0.5800 | +26.00 pp | 12,774.78 | 12,538.42 | 1.019 |
+| Overall | 124/150 = 0.8267 | 119/150 = 0.7933 | +3.33 pp | 6,998.64 | 11,186.52 | 0.626 |
+
+Overall paired disagreement:
+
+| both correct | myAgent only | MACT only | neither |
+|---:|---:|---:|---:|
+| 106 | 18 | 13 | 13 |
+
+Diagnostics:
+
+```text
+MACT internal Halted: WTQ 5 rows, TabFact 4 rows, CRT 19 rows.
+Critical log hits: 2 log lines, both from the same WTQ context length failure.
+Context failure detail: 6145 input tokens + 2048 requested output tokens exceeds 8192 context by 1 token.
+```
+
+Stage verdict:
+
+1. Blind50 core paired overall passes: myAgent is `+5/150` correct over MACT and uses `62.6%` of MACT tokens.
+2. The result must not be overstated: WTQ and TabFact individually are below MACT on this blind50 slice; the overall win comes from CRT.
+3. The next expert-facing table should include both per-dataset rows and the overall row.
+4. For the next expansion, prefer blind100 paired before full blind200. If WTQ remains below MACT, do not claim dataset-wide dominance; claim overall selective-risk efficiency with per-task caveats.
