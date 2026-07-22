@@ -591,6 +591,16 @@ Internal Halted: 1 count in WTQ log: 8.
 WTQ resume elapsed after row54: 5,243 seconds.
 ```
 
+2026-07-23 01:24:28 CST TabFact/CRT resume preparation:
+
+```text
+Qwen3 healthcheck: ok.
+Active MACT runner before TabFact start: 0.
+Created MACT-side resume scripts:
+- run_tabfact_resume.sh
+- run_crt_resume.sh
+```
+
 下一步恢复策略：
 
 1. WTQ final checkpoint 已完成并准备同步。
