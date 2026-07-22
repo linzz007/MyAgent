@@ -476,3 +476,75 @@ Stage verdict:
 2. The result must not be overstated: WTQ and TabFact individually are below MACT on this blind50 slice; the overall win comes from CRT.
 3. The next expert-facing table should include both per-dataset rows and the overall row.
 4. For the next expansion, prefer blind100 paired before full blind200. If WTQ remains below MACT, do not claim dataset-wide dominance; claim overall selective-risk efficiency with per-task caveats.
+
+## 10. Active Workflow Ledger
+
+本章节作为当前目标的唯一流程文档。所有实时状态、阶段判断、下一步实验选择先写在这里；所有测试原始结果、日志、eval、paired summary 必须保存在 MACT run 目录，并用 `git add -f` 同步到 MACT GitHub。
+
+当前目标：
+
+```text
+在不继续优先优化 TabFact 的前提下，验证当前 myAgent/Qwen3-32B 是否总体超过 MACT，
+并建立一个服务器不稳定时可恢复、可同步、可扩展到后续模型筛选和正式实验的流程。
+```
+
+当前执行原则：
+
+| rule | implementation |
+|---|---|
+| 流程只维护一份 | 本章节记录总体流程、阶段 verdict、下一步动作 |
+| 测试结果保存到 MACT | MACT raw/eval/paired/log 都放在 `/home/ubuntu/lzz/MACT/outputs/server_runs/...` |
+| 防止数据丢失 | 每个检查点分别 commit/push MyAgent 流程文档和 MACT 结果目录 |
+| 不跑无意义 full | 先 blind50，再 blind100；只有入围模型才考虑 full blind200 |
+| 不夸大结论 | 分数据集输赢和 overall 输赢同时写，不能把 overall win 写成所有数据集 win |
+
+当前 MACT blind100 run：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_core100_20260722
+```
+
+对应 MACT live ledger：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_core100_20260722/LIVE_LEDGER.md
+```
+
+GitHub 同步状态：
+
+| repo | branch | last synced checkpoint |
+|---|---|---|
+| MyAgent | `codex/selective-risk-collaboration` | `adf915f` blind50 paired report |
+| MACT | `main` | `7e7b5ae` blind100 seed |
+
+2026-07-22 19:32:47 CST 实时检查：
+
+| dataset | MACT rows | failed | missing | last id | note |
+|---|---:|---:|---:|---|---|
+| WTQ | 54/100 | 1 | 1 | `nu-484` | inherited `nu-4299` context failure; rows 51-54 completed |
+| TabFact | 50/100 | 0 | 0 | `tabfact-test-11867` | seed from blind50 |
+| CRT | 50/100 | 0 | 0 | `crt-279` | seed from blind50 |
+
+进程状态：
+
+```text
+No active scripts/server/run_mact_one_by_one.py or MACT code/tqa.py process found.
+The prior core100 runner session was interrupted/lost after WTQ row 54.
+```
+
+下一步恢复策略：
+
+1. 先提交并推送 MyAgent 流程文档和 MACT 54/50/50 结果检查点。
+2. 只恢复 WTQ：`--limit 100 --resume`，从现有 54 行继续到 100。
+3. WTQ 到 100 后立即更新 MACT ledger、commit/push MACT。
+4. 再按同样方式跑 TabFact 到 100、CRT 到 100，每个数据集结束都同步。
+5. 三个数据集到 100 后生成 `*_eval.json`、`*_paired.json`、`overall_mact_core100_summary.json`。
+6. 最后把 blind100 paired result 写回本章节，并推送 MyAgent。
+
+当前阶段可写入专家材料的结论仍以 blind50 为准：
+
+```text
+Qwen3-32B blind50 same-ID paired overall: myAgent 124/150 vs MACT 119/150,
+myAgent 平均 token 为 MACT 的 62.6%。WTQ 和 TabFact 单项未超过 MACT，CRT 明显超过；
+因此当前应写“总体超过且 token 显著更低”，不能写“三个数据集全部超过”。
+```
