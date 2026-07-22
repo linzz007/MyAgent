@@ -541,6 +541,14 @@ Fix: run_wtq_resume.sh now uses bash SECONDS for elapsed-time logging.
 Rows remain WTQ 54/100, TabFact 50/100, CRT 50/100 before relaunch.
 ```
 
+2026-07-23 00:08:45 CST WTQ resume checkpoint:
+
+| dataset | MACT rows | failed | missing | last id | runner |
+|---|---:|---:|---:|---|---|
+| WTQ | 61/100 | 1 | 1 | `nu-1990` | active pid `318083` |
+| TabFact | 50/100 | 0 | 0 | `tabfact-test-11867` | not started for core100 tail |
+| CRT | 50/100 | 0 | 0 | `crt-279` | not started for core100 tail |
+
 下一步恢复策略：
 
 1. 先提交并推送 MyAgent 流程文档和 MACT 54/50/50 结果检查点。
