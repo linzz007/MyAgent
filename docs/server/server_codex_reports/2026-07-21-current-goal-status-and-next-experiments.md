@@ -573,12 +573,30 @@ Rows remain WTQ 54/100, TabFact 50/100, CRT 50/100 before relaunch.
 | TabFact | 50/100 | 0 | 0 | `tabfact-test-11867` | not started for core100 tail |
 | CRT | 50/100 | 0 | 0 | `crt-279` | not started for core100 tail |
 
+2026-07-23 01:22:10 CST WTQ final checkpoint:
+
+| dataset | MACT rows | failed | missing | last id | runner |
+|---|---:|---:|---:|---|---|
+| WTQ | 100/100 | 2 | 2 | `nu-216` | exited status 0 |
+| TabFact | 50/100 | 0 | 0 | `tabfact-test-11867` | not started for core100 tail |
+| CRT | 50/100 | 0 | 0 | `crt-279` | not started for core100 tail |
+
+WTQ final diagnostics:
+
+```text
+Failed/missing IDs: nu-4299, nu-2633.
+Both failures are MACT context length BadRequest: 6145 input tokens + 2048 output tokens > 8192.
+Connection refused / APIConnectionError: 0.
+Internal Halted: 1 count in WTQ log: 8.
+WTQ resume elapsed after row54: 5,243 seconds.
+```
+
 下一步恢复策略：
 
-1. 先提交并推送 MyAgent 流程文档和 MACT 54/50/50 结果检查点。
-2. 只恢复 WTQ：`--limit 100 --resume`，从现有 54 行继续到 100。
-3. WTQ 到 100 后立即更新 MACT ledger、commit/push MACT。
-4. 再按同样方式跑 TabFact 到 100、CRT 到 100，每个数据集结束都同步。
+1. WTQ final checkpoint 已完成并准备同步。
+2. 下一步跑 TabFact：`--limit 100 --resume`，从现有 50 行继续到 100。
+3. TabFact 到 100 后立即更新 MACT ledger、commit/push MACT。
+4. 再按同样方式跑 CRT 到 100，并同步。
 5. 三个数据集到 100 后生成 `*_eval.json`、`*_paired.json`、`overall_mact_core100_summary.json`。
 6. 最后把 blind100 paired result 写回本章节，并推送 MyAgent。
 
