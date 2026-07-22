@@ -532,6 +532,15 @@ No active scripts/server/run_mact_one_by_one.py or MACT code/tqa.py process foun
 The prior core100 runner session was interrupted/lost after WTQ row 54.
 ```
 
+2026-07-22 21:21:35 CST 恢复脚本检查：
+
+```text
+Detached WTQ resume script first launch exited with status 127 before adding rows:
+/usr/bin/time is not available on this server.
+Fix: run_wtq_resume.sh now uses bash SECONDS for elapsed-time logging.
+Rows remain WTQ 54/100, TabFact 50/100, CRT 50/100 before relaunch.
+```
+
 下一步恢复策略：
 
 1. 先提交并推送 MyAgent 流程文档和 MACT 54/50/50 结果检查点。
