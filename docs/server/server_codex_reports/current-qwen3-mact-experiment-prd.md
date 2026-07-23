@@ -110,7 +110,7 @@ nu-2633
 | `*_mact_core100_paired.json` | same-ID myAgent vs MACT paired details |
 | `overall_mact_core100_summary.json` | core100 final summary |
 
-当前准备同步 core100 eval/paired/summary final。
+core100 raw/log/eval/paired/summary 已同步到 MACT `main`，可作为当前 staged paired 主证据。
 
 core100 final result:
 
@@ -256,10 +256,10 @@ MyAgent/docs/server/server_codex_reports/current-qwen3-mact-experiment-prd.md
 MACT/outputs/server_runs/qwen3_32b_blind200_mact_core100_20260722/LIVE_LEDGER.md
 ```
 
-4. 如果 CRT 没完成，用已同步的脚本继续：
+4. 如果要继续扩到 blind200，需要新建或恢复对应的 blind200 run 目录，并使用 `--resume --limit 200` 从已保存行数继续。core100 目录中的脚本只用于复现当前 100 行阶段：
 
 ```bash
 setsid -f bash /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_core100_20260722/run_crt_resume.sh
 ```
 
-脚本使用 `--resume --limit 100`，会从已有 `crt_mact_core100.jsonl` 行数继续，不会重跑已保存样本。
+这些脚本使用 `--resume --limit 100`，会从已有 `*_mact_core100.jsonl` 行数继续，不会重跑已保存样本。
