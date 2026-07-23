@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-23 12:42:36 CST
+最后更新：2026-07-23 13:11:42 CST
 
 ## 1. 最大目标
 
@@ -57,19 +57,19 @@ PRD:
 | myAgent blind200 三数据集运行 | completed | WTQ/TabFact/CRT 共 600 条，failed/missing 为 0 |
 | MACT blind smoke5 路径验证 | completed | 15 条同 ID smoke 可跑通，用于验证 MACT pipeline |
 | MACT blind core50 paired | completed | myAgent `124/150` vs MACT `119/150`，token ratio `0.626` |
-| MACT blind core100 paired | in progress | WTQ 100/100，TabFact 100/100，CRT 91/100 本地进行中 |
+| MACT blind core100 paired raw/log | completed | WTQ 100/100，TabFact 100/100，CRT 100/100 |
 | core100 eval/paired/summary | pending | 等 CRT 到 100 后生成 |
 | 专家/专利正式实验方案 | pending | 等 core100 结果决定是否扩到 blind200 或改跑新模型 gate |
 
 ## 6. 当前 core100 实时状态
 
-截至 2026-07-23 12:42:36 CST：
+截至 2026-07-23 13:11:42 CST：
 
 | dataset | rows | failed | missing | last id | runner |
 |---|---:|---:|---:|---|---|
 | WTQ | 100/100 | 2 | 2 | `nu-216` | complete |
 | TabFact | 100/100 | 0 | 0 | `tabfact-test-6673` | complete |
-| CRT | 91/100 | 0 | 0 | `crt-499` | active pid `346671` |
+| CRT | 100/100 | 0 | 0 | `crt-620` | complete |
 
 WTQ failed/missing IDs：
 
@@ -95,18 +95,18 @@ nu-2633
 | `LIVE_LEDGER.md` | core100 实时 ledger |
 | `wtq_mact_core100.jsonl` | WTQ 100/100 raw |
 | `tabfact_mact_core100.jsonl` | TabFact 100/100 raw |
-| `crt_mact_core100.jsonl` | CRT 91/100 raw，本地继续增长 |
+| `crt_mact_core100.jsonl` | CRT 100/100 raw |
 | `logs/wtq_mact_core100.log` | WTQ MACT log |
 | `logs/tabfact_mact_core100.log` | TabFact MACT log |
-| `logs/crt_mact_core100.log` | CRT MACT log，本地继续增长 |
+| `logs/crt_mact_core100.log` | CRT MACT log |
 | `logs/wtq_core100_resume_stdout.log` | WTQ detached stdout |
 | `logs/tabfact_core100_resume_stdout.log` | TabFact detached stdout |
-| `logs/crt_core100_resume_stdout.log` | CRT detached stdout，本地继续增长 |
+| `logs/crt_core100_resume_stdout.log` | CRT detached stdout |
 | `run_wtq_resume.sh` | WTQ recovery script |
 | `run_tabfact_resume.sh` | TabFact recovery script |
 | `run_crt_resume.sh` | CRT recovery script |
 
-最新 checkpoint 会继续推送到 MACT `main`。当前准备同步 CRT row91。
+当前准备同步 core100 raw/log final。eval、paired、overall summary 尚未生成。
 
 ### 7.2 MACT core50 final
 
@@ -182,8 +182,7 @@ full dataset 已完成。
 
 | priority | task | output |
 |---:|---|---|
-| P0 | CRT core100 从 91/100 跑到 100/100 | `crt_mact_core100.jsonl`、CRT logs |
-| P0 | 每 5-10 行同步 MACT checkpoint | MACT commits on `main` |
+| P0 | 同步 CRT 100/100 final checkpoint | MACT commit on `main` |
 | P1 | 生成 core100 per-dataset eval | `*_mact_core100_eval.json` |
 | P1 | 生成 same-ID paired compare | `*_mact_core100_paired.json` |
 | P1 | 生成 overall summary | `overall_mact_core100_summary.json` |
