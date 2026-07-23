@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-23 13:11:42 CST
+最后更新：2026-07-23 13:15:37 CST
 
 ## 1. 最大目标
 
@@ -58,8 +58,8 @@ PRD:
 | MACT blind smoke5 路径验证 | completed | 15 条同 ID smoke 可跑通，用于验证 MACT pipeline |
 | MACT blind core50 paired | completed | myAgent `124/150` vs MACT `119/150`，token ratio `0.626` |
 | MACT blind core100 paired raw/log | completed | WTQ 100/100，TabFact 100/100，CRT 100/100 |
-| core100 eval/paired/summary | pending | 等 CRT 到 100 后生成 |
-| 专家/专利正式实验方案 | pending | 等 core100 结果决定是否扩到 blind200 或改跑新模型 gate |
+| core100 eval/paired/summary | completed | overall myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
+| 专家/专利正式实验方案 | pending | 基于 core100 结果决定是否扩到 blind200 或改跑新模型 gate |
 
 ## 6. 当前 core100 实时状态
 
@@ -105,8 +105,21 @@ nu-2633
 | `run_wtq_resume.sh` | WTQ recovery script |
 | `run_tabfact_resume.sh` | TabFact recovery script |
 | `run_crt_resume.sh` | CRT recovery script |
+| `*_mact_core100_eval.json` | per-dataset MACT eval |
+| `*_mact_core100_errors.jsonl` | per-dataset anomaly rows |
+| `*_mact_core100_paired.json` | same-ID myAgent vs MACT paired details |
+| `overall_mact_core100_summary.json` | core100 final summary |
 
-当前准备同步 core100 raw/log final。eval、paired、overall summary 尚未生成。
+当前准备同步 core100 eval/paired/summary final。
+
+core100 final result:
+
+| dataset | myAgent | MACT | delta | token ratio |
+|---|---:|---:|---:|---:|
+| WTQ | 69/100 | 79/100 | -10 | 0.574 |
+| TabFact | 95/100 | 93/100 | +2 | 0.233 |
+| CRT | 73/100 | 55/100 | +18 | 0.913 |
+| Overall | 237/300 | 227/300 | +10 | 0.591 |
 
 ### 7.2 MACT core50 final
 
@@ -160,13 +173,18 @@ myAgent blind200 stress result：
 在 Qwen3-32B 本地模型、same-ID paired 的 blind50 core 实验中，
 myAgent 总体准确率高于 MACT：124/150 vs 119/150，
 平均 token 为 MACT 的 62.6%。
+
+在 blind100 core 实验中，myAgent 总体准确率继续高于 MACT：
+237/300 vs 227/300，平均 token 为 MACT 的 59.1%。
 ```
 
 必须带限制：
 
 ```text
-WTQ 和 TabFact 在 blind50 单项上低于 MACT，overall 优势主要来自 CRT。
-blind100 还在跑 CRT，不能提前写 blind100 已完成或已证明总体超过。
+WTQ 在 blind100 单项上仍低于 MACT：69/100 vs 79/100。
+TabFact 小幅超过 MACT：95/100 vs 93/100。
+CRT 明显超过 MACT：73/100 vs 55/100。
+因此当前可以写“总体超过且 token 明显更低”，不能写“三个数据集全部超过”。
 ```
 
 不能写：
@@ -182,13 +200,11 @@ full dataset 已完成。
 
 | priority | task | output |
 |---:|---|---|
-| P0 | 同步 CRT 100/100 final checkpoint | MACT commit on `main` |
-| P1 | 生成 core100 per-dataset eval | `*_mact_core100_eval.json` |
-| P1 | 生成 same-ID paired compare | `*_mact_core100_paired.json` |
-| P1 | 生成 overall summary | `overall_mact_core100_summary.json` |
-| P1 | 更新本文档的 core100 结论 | 本 PRD |
-| P2 | 判断是否扩到 blind200 | 若 core100 overall 仍超过 MACT 且 token 优势明显 |
-| P2 | 新模型筛选 | 只跑 Gate-50/Gate-150，不直接 full |
+| P0 | 同步 core100 eval/paired/summary final checkpoint | MACT commit on `main` |
+| P0 | 更新并同步本文档的 core100 结论 | 本 PRD |
+| P1 | 判断是否扩到 blind200 | core100 overall 已过；若要专家主表更强，可扩 blind200 |
+| P1 | 新模型筛选 | 只跑 Gate-50/Gate-150，不直接 full |
+| P2 | 正式实验方案定稿 | 控制时间成本，避免所有模型 full run |
 
 ## 11. 如果服务器清空后的恢复方式
 
