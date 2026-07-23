@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-23 13:15:37 CST
+最后更新：2026-07-23 13:27:07 CST
 
 ## 1. 最大目标
 
@@ -32,6 +32,12 @@ PRD:
 
 当前 core100 live ledger:
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_core100_20260722/LIVE_LEDGER.md
+
+当前 full200 MACT run:
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723
+
+当前 full200 live ledger:
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/LIVE_LEDGER.md
 ```
 
 ## 4. 当前实验口径
@@ -59,6 +65,7 @@ PRD:
 | MACT blind core50 paired | completed | myAgent `124/150` vs MACT `119/150`，token ratio `0.626` |
 | MACT blind core100 paired raw/log | completed | WTQ 100/100，TabFact 100/100，CRT 100/100 |
 | core100 eval/paired/summary | completed | overall myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
+| MACT blind full200 seeded run | in_progress | full200 目录已从 core100 seed，每个数据集 100/200；待补 tail100 |
 | 专家/专利正式实验方案 | pending | 基于 core100 结果决定是否扩到 blind200 或改跑新模型 gate |
 
 ## 6. 当前 core100 实时状态
@@ -79,6 +86,22 @@ nu-2633
 ```
 
 二者都是 MACT prompt 超过 Qwen3 8192 context 的 BadRequest，不是服务连接错误。
+
+## 6.1 当前 full200 扩样状态
+
+截至 2026-07-23 13:27:07 CST：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723
+```
+
+| dataset | rows | status | recovery script |
+|---|---:|---|---|
+| WTQ | 100/200 | seeded; tail100 pending | `run_wtq_resume.sh` |
+| TabFact | 100/200 | seeded; tail100 pending | `run_tabfact_resume.sh` |
+| CRT | 100/200 | seeded; tail100 pending | `run_crt_resume.sh` |
+
+full200 的 100 行 seed 来自 core100 raw/log/summary；后续用 `--limit 200 --resume` 只补第 101-200 行，不重跑前 100。
 
 ## 7. 已完成结果文件
 
@@ -153,6 +176,18 @@ myAgent blind200 stress result：
 | CRT | 137/200 | 0.6850 | 10,838.25 | 24.899s | 0 | 0 |
 | Overall | 453/600 | 0.7550 | 6,497.36 | 17.198s | 0 | 0 |
 
+### 7.4 多模型 Gate-50 结果位置
+
+这些是已经完成的 myAgent-only Gate-50 筛选。结论是三个非主模型都不进入扩大实验。
+
+| model | output dir | WTQ | TabFact | CRT | overall | avg tokens | decision |
+|---|---|---:|---:|---:|---:|---:|---|
+| Qwen3-14B-AWQ | `/home/ubuntu/lzz/MyAgent/outputs/server_runs/qwen3_14b_awq_gate50_20260721/` | 37/50 | 44/50 | 27/50 | 108/150 | 7,344.51 | no-go |
+| Qwen2.5-14B-AWQ | `/home/ubuntu/lzz/MyAgent/outputs/server_runs/qwen25_14b_awq_gate50_20260721/` | 34/50 | 45/50 | 28/50 | 107/150 | 7,308.35 | no-go |
+| Qwen2.5-3B-Instruct | `/home/ubuntu/lzz/MyAgent/outputs/server_runs/qwen25_3b_current_frozen_gate50_20260720/` | 28/50 | 40/50 | 21/50 | 89/150 | 7,298.51 | no-go |
+
+这些模型没有进入 MACT paired 扩样，因为 Gate-50 已明显低于当前 Qwen3-32B 主模型，也低于 MACT Gate-50 reference。
+
 ## 8. 已做优化和修复
 
 | item | status | impact |
@@ -202,8 +237,8 @@ full dataset 已完成。
 |---:|---|---|
 | P0 | 同步 core100 eval/paired/summary final checkpoint | done: MACT `main` |
 | P0 | 更新并同步本文档的 core100 结论 | done: 本 PRD |
-| P1 | 判断是否扩到 blind200 | core100 overall 已过；若要专家主表更强，可扩 blind200 tail100 |
-| P1 | 新模型筛选 | 只跑 Gate-50/Gate-150，不直接 full |
+| P1 | 扩到 blind200 | in progress: full200 目录已 seed，准备补 MACT tail100 |
+| P1 | 新模型筛选 | 当前本地 3 个非主模型已 no-go；除非新增/挂载模型，否则不继续跑 |
 | P2 | 正式实验方案定稿 | 控制时间成本，避免所有模型 full run |
 
 ## 11. 当前决策建议
@@ -226,7 +261,7 @@ WTQ: myAgent 69/100 vs MACT 79/100
 
 1. 专家/专利材料可以先使用 `blind50 + blind100` 作为 staged paired evidence。
 2. 不要写“三个数据集全部超过”；只写“总体超过，TabFact/CRT 贡献主要优势，WTQ 仍为短板”。
-3. 如果服务器清空前还有稳定时间，可以只对 Qwen3-32B 补 blind200 tail100 MACT，不要给所有模型跑 full。
+3. 如果服务器清空前还有稳定时间，当前正在按 seeded full200 方案只对 Qwen3-32B 补 blind200 tail100 MACT，不给 no-go 模型跑 full。
 4. 若换新模型，先跑 myAgent-only Gate-50/Gate-150；只有接近或超过 Qwen3-32B 的模型才补 MACT paired。
 5. 正式实验建议采用“分阶段抽样 + 最终候选扩样”，不是全模型全数据集暴力跑。
 
