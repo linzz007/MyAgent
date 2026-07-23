@@ -633,12 +633,28 @@ Created MACT-side resume scripts:
 | TabFact | 90/100 | 0 | 0 | `tabfact-test-9395` | active pid `334723` |
 | CRT | 50/100 | 0 | 0 | `crt-279` | not started for core100 tail |
 
+2026-07-23 09:52:52 CST TabFact final checkpoint:
+
+| dataset | MACT rows | failed | missing | last id | runner |
+|---|---:|---:|---:|---|---|
+| WTQ | 100/100 | 2 | 2 | `nu-216` | complete |
+| TabFact | 100/100 | 0 | 0 | `tabfact-test-6673` | exited status 0 |
+| CRT | 50/100 | 0 | 0 | `crt-279` | not started for core100 tail |
+
+TabFact final diagnostics:
+
+```text
+Critical errors: 0 for Traceback, BadRequestError, context length, Connection refused, APIConnectionError.
+Internal Halted: 1 count in TabFact log: 9.
+TabFact resume elapsed after row50: 5,428 seconds.
+```
+
 下一步恢复策略：
 
 1. WTQ final checkpoint 已完成并准备同步。
-2. 下一步跑 TabFact：`--limit 100 --resume`，从现有 50 行继续到 100。
-3. TabFact 到 100 后立即更新 MACT ledger、commit/push MACT。
-4. 再按同样方式跑 CRT 到 100，并同步。
+2. TabFact final checkpoint 已完成并准备同步。
+3. 下一步跑 CRT：`--limit 100 --resume`，从现有 50 行继续到 100。
+4. CRT 到 100 后立即更新 MACT ledger、commit/push MACT。
 5. 三个数据集到 100 后生成 `*_eval.json`、`*_paired.json`、`overall_mact_core100_summary.json`。
 6. 最后把 blind100 paired result 写回本章节，并推送 MyAgent。
 
