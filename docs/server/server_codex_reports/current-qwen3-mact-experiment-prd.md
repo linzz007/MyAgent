@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-23 14:55:56 CST
+最后更新：2026-07-23 15:08:55 CST
 
 ## 1. 最大目标
 
@@ -75,7 +75,7 @@ PRD:
 | MACT blind core50 paired | completed | myAgent `124/150` vs MACT `119/150`，token ratio `0.626` |
 | MACT blind core100 paired raw/log | completed | WTQ 100/100，TabFact 100/100，CRT 100/100 |
 | core100 eval/paired/summary | completed | overall myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
-| MACT blind full200 seeded run | in_progress | full200 目录已从 core100 seed；WTQ `138/200`，TabFact/CRT `100/200` |
+| MACT blind full200 seeded run | in_progress | full200 目录已从 core100 seed；WTQ `145/200`，TabFact/CRT `100/200` |
 | 专家/专利正式实验方案 | pending | 基于 core100 结果决定是否扩到 blind200 或改跑新模型 gate |
 
 ## 6. 当前 core100 实时状态
@@ -99,7 +99,7 @@ nu-2633
 
 ## 6.1 当前 full200 扩样状态
 
-截至 2026-07-23 14:55:56 CST：
+截至 2026-07-23 15:08:55 CST：
 
 ```text
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723
@@ -107,7 +107,7 @@ nu-2633
 
 | dataset | rows | status | recovery script |
 |---|---:|---|---|
-| WTQ | 138/200 | running; row101-row123 ok, row124 context overflow, row125-row132 ok, row133 context overflow, row134-row138 ok, last id `nu-824` | `run_wtq_resume.sh` |
+| WTQ | 145/200 | running; row101-row123 ok, row124 context overflow, row125-row132 ok, row133 context overflow, row134-row145 ok, last id `nu-2426` | `run_wtq_resume.sh` |
 | TabFact | 100/200 | seeded; tail100 pending | `run_tabfact_resume.sh` |
 | CRT | 100/200 | seeded; tail100 pending | `run_crt_resume.sh` |
 
@@ -130,6 +130,8 @@ latest checkpoint: 126/200, id=nu-3527, ok, 7678 tokens, 76.6s
 latest checkpoint: 131/200, id=nu-1298, ok, 6794 tokens, 67.1s
 latest checkpoint: 133/200, id=nu-3139, failed, context overflow 6145+2048 > 8192
 latest checkpoint: 138/200, id=nu-824, ok, 19077 tokens, 307.0s
+latest checkpoint: 144/200, id=nu-976, ok, 11989 tokens, 130.1s
+latest checkpoint: 145/200, id=nu-2426, ok, 10617 tokens, 111.2s
 ```
 
 错误扫描截至本次更新看到四个 WTQ context length BadRequest：
@@ -170,7 +172,7 @@ nu-3139
 | file | current content |
 |---|---|
 | `LIVE_LEDGER.md` | full200 实时 ledger |
-| `wtq_mact_full200.jsonl` | WTQ 138/200 raw，row124/row133 为 context overflow failure，后台仍在继续 |
+| `wtq_mact_full200.jsonl` | WTQ 145/200 raw，row124/row133 为 context overflow failure，后台仍在继续 |
 | `tabfact_mact_full200.jsonl` | TabFact 100/200 seed |
 | `crt_mact_full200.jsonl` | CRT 100/200 seed |
 | `logs/wtq_mact_full200.log` | WTQ MACT full200 log |
@@ -273,7 +275,7 @@ myAgent blind200 stress result：
 | vLLM stale pid / live port 检查 | done | 避免 pid stale 时重复启动服务 |
 | MACT one-by-one + `--resume` | done | 单条失败不丢整批，服务器中断后可继续 |
 | detached resume scripts | done | 防止 Codex 前台 session 断开导致长跑停止 |
-| 周期性 Git checkpoint | ongoing | core100 已 final 推送；full200 已按 seed/row101/104/109/116/120/126/133 节点推送，当前准备同步 row138 |
+| 周期性 Git checkpoint | ongoing | core100 已 final 推送；full200 已按 seed/row101/104/109/116/120/126/133/138 节点推送，当前准备同步 row145 |
 | context length failure 保留为 failed/missing | ongoing | WTQ 中 MACT 的 `nu-4299`、`nu-2633`、`nu-3290`、`nu-3139` 当前被严格计入失败；后续 repair 需显式标注 |
 | full200 seed 复用 | done | 从 core100 复制前 100 行，full200 只补 tail100，避免重跑已完成样本 |
 
@@ -314,7 +316,7 @@ full dataset 已完成。
 |---:|---|---|
 | P0 | 同步 core100 eval/paired/summary final checkpoint | done: MACT `main` |
 | P0 | 更新并同步本文档的 core100 结论 | done: 本 PRD |
-| P0 | WTQ full200 补到 200 并 checkpoint | in progress: 当前 138/200 |
+| P0 | WTQ full200 补到 200 并 checkpoint | in progress: 当前 145/200 |
 | P0 | WTQ context overflow 处置 | pending: 当前按 failure 保留；若做 repair，需单独记录 repaired 口径 |
 | P0 | WTQ full200 完成后生成 eval/paired | pending: 需要 WTQ 200/200 后执行 |
 | P1 | TabFact full200 tail100 | pending: WTQ 完成或停止并 checkpoint 后再跑 |
