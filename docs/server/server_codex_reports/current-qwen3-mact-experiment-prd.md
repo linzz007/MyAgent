@@ -200,13 +200,37 @@ full dataset 已完成。
 
 | priority | task | output |
 |---:|---|---|
-| P0 | 同步 core100 eval/paired/summary final checkpoint | MACT commit on `main` |
-| P0 | 更新并同步本文档的 core100 结论 | 本 PRD |
-| P1 | 判断是否扩到 blind200 | core100 overall 已过；若要专家主表更强，可扩 blind200 |
+| P0 | 同步 core100 eval/paired/summary final checkpoint | done: MACT `main` |
+| P0 | 更新并同步本文档的 core100 结论 | done: 本 PRD |
+| P1 | 判断是否扩到 blind200 | core100 overall 已过；若要专家主表更强，可扩 blind200 tail100 |
 | P1 | 新模型筛选 | 只跑 Gate-50/Gate-150，不直接 full |
 | P2 | 正式实验方案定稿 | 控制时间成本，避免所有模型 full run |
 
-## 11. 如果服务器清空后的恢复方式
+## 11. 当前决策建议
+
+core100 结果已经满足“总体超过 MACT 且 token 明显更低”的阶段目标：
+
+```text
+myAgent: 237/300 = 0.7900
+MACT:    227/300 = 0.7567
+token ratio: 0.5913
+```
+
+但 WTQ 仍显著低于 MACT：
+
+```text
+WTQ: myAgent 69/100 vs MACT 79/100
+```
+
+因此建议：
+
+1. 专家/专利材料可以先使用 `blind50 + blind100` 作为 staged paired evidence。
+2. 不要写“三个数据集全部超过”；只写“总体超过，TabFact/CRT 贡献主要优势，WTQ 仍为短板”。
+3. 如果服务器清空前还有稳定时间，可以只对 Qwen3-32B 补 blind200 tail100 MACT，不要给所有模型跑 full。
+4. 若换新模型，先跑 myAgent-only Gate-50/Gate-150；只有接近或超过 Qwen3-32B 的模型才补 MACT paired。
+5. 正式实验建议采用“分阶段抽样 + 最终候选扩样”，不是全模型全数据集暴力跑。
+
+## 12. 如果服务器清空后的恢复方式
 
 1. 重新 clone / pull 两个仓库：
 
