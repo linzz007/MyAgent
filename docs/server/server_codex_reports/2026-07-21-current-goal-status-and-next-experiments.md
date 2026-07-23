@@ -617,6 +617,14 @@ Created MACT-side resume scripts:
 | TabFact | 72/100 | 0 | 0 | `tabfact-test-11430` | active pid `334723` |
 | CRT | 50/100 | 0 | 0 | `crt-279` | not started for core100 tail |
 
+2026-07-23 09:19:31 CST TabFact resume checkpoint:
+
+| dataset | MACT rows | failed | missing | last id | runner |
+|---|---:|---:|---:|---|---|
+| WTQ | 100/100 | 2 | 2 | `nu-216` | complete |
+| TabFact | 80/100 | 0 | 0 | `tabfact-test-6430` | active pid `334723` |
+| CRT | 50/100 | 0 | 0 | `crt-279` | not started for core100 tail |
+
 下一步恢复策略：
 
 1. WTQ final checkpoint 已完成并准备同步。
