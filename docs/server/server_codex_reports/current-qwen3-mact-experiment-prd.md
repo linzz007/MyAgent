@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-23 14:15:29 CST
+最后更新：2026-07-23 14:24:07 CST
 
 ## 1. 最大目标
 
@@ -75,7 +75,7 @@ PRD:
 | MACT blind core50 paired | completed | myAgent `124/150` vs MACT `119/150`，token ratio `0.626` |
 | MACT blind core100 paired raw/log | completed | WTQ 100/100，TabFact 100/100，CRT 100/100 |
 | core100 eval/paired/summary | completed | overall myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
-| MACT blind full200 seeded run | in_progress | full200 目录已从 core100 seed；WTQ `120/200`，TabFact/CRT `100/200` |
+| MACT blind full200 seeded run | in_progress | full200 目录已从 core100 seed；WTQ `126/200`，TabFact/CRT `100/200` |
 | 专家/专利正式实验方案 | pending | 基于 core100 结果决定是否扩到 blind200 或改跑新模型 gate |
 
 ## 6. 当前 core100 实时状态
@@ -99,7 +99,7 @@ nu-2633
 
 ## 6.1 当前 full200 扩样状态
 
-截至 2026-07-23 14:15:29 CST：
+截至 2026-07-23 14:24:07 CST：
 
 ```text
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723
@@ -107,7 +107,7 @@ nu-2633
 
 | dataset | rows | status | recovery script |
 |---|---:|---|---|
-| WTQ | 120/200 | running; row101-row120 ok, last id `nu-3399` | `run_wtq_resume.sh` |
+| WTQ | 126/200 | running; row101-row123 ok, row124 context overflow, row125-row126 ok, last id `nu-3527` | `run_wtq_resume.sh` |
 | TabFact | 100/200 | seeded; tail100 pending | `run_tabfact_resume.sh` |
 | CRT | 100/200 | seeded; tail100 pending | `run_crt_resume.sh` |
 
@@ -124,16 +124,22 @@ latest checkpoint: 104/200, id=nu-3939, ok, 16520 tokens, 173.7s
 latest checkpoint: 109/200, id=nu-712, ok, 7551 tokens, 98.8s
 latest checkpoint: 116/200, id=nu-2903, ok, 11749 tokens, 132.6s
 latest checkpoint: 120/200, id=nu-3399, ok, 8017 tokens, 102.6s
+latest checkpoint: 124/200, id=nu-3290, failed, context overflow 6145+2048 > 8192
+latest checkpoint: 125/200, id=nu-3922, ok, 8291 tokens, 116.7s
+latest checkpoint: 126/200, id=nu-3527, ok, 7678 tokens, 76.6s
 ```
 
-错误扫描截至本次更新仍只看到 seed 中的两个 WTQ context length BadRequest：
+错误扫描截至本次更新看到三个 WTQ context length BadRequest：
 
 ```text
 nu-4299
 nu-2633
+nu-3290
 ```
 
 没有新的 Connection refused / APIConnectionError。
+
+`nu-3290` 是 full200 tail 中新增的 MACT context overflow。原因和前两个一致：MACT 请求 `max_tokens=2048` 时，vLLM 只允许 input <= 6144，但该样本 input 为 6145。runner 已将该样本保留为一行 `exec_error`，并继续运行到 row126。后续如果要提升 MACT baseline 严谨性，应设计单独的 failed-row repair 步骤，例如用 `max_tokens=2047` 重跑这些失败 ID，并在 paired 结果中明确标注 repaired 口径；不能静默覆盖。
 
 ## 6.2 当前执行流程
 
@@ -160,7 +166,7 @@ nu-2633
 | file | current content |
 |---|---|
 | `LIVE_LEDGER.md` | full200 实时 ledger |
-| `wtq_mact_full200.jsonl` | WTQ 120/200 raw，后台仍在继续 |
+| `wtq_mact_full200.jsonl` | WTQ 126/200 raw，row124 为 context overflow failure，后台仍在继续 |
 | `tabfact_mact_full200.jsonl` | TabFact 100/200 seed |
 | `crt_mact_full200.jsonl` | CRT 100/200 seed |
 | `logs/wtq_mact_full200.log` | WTQ MACT full200 log |
@@ -263,8 +269,8 @@ myAgent blind200 stress result：
 | vLLM stale pid / live port 检查 | done | 避免 pid stale 时重复启动服务 |
 | MACT one-by-one + `--resume` | done | 单条失败不丢整批，服务器中断后可继续 |
 | detached resume scripts | done | 防止 Codex 前台 session 断开导致长跑停止 |
-| 周期性 Git checkpoint | ongoing | core100 已 final 推送；full200 已按 seed/row101/104/109/116 节点推送，当前准备同步 row120 |
-| context length failure 保留为 failed/missing | done | WTQ 中 MACT 的 `nu-4299`、`nu-2633` 被严格计入失败 |
+| 周期性 Git checkpoint | ongoing | core100 已 final 推送；full200 已按 seed/row101/104/109/116/120 节点推送，当前准备同步 row126 |
+| context length failure 保留为 failed/missing | ongoing | WTQ 中 MACT 的 `nu-4299`、`nu-2633`、`nu-3290` 当前被严格计入失败；后续 repair 需显式标注 |
 | full200 seed 复用 | done | 从 core100 复制前 100 行，full200 只补 tail100，避免重跑已完成样本 |
 
 ## 9. 当前可以写的结论
@@ -304,7 +310,8 @@ full dataset 已完成。
 |---:|---|---|
 | P0 | 同步 core100 eval/paired/summary final checkpoint | done: MACT `main` |
 | P0 | 更新并同步本文档的 core100 结论 | done: 本 PRD |
-| P0 | WTQ full200 补到 200 并 checkpoint | in progress: 当前 120/200 |
+| P0 | WTQ full200 补到 200 并 checkpoint | in progress: 当前 126/200 |
+| P0 | WTQ context overflow 处置 | pending: 当前按 failure 保留；若做 repair，需单独记录 repaired 口径 |
 | P0 | WTQ full200 完成后生成 eval/paired | pending: 需要 WTQ 200/200 后执行 |
 | P1 | TabFact full200 tail100 | pending: WTQ 完成或停止并 checkpoint 后再跑 |
 | P1 | CRT full200 tail100 | pending: TabFact 完成或停止并 checkpoint 后再跑 |
