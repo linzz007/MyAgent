@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-23 13:43:32 CST
+最后更新：2026-07-23 13:55:24 CST
 
 ## 1. 最大目标
 
@@ -89,7 +89,7 @@ nu-2633
 
 ## 6.1 当前 full200 扩样状态
 
-截至 2026-07-23 13:43:32 CST：
+截至 2026-07-23 13:55:24 CST：
 
 ```text
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723
@@ -97,7 +97,7 @@ nu-2633
 
 | dataset | rows | status | recovery script |
 |---|---:|---|---|
-| WTQ | 104/200 | running; row101-row104 ok, last id `nu-3939` | `run_wtq_resume.sh` |
+| WTQ | 109/200 | running; row101-row109 ok, last id `nu-712` | `run_wtq_resume.sh` |
 | TabFact | 100/200 | seeded; tail100 pending | `run_tabfact_resume.sh` |
 | CRT | 100/200 | seeded; tail100 pending | `run_crt_resume.sh` |
 
@@ -111,6 +111,7 @@ runner: run_wtq_resume.sh
 stdout log: logs/wtq_full200_resume_stdout.log
 first tail row: 101/200, id=nu-4099, ok, 8735 tokens, 84.3s
 latest checkpoint: 104/200, id=nu-3939, ok, 16520 tokens, 173.7s
+latest checkpoint: 109/200, id=nu-712, ok, 7551 tokens, 98.8s
 ```
 
 ## 7. 已完成结果文件
