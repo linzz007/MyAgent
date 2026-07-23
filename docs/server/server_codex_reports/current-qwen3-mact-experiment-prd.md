@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-23 19:04:39 CST
+最后更新：2026-07-23 19:15:25 CST
 
 ## 1. 最大目标
 
@@ -75,7 +75,7 @@ PRD:
 | MACT blind core50 paired | completed | myAgent `124/150` vs MACT `119/150`，token ratio `0.626` |
 | MACT blind core100 paired raw/log | completed | WTQ 100/100，TabFact 100/100，CRT 100/100 |
 | core100 eval/paired/summary | completed | overall myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
-| MACT blind full200 seeded run | in_progress | full200 目录已从 core100 seed；WTQ `200/200` raw/eval/paired complete；TabFact `102/200` running；CRT `100/200` |
+| MACT blind full200 seeded run | in_progress | full200 目录已从 core100 seed；WTQ `200/200` raw/eval/paired complete；TabFact `109/200` running；CRT `100/200` |
 | 专家/专利正式实验方案 | pending | 基于 core100 结果决定是否扩到 blind200 或改跑新模型 gate |
 
 ## 6. 当前 core100 实时状态
@@ -99,7 +99,7 @@ nu-2633
 
 ## 6.1 当前 full200 扩样状态
 
-截至 2026-07-23 19:04:39 CST：
+截至 2026-07-23 19:15:25 CST：
 
 ```text
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723
@@ -108,7 +108,7 @@ nu-2633
 | dataset | rows | status | recovery script |
 |---|---:|---|---|
 | WTQ | 200/200 | complete; MACT `148/200`, myAgent `131/200`, token ratio `0.5926`; 5 context overflow failures | `run_wtq_resume.sh` |
-| TabFact | 102/200 | running; row101-row102 ok, last id `tabfact-test-12180` | `run_tabfact_resume.sh` |
+| TabFact | 109/200 | running; row101-row109 ok, last id `tabfact-test-5452` | `run_tabfact_resume.sh` |
 | CRT | 100/200 | seeded; tail100 pending | `run_crt_resume.sh` |
 
 full200 的 100 行 seed 来自 core100 raw/log/summary；后续用 `--limit 200 --resume` 只补第 101-200 行，不重跑前 100。
@@ -244,8 +244,8 @@ WTQ full200 same-ID paired 结果：
 | `wtq_mact_full200_eval.json` | WTQ MACT full200 eval：MACT `148/200 = 0.7400` |
 | `wtq_mact_full200_errors.jsonl` | WTQ eval anomaly rows，52 行 |
 | `wtq_mact_full200_paired.json` | WTQ full200 same-ID paired：myAgent `131/200` vs MACT `148/200` |
-| `tabfact_mact_full200.jsonl` | TabFact 100/200 seed |
-| `logs/tabfact_full200_resume_stdout.log` | TabFact detached stdout，19:01:42 CST 已启动，row101-row102 ok |
+| `tabfact_mact_full200.jsonl` | TabFact 109/200 raw，tail rows 101-109 all ok |
+| `logs/tabfact_full200_resume_stdout.log` | TabFact detached stdout，19:01:42 CST 已启动，row101-row109 ok |
 | `crt_mact_full200.jsonl` | CRT 100/200 seed |
 | `logs/wtq_mact_full200.log` | WTQ MACT full200 log |
 | `logs/wtq_full200_resume_stdout.log` | WTQ detached stdout |
@@ -391,7 +391,7 @@ full dataset 已完成。
 | P0 | WTQ full200 补到 200 并 checkpoint | done: WTQ `200/200` raw/log complete |
 | P0 | WTQ context overflow 处置 | pending: 当前按 failure 保留；若做 repair，需单独记录 repaired 口径 |
 | P0 | WTQ full200 完成后生成 eval/paired | done: WTQ full200 myAgent `131/200` vs MACT `148/200` |
-| P1 | TabFact full200 tail100 | in progress: current 102/200, last `tabfact-test-12180` ok |
+| P1 | TabFact full200 tail100 | in progress: current 109/200, last `tabfact-test-5452` ok |
 | P1 | CRT full200 tail100 | pending: TabFact 完成或停止并 checkpoint 后再跑 |
 | P1 | 新模型筛选 | 当前本地 3 个非主模型已 no-go；除非新增/挂载模型，否则不继续跑 |
 | P2 | 正式实验方案定稿 | 控制时间成本，避免所有模型 full run |
