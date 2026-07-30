@@ -113,6 +113,58 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertIn("run_gate150.sh", readme)
             self.assertIn("git add -f", readme)
 
+    def test_prepare_gate_run_rejects_known_tested_local_model_by_default(self):
+        """Catches accidentally spending GPU time on a local model already ruled in/out by prior gates."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            model_dir = tmp / "models" / "Qwen3-14B-AWQ"
+            run_dir = mact_root / "outputs" / "server_runs" / "qwen3_14b_repeat_gate50"
+            model_dir.mkdir(parents=True)
+            myagent_root.mkdir()
+
+            with self.assertRaisesRegex(ValueError, "known tested local model"):
+                prepare_gate_run(
+                    GateRunConfig(
+                        myagent_root=myagent_root,
+                        mact_root=mact_root,
+                        model_id=model_dir,
+                        model_tag="qwen3_14b_awq",
+                        served_model_name="qwen3-14b-awq-local",
+                        run_dir=run_dir,
+                    )
+                )
+
+            self.assertFalse(run_dir.exists())
+
+    def test_prepare_gate_run_allows_known_tested_model_with_explicit_override(self):
+        """Catches override runs that are indistinguishable from fresh model screening."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            model_dir = tmp / "models" / "Qwen3-14B-AWQ"
+            run_dir = mact_root / "outputs" / "server_runs" / "qwen3_14b_repeat_gate50"
+            model_dir.mkdir(parents=True)
+            myagent_root.mkdir()
+
+            manifest = prepare_gate_run(
+                GateRunConfig(
+                    myagent_root=myagent_root,
+                    mact_root=mact_root,
+                    model_id=model_dir,
+                    model_tag="qwen3_14b_awq",
+                    served_model_name="qwen3-14b-awq-local",
+                    run_dir=run_dir,
+                    allow_known_tested_model=True,
+                )
+            )
+
+            manifest_json = json.loads((run_dir / "gate_run_manifest.json").read_text(encoding="utf-8"))
+            self.assertTrue(manifest["known_tested_model_override"])
+            self.assertTrue(manifest_json["known_tested_model_override"])
+
     def test_cli_prepares_external_api_gate_run_without_writing_secret(self):
         """Catches external API candidates that require manual, non-recoverable script edits."""
         with tempfile.TemporaryDirectory() as tmp_name:

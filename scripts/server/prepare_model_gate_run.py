@@ -21,6 +21,13 @@ DEFAULT_GPU_GROUPS = "4,5;6,7"
 DEFAULT_BASE_PORT = 8000
 DEFAULT_API_KEY = "local-vllm-key-change-me"
 DEFAULT_MACT_AVG_TOKENS = 11262.41
+KNOWN_TESTED_LOCAL_MODEL_KEYS = {
+    "qwen332b",
+    "qwen314bawq",
+    "qwen2514bawq",
+    "qwen2514binstructawq",
+    "qwen253binstruct",
+}
 
 
 @dataclass(frozen=True)
@@ -42,6 +49,7 @@ class GateRunConfig:
     vllm_gpu_memory_utilization: float = 0.88
     vllm_dtype: str = "auto"
     vllm_extra_args: str = "--trust-remote-code"
+    allow_known_tested_model: bool = False
     wtq_dataset: str = DEFAULT_WTQ_DATASET
     tabfact_dataset: str = DEFAULT_TABFACT_DATASET
     crt_dataset: str = DEFAULT_CRT_DATASET
@@ -52,6 +60,23 @@ class GateRunConfig:
 def safe_slug(value: str) -> str:
     slug = re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("_")
     return slug or "model"
+
+
+def normalized_model_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower()).removesuffix("local")
+
+
+def known_tested_local_model_key(config: GateRunConfig) -> str | None:
+    if config.backend != "local-vllm":
+        return None
+    values = [config.model_tag, config.served_model_name]
+    if config.model_id is not None:
+        values.extend([config.model_id.name, str(config.model_id)])
+    for value in values:
+        key = normalized_model_key(value)
+        if key in KNOWN_TESTED_LOCAL_MODEL_KEYS:
+            return key
+    return None
 
 
 def shell_quote(value: Any) -> str:
@@ -79,6 +104,11 @@ def validate_config(config: GateRunConfig) -> None:
     if config.backend == "local-vllm":
         if config.model_id is None:
             raise ValueError("local-vllm backend requires model_id")
+        known_key = known_tested_local_model_key(config)
+        if known_key and not config.allow_known_tested_model:
+            raise ValueError(
+                "known tested local model; use --allow-known-tested-model only for an explicitly documented rerun"
+            )
     elif config.backend == "api":
         if not config.api_base_url:
             raise ValueError("api backend requires api_base_url")
@@ -298,6 +328,7 @@ def build_manifest(config: GateRunConfig, run_dir: Path) -> dict[str, Any]:
         endpoints = [config.api_base_url.rstrip("/")]
     else:
         endpoints = endpoints_for(config.gpu_groups, config.base_port)
+    known_key = known_tested_local_model_key(config)
     return {
         "run_dir": str(run_dir),
         "myagent_root": str(config.myagent_root),
@@ -313,6 +344,8 @@ def build_manifest(config: GateRunConfig, run_dir: Path) -> dict[str, Any]:
         "base_port": config.base_port,
         "endpoints": endpoints,
         "gate_limits": {"gate10": 10, "gate50": 50, "gate150": 150},
+        "known_tested_model": known_key,
+        "known_tested_model_override": bool(known_key and config.allow_known_tested_model),
         "datasets": {
             "wtq": config.wtq_dataset,
             "tabfact": config.tabfact_dataset,
@@ -364,6 +397,11 @@ def main() -> None:
     parser.add_argument("--api-key-env", default="")
     parser.add_argument("--gpu-groups", default=DEFAULT_GPU_GROUPS)
     parser.add_argument("--base-port", type=int, default=DEFAULT_BASE_PORT)
+    parser.add_argument(
+        "--allow-known-tested-model",
+        action="store_true",
+        help="Allow preparing a rerun for a local model already present in the experiment no-go/baseline ledger.",
+    )
     args = parser.parse_args()
 
     config = GateRunConfig(
@@ -379,6 +417,7 @@ def main() -> None:
         api_key_env=args.api_key_env,
         gpu_groups=args.gpu_groups,
         base_port=args.base_port,
+        allow_known_tested_model=args.allow_known_tested_model,
     )
     manifest = prepare_gate_run(config)
     print(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
