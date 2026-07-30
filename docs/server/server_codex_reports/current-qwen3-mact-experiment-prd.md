@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 19:33:27 CST
+最后更新：2026-07-30 19:38:42 CST
 
 ## 0. 下一次启动先看这里
 
@@ -69,9 +69,10 @@ MyAgent 仓库只负责代码、脚本和本文档；除非临时调试，不再
 
 ```text
 /home/ubuntu/lzz/MyAgent/scripts/server/audit_qwen3_experiment_state.py
+/home/ubuntu/lzz/MyAgent/scripts/server/prepare_model_gate_run.py
 ```
 
-作用：从 MACT 已保存的 full200 summary、当前 CRT 复跑 comparison、WTQ representative100 comparison 和本机模型/API 状态生成机器可读 JSON，并可同步生成中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”。
+作用：`audit_qwen3_experiment_state.py` 从 MACT 已保存结果生成机器可读 JSON 和中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”。`prepare_model_gate_run.py` 在新增本地模型后自动生成 MACT run 目录、双服务 vLLM env、Gate-10/Gate-50 runner 和 manifest，但不启动服务。
 
 ## 1. 最大目标
 
@@ -743,6 +744,7 @@ myAgent blind200 stress result：
 | numpy array execution result 判断 | done | `verification_gap` 改为显式判断非空执行结果，避免 numpy array truth-value 崩溃 |
 | numpy array 输出序列化 | done | `_to_serializable` 和 `_json_default` 优先使用 `.tolist()`，避免多元素 numpy array `.item()` 崩溃 |
 | 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json` 和 `latest_expert_evidence_summary.md`，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
+| 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地模型生成 MACT run 目录、`vllm.env`、启动/健康检查/停止脚本、Gate-10/Gate-50 runner 和 `gate_run_manifest.json`；默认 GPU `4,5;6,7`、端口 `8000/8001` |
 
 ## 9. 当前可以写的结论
 
@@ -943,80 +945,45 @@ setsid -f bash /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact
 
 ### 14.1 本地 vLLM 候选模型
 
-先在 MACT 下创建 run 目录和 env 文件：
+先用准备脚本在 MACT 下创建 run 目录和全部脚本。该命令只写文件，不启动模型：
 
 ```bash
 MODEL_TAG=<model_tag>
-RUN_DIR=/home/ubuntu/lzz/MACT/outputs/server_runs/${MODEL_TAG}_gate50_$(date +%Y%m%d_%H%M%S)
-mkdir -p "$RUN_DIR"/logs
+MODEL_ID=/home/ubuntu/models/<model_dir>
+SERVED_MODEL_NAME=<served_model_name>
 
-cat > "$RUN_DIR/vllm.env" <<'EOF'
-export HF_HOME=/home/ubuntu/models
-export HF_HUB_ENABLE_HF_TRANSFER=1
-export MODEL_ID=/home/ubuntu/models/<model_dir>
-export SERVED_MODEL_NAME=<served_model_name>
-export GPU_GROUPS="4,5;6,7"
-export BASE_PORT=8000
-export VLLM_API_KEY=local-vllm-key-change-me
-export VLLM_MAX_MODEL_LEN=8192
-export VLLM_GPU_MEMORY_UTILIZATION=0.88
-export VLLM_DTYPE=auto
-export VLLM_EXTRA_ARGS="--trust-remote-code"
-export LOCAL_VLLM_API_KEY="${VLLM_API_KEY}"
-EOF
+cd /home/ubuntu/lzz/MyAgent
+source /home/ubuntu/miniconda3/etc/profile.d/conda.sh
+conda activate lzz-agent
+
+python scripts/server/prepare_model_gate_run.py \
+  --myagent-root /home/ubuntu/lzz/MyAgent \
+  --mact-root /home/ubuntu/lzz/MACT \
+  --model-id "$MODEL_ID" \
+  --model-tag "$MODEL_TAG" \
+  --served-model-name "$SERVED_MODEL_NAME"
+```
+
+脚本会输出 `run_dir`。后续从 `gate_run_manifest.json` 或 stdout 取 `RUN_DIR`：
+
+```bash
+RUN_DIR=/home/ubuntu/lzz/MACT/outputs/server_runs/<model_tag>_gate50_<timestamp>
+cat "$RUN_DIR/gate_run_manifest.json"
 ```
 
 启动和健康检查：
 
 ```bash
-cd /home/ubuntu/lzz/MyAgent
-source /home/ubuntu/miniconda3/etc/profile.d/conda.sh
-conda activate lzz-agent
-
-bash scripts/server/start_vllm_pool.sh "$RUN_DIR/vllm.env"
-bash scripts/server/healthcheck_vllm_pool.sh "$RUN_DIR/vllm.env"
+bash "$RUN_DIR/start_services.sh"
+bash "$RUN_DIR/healthcheck_services.sh"
 ```
 
-可选 Gate-10 smoke：
+Gate-10 / Gate-50：
 
 ```bash
-source "$RUN_DIR/vllm.env"
-python scripts/server/run_sharded_tqa.py \
-  --repo-root . \
-  --tasks wtq,tabfact,crt \
-  --wtq-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl \
-  --tabfact-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/tabfact.jsonl \
-  --crt-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/crt.jsonl \
-  --endpoints http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1 \
-  --model "$SERVED_MODEL_NAME" \
-  --api-key-env LOCAL_VLLM_API_KEY \
-  --output-root "$RUN_DIR/myagent_gate10" \
-  --limit-per-task 10 \
-  --max-replan 2 \
-  --mact-avg-tokens 11262.41 \
-  --resume
-```
-
-Gate-10 若有连接错误、缺行、schema 错误或明显 context 问题，先排查服务，不进入 Gate-50。
-
-Gate-50：
-
-```bash
-source "$RUN_DIR/vllm.env"
-python scripts/server/run_sharded_tqa.py \
-  --repo-root . \
-  --tasks wtq,tabfact,crt \
-  --wtq-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl \
-  --tabfact-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/tabfact.jsonl \
-  --crt-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/crt.jsonl \
-  --endpoints http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1 \
-  --model "$SERVED_MODEL_NAME" \
-  --api-key-env LOCAL_VLLM_API_KEY \
-  --output-root "$RUN_DIR/myagent_gate50" \
-  --limit-per-task 50 \
-  --max-replan 2 \
-  --mact-avg-tokens 11262.41 \
-  --resume
+bash "$RUN_DIR/run_gate10.sh"
+# Gate-10 若有连接错误、缺行、schema 错误或明显 context 问题，先排查服务，不进入 Gate-50。
+bash "$RUN_DIR/run_gate50.sh"
 ```
 
 Gate-50 完成后必须检查：
