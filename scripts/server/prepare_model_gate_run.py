@@ -84,6 +84,23 @@ def model_from_readiness_audit(path: Path, model_name: str = "") -> tuple[str, P
     return model_name, Path(paths[0])
 
 
+def api_provider_from_readiness_audit(path: Path, provider_name: str = "") -> tuple[str, dict[str, Any]]:
+    readiness = read_json(path).get("model_readiness", {})
+    profiles = readiness.get("api_provider_profiles", {})
+    if not isinstance(profiles, dict) or not profiles:
+        raise ValueError(f"no API provider profiles in readiness audit: {path}")
+    if not provider_name:
+        if len(profiles) != 1:
+            candidates = ", ".join(sorted(profiles))
+            raise ValueError(f"multiple API provider profiles; pass --api-provider ({candidates})")
+        provider_name = next(iter(profiles))
+    profile = profiles.get(provider_name)
+    if not isinstance(profile, dict):
+        candidates = ", ".join(sorted(profiles))
+        raise ValueError(f"api provider not found in readiness audit: {provider_name}; candidates: {candidates}")
+    return provider_name, profile
+
+
 def known_tested_local_model_key(config: GateRunConfig) -> str | None:
     if config.backend != "local-vllm":
         return None
@@ -427,25 +444,36 @@ def main() -> None:
         except ValueError as exc:
             parser.error(str(exc))
         model_id = model_id.resolve()
+    api_provider = args.api_provider
+    api_profile: dict[str, Any] = {}
+    if args.backend == "api" and readiness_audit is not None and not api_provider:
+        try:
+            api_provider, api_profile = api_provider_from_readiness_audit(readiness_audit, api_provider)
+        except ValueError as exc:
+            parser.error(str(exc))
     if not model_name and model_id is not None:
         model_name = model_id.name
 
     model_tag = safe_slug(args.model_tag or model_name)
-    api_defaults = api_provider_defaults(args.api_provider) if args.backend == "api" else {}
+    api_defaults = api_provider_defaults(api_provider) if args.backend == "api" else {}
     if args.backend == "api":
         served_model_name = args.served_model_name or model_name
-        if not args.api_base_url and not api_defaults.get("api_base_url"):
+        api_base_url = args.api_base_url or str(api_profile.get("api_base_url", "")) or api_defaults.get("api_base_url", "")
+        api_key_env = args.api_key_env or str(api_profile.get("api_key_env", "")) or api_defaults.get("api_key_env", "")
+        if not api_base_url:
             parser.error(
-                f"--api-base-url is required for API provider {args.api_provider!r}; "
+                f"--api-base-url is required for API provider {api_provider!r}; "
                 "only providers with tested defaults can omit it"
             )
-        if not args.api_key_env and not api_defaults.get("api_key_env"):
+        if not api_key_env:
             parser.error(
-                f"--api-key-env is required for API provider {args.api_provider!r}; "
+                f"--api-key-env is required for API provider {api_provider!r}; "
                 "only providers with tested defaults can omit it"
             )
     else:
         served_model_name = args.served_model_name or (default_served_model_name(model_name) if model_name else "")
+        api_base_url = ""
+        api_key_env = ""
     if not model_tag or not served_model_name:
         parser.error("--model-tag and --served-model-name are required unless --model-id or --readiness-audit provides a model name")
 
@@ -457,9 +485,9 @@ def main() -> None:
         model_id=model_id,
         run_dir=args.run_dir.resolve() if args.run_dir else None,
         backend=args.backend,
-        api_provider=args.api_provider,
-        api_base_url=args.api_base_url or api_defaults.get("api_base_url", ""),
-        api_key_env=args.api_key_env or api_defaults.get("api_key_env", ""),
+        api_provider=api_provider,
+        api_base_url=api_base_url,
+        api_key_env=api_key_env,
         readiness_audit_path=readiness_audit,
         gpu_groups=args.gpu_groups,
         base_port=args.base_port,

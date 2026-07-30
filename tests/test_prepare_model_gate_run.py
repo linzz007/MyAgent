@@ -302,6 +302,107 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertIn("export SERVED_MODEL_NAME=qwen/qwen3-32b", api_env)
             self.assertIn("export API_KEY_ENV=OPENROUTER_API_KEY", api_env)
 
+    def test_cli_prepares_api_gate_run_from_readiness_audit_provider_profile(self):
+        """Catches manually retyping provider defaults already present in readiness audit."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            run_dir = mact_root / "outputs" / "server_runs" / "openrouter_from_audit_gate50"
+            readiness_audit = tmp / "latest_experiment_readiness_audit.json"
+            myagent_root.mkdir()
+            readiness_audit.write_text(
+                json.dumps(
+                    {
+                        "model_readiness": {
+                            "api_provider_profiles": {
+                                "OpenRouter": {
+                                    "api_base_url": "https://openrouter.ai/api/v1",
+                                    "api_key_env": "OPENROUTER_API_KEY",
+                                    "requires_model_name": True,
+                                }
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "scripts" / "server" / "prepare_model_gate_run.py"),
+                    "--backend",
+                    "api",
+                    "--myagent-root",
+                    str(myagent_root),
+                    "--mact-root",
+                    str(mact_root),
+                    "--readiness-audit",
+                    str(readiness_audit),
+                    "--model-name",
+                    "qwen/qwen3-32b",
+                    "--run-dir",
+                    str(run_dir),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            manifest = json.loads((run_dir / "gate_run_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["backend"], "api")
+            self.assertEqual(manifest["api_provider"], "OpenRouter")
+            self.assertEqual(manifest["api_base_url"], "https://openrouter.ai/api/v1")
+            self.assertEqual(manifest["api_key_env"], "OPENROUTER_API_KEY")
+            self.assertEqual(manifest["served_model_name"], "qwen/qwen3-32b")
+            self.assertEqual(manifest["readiness_audit_path"], str(readiness_audit.resolve()))
+
+    def test_cli_explicit_api_provider_with_readiness_audit_uses_defaults_when_profile_absent(self):
+        """Catches readiness metadata becoming mandatory after the user passes a tested provider."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            run_dir = mact_root / "outputs" / "server_runs" / "openrouter_explicit_with_audit_gate50"
+            readiness_audit = tmp / "latest_experiment_readiness_audit.json"
+            myagent_root.mkdir()
+            readiness_audit.write_text(
+                json.dumps({"model_readiness": {"api_provider_profiles": {}}}),
+                encoding="utf-8",
+            )
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "scripts" / "server" / "prepare_model_gate_run.py"),
+                    "--backend",
+                    "api",
+                    "--myagent-root",
+                    str(myagent_root),
+                    "--mact-root",
+                    str(mact_root),
+                    "--readiness-audit",
+                    str(readiness_audit),
+                    "--api-provider",
+                    "OpenRouter",
+                    "--model-name",
+                    "qwen/qwen3-32b",
+                    "--run-dir",
+                    str(run_dir),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            manifest = json.loads((run_dir / "gate_run_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["api_provider"], "OpenRouter")
+            self.assertEqual(manifest["api_base_url"], "https://openrouter.ai/api/v1")
+            self.assertEqual(manifest["api_key_env"], "OPENROUTER_API_KEY")
+
     def test_cli_unknown_api_provider_without_endpoint_fails_without_traceback(self):
         """Catches confusing Python tracebacks when an API provider has no tested defaults."""
         with tempfile.TemporaryDirectory() as tmp_name:
