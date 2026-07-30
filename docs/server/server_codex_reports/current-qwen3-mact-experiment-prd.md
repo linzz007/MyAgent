@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 22:36:30 CST
+最后更新：2026-07-30 22:45:10 CST
 
 ## 0. 下一次启动先看这里
 
@@ -27,7 +27,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
-| 下一步建议 | 结果已校验并关停进程；当前不要重启旧 Qwen3-32B/no-go 模型做重复实验。只有新增/挂载候选模型或提供外部 API key 后，才按第 14 节启动双服务 Gate-10/Gate-50/Gate-150；Gate-150 仍有竞争力时再用 `prepare_paired200_run.py` 生成 paired-200 |
+| 下一步建议 | 结果已校验并关停进程；当前不要重启旧 Qwen3-32B/no-go 模型做重复实验。只有新增/挂载候选模型或提供外部 API key 后，才按第 14 节启动双服务 Gate-10/Gate-50/Gate-150；Gate-150 仍有竞争力时再用 `prepare_paired200_run.py` 生成 paired-200；每个新生成的 Gate / paired-200 run 目录都会包含 `checkpoint_to_git.sh`，长跑中每完成一个 gate 或 dataset 脚本就执行一次，服务器不稳定时用 `--commit ... --push` 立即同步远端 |
 
 下一次恢复命令入口：
 
@@ -72,6 +72,15 @@ python scripts/server/audit_qwen3_experiment_state.py \
 
 MyAgent 仓库只负责代码、脚本和本文档；除非临时调试，不再把新实验主结果分散写到 MyAgent 的 `outputs/server_runs/`。
 
+生成新的 Gate 或 paired-200 run 后，先看该 run 目录的 `README.md`。每个 run 目录都会生成 `checkpoint_to_git.sh`：
+
+```bash
+bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh
+bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --commit "checkpoint: <run> <stage>" --push
+```
+
+第一条命令只对当前 MACT run 目录执行 `git add -f`，适合检查后统一提交；第二条命令会把当前 run 目录限定提交并推送到远端，适合服务器可能清空时的中途备份。
+
 当前可复核审计脚本：
 
 ```text
@@ -84,7 +93,7 @@ MyAgent 仓库只负责代码、脚本和本文档；除非临时调试，不再
 /home/ubuntu/lzz/MyAgent/scripts/server/summarize_model_gate_results.py
 ```
 
-作用：`audit_qwen3_experiment_state.py` 从 MACT 已保存结果生成机器可读 JSON 和中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”；API key readiness 默认检查 `MyAgent/configs/server/*.env` 的真实 env 文件并跳过 `.example`/`.bak`，也可通过 `--env-file <path>` 读取额外 run-specific `.env` 中的 key 名，但不会保存或打印 secret 值。`experiment_model_registry.py` 集中维护已测本地模型清单和 alias 规范化规则，供审计和 Gate 准备脚本共用；`experiment_api_registry.py` 集中维护 API key 名和已测试 provider 默认配置，供审计和 Gate 准备脚本共用。`healthcheck_openai_compatible.py` 在外部 API Gate-10 前用 `/models` 验证 API key、endpoint 和目标 model，且不打印 secret。`prepare_model_gate_run.py` 在新增本地模型或外部 API 候选后自动生成 MACT run 目录、双服务 vLLM env 或 API profile、Gate-10/Gate-50/Gate-150 runner 和 manifest，但不启动服务；本地候选可从 readiness audit 读取 `untested_local_model_paths`，外部 API 候选可从 readiness audit 读取单个 `api_provider_profiles` 并自动填 provider/base URL/key env，仍需通过 `--model-name` 指明 provider model；已知测试过的本地模型默认会被拒绝，只有显式 `--allow-known-tested-model` 才能生成重跑目录，manifest 会标记 override。`run_gate10.sh`、`run_gate50.sh` 和 `run_gate150.sh` 会分别生成 gate summary，且 `run_gate50.sh` 会强制要求 `gate10_summary.json` 的 decision 为 `gate50`，`run_gate150.sh` 会强制要求 `gate50_summary.json` 的 decision 为 `gate150`。`prepare_paired200_run.py` 从 Gate run manifest 生成 MACT paired-200 run 目录、myAgent/MACT runner、eval/compare 脚本和 manifest，同时强制要求 `gate150_summary.json` 存在且 `decision=paired200`，避免 no-go 候选被静默扩样。`summarize_model_gate_results.py` 读取 Gate-10/Gate-50/Gate-150 三个 eval JSON，输出对应 `gate*_summary.json/md`；Gate summary 的异常行按 `min(rows, num_failed_exec + num_missing_answer)` 保守统计，避免 failed 与 missing 同时出现时低估失败率；Gate-10 通过时 decision 为 `gate50`，Gate-50 通过时 decision 为 `gate150`，Gate-150 通过 Qwen3-32B frozen150 overall reference `333/450`，且至少 2 个数据集达到单项 reference 时 decision 为 `paired200`。
+作用：`audit_qwen3_experiment_state.py` 从 MACT 已保存结果生成机器可读 JSON 和中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”；API key readiness 默认检查 `MyAgent/configs/server/*.env` 的真实 env 文件并跳过 `.example`/`.bak`，也可通过 `--env-file <path>` 读取额外 run-specific `.env` 中的 key 名，但不会保存或打印 secret 值。`experiment_model_registry.py` 集中维护已测本地模型清单和 alias 规范化规则，供审计和 Gate 准备脚本共用；`experiment_api_registry.py` 集中维护 API key 名和已测试 provider 默认配置，供审计和 Gate 准备脚本共用。`healthcheck_openai_compatible.py` 在外部 API Gate-10 前用 `/models` 验证 API key、endpoint 和目标 model，且不打印 secret。`prepare_model_gate_run.py` 在新增本地模型或外部 API 候选后自动生成 MACT run 目录、双服务 vLLM env 或 API profile、Gate-10/Gate-50/Gate-150 runner、`checkpoint_to_git.sh` 和 manifest，但不启动服务；本地候选可从 readiness audit 读取 `untested_local_model_paths`，外部 API 候选可从 readiness audit 读取单个 `api_provider_profiles` 并自动填 provider/base URL/key env，仍需通过 `--model-name` 指明 provider model；已知测试过的本地模型默认会被拒绝，只有显式 `--allow-known-tested-model` 才能生成重跑目录，manifest 会标记 override。`run_gate10.sh`、`run_gate50.sh` 和 `run_gate150.sh` 会分别生成 gate summary，且 `run_gate50.sh` 会强制要求 `gate10_summary.json` 的 decision 为 `gate50`，`run_gate150.sh` 会强制要求 `gate50_summary.json` 的 decision 为 `gate150`。`prepare_paired200_run.py` 从 Gate run manifest 生成 MACT paired-200 run 目录、myAgent/MACT runner、eval/compare 脚本、`checkpoint_to_git.sh` 和 manifest，同时强制要求 `gate150_summary.json` 存在且 `decision=paired200`，避免 no-go 候选被静默扩样。`checkpoint_to_git.sh` 默认只对当前 run 目录执行 `git add -f`，可选 `--commit MESSAGE --push` 会限定提交并推送当前 run 目录。`summarize_model_gate_results.py` 读取 Gate-10/Gate-50/Gate-150 三个 eval JSON，输出对应 `gate*_summary.json/md`；Gate summary 的异常行按 `min(rows, num_failed_exec + num_missing_answer)` 保守统计，避免 failed 与 missing 同时出现时低估失败率；Gate-10 通过时 decision 为 `gate50`，Gate-50 通过时 decision 为 `gate150`，Gate-150 通过 Qwen3-32B frozen150 overall reference `333/450`，且至少 2 个数据集达到单项 reference 时 decision 为 `paired200`。
 
 ## 1. 最大目标
 
@@ -204,6 +213,7 @@ WTQ extreme/only 修复代表性 WTQ100 回归 run:
 | readiness 自动准备 Gate run | completed | `prepare_model_gate_run.py` 支持 `--readiness-audit latest_experiment_readiness_audit.json --model-name <name>`，自动从 `untested_local_model_paths` 取本地模型路径并派生 `model_tag` / `served_model_name`；如果只有一个未测本地模型可省略 `--model-name`，多个候选漏传时会提示候选列表 |
 | OpenRouter API 默认准备 | completed | `experiment_api_registry.py` 集中维护 OpenRouter 的 `api_base_url=https://openrouter.ai/api/v1` 和 `api_key_env=OPENROUTER_API_KEY`；`audit_qwen3_experiment_state.py` 在检测到 `OPENROUTER_API_KEY` 时会输出 `api_provider_profiles.OpenRouter`；`prepare_model_gate_run.py --backend api --api-provider OpenRouter --model-name <provider_model>` 会自动填配置且不会写入真实 key；2026-07-30 22:24 起也可用 `--backend api --readiness-audit latest_experiment_readiness_audit.json --model-name <provider_model>` 自动消费单个 provider profile；未知 provider 缺少 endpoint/key env 时会给出 CLI 参数提示而不是 Python traceback |
 | 外部 API healthcheck 前置 | completed | 2026-07-30 22:30 新增 `healthcheck_openai_compatible.py`；`prepare_model_gate_run.py` 生成的 API `healthcheck_services.sh` 不再只检查 key env 存在，会调用 `/models` 验证 endpoint 连通性和目标 model 是否列出，错误信息不打印 secret；2026-07-30 22:36 `prepare_paired200_run.py` 生成的 paired-200 目录也包含 `healthcheck_services.sh`，API 场景复用 `/models` 检查，本地 vLLM 场景复用 `healthcheck_vllm_pool.sh`，README run order 要求先 healthcheck 再跑 myAgent/MACT 200 行 |
+| 长跑 checkpoint / GitHub 同步流程固化 | completed | 2026-07-30 22:45 `prepare_model_gate_run.py` 和 `prepare_paired200_run.py` 生成的每个 MACT run 目录都会包含 `checkpoint_to_git.sh`；默认只 force-stage 当前 run 目录，`--commit MESSAGE --push` 可将当前 run 目录限定提交并推送；新增单测在临时 git 仓库中把 `outputs/` 设为 ignore，验证脚本仍能把 ignored run 目录 stage 进 Git |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
 ## 6. 当前 core100 实时状态

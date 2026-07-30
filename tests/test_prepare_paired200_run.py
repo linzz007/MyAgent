@@ -32,6 +32,34 @@ def write_gate150_paired200_summary(gate_run: Path) -> None:
     )
 
 
+def assert_checkpoint_script_stages_ignored_run_dir(
+    testcase: unittest.TestCase,
+    mact_root: Path,
+    run_dir: Path,
+    marker_relative_path: str,
+) -> None:
+    subprocess.run(["git", "-C", str(mact_root), "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (mact_root / ".gitignore").write_text("outputs/\n", encoding="utf-8")
+    marker = run_dir / marker_relative_path
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text('{"ok": true}\n', encoding="utf-8")
+
+    checkpoint = run_dir / "checkpoint_to_git.sh"
+    testcase.assertTrue(checkpoint.stat().st_mode & stat.S_IXUSR)
+    subprocess.run(["bash", "-n", str(checkpoint)], check=True)
+    subprocess.run(["bash", str(checkpoint)], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    staged = subprocess.run(
+        ["git", "-C", str(mact_root), "diff", "--cached", "--name-only"],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    ).stdout.splitlines()
+    run_relative = run_dir.relative_to(mact_root)
+    testcase.assertIn(str(run_relative / "checkpoint_to_git.sh"), staged)
+    testcase.assertIn(str(run_relative / marker_relative_path), staged)
+
+
 class PreparePaired200RunTests(unittest.TestCase):
     def test_cli_prepares_local_paired200_run_from_gate_manifest(self):
         """Catches final-candidate paired-200 expansion that still needs hand-written scripts."""
@@ -129,6 +157,13 @@ class PreparePaired200RunTests(unittest.TestCase):
             compare_script = (paired_run / "run_eval_and_compare.sh").read_text(encoding="utf-8")
             self.assertIn("code/compare_blind_results.py", compare_script)
             self.assertIn("--output \"$PAIRED_RUN_DIR/paired200_summary.json\"", compare_script)
+
+            assert_checkpoint_script_stages_ignored_run_dir(
+                self,
+                mact_root,
+                paired_run,
+                "mact/wtq_mact_paired200.jsonl",
+            )
 
     def test_cli_prepares_api_paired200_run_without_writing_secret(self):
         """Catches external paired-200 scripts that leak API key values into MACT outputs."""

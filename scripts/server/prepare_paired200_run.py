@@ -257,6 +257,71 @@ def render_eval_compare_script(
     return "\n".join(lines)
 
 
+def render_checkpoint_script(config: Paired200Config, run_dir: Path) -> str:
+    return "\n".join(
+        [
+            "#!/usr/bin/env bash",
+            "set -euo pipefail",
+            f"MACT_ROOT={shell_quote(config.mact_root)}",
+            f"RUN_DIR={shell_quote(run_dir)}",
+            'COMMIT_MESSAGE=""',
+            'PUSH_AFTER_COMMIT="0"',
+            'PUSH_REMOTE="${PUSH_REMOTE:-origin}"',
+            "",
+            "while [[ $# -gt 0 ]]; do",
+            '  case "$1" in',
+            "    --commit)",
+            "      shift",
+            '      if [[ $# -eq 0 ]]; then',
+            '        echo "missing commit message after --commit" >&2',
+            "        exit 2",
+            "      fi",
+            '      COMMIT_MESSAGE="$1"',
+            "      shift",
+            "      ;;",
+            "    --push)",
+            '      PUSH_AFTER_COMMIT="1"',
+            "      shift",
+            "      ;;",
+            "    *)",
+            '      echo "unknown argument: $1" >&2',
+            '      echo "usage: $0 [--commit MESSAGE] [--push]" >&2',
+            "      exit 2",
+            "      ;;",
+            "  esac",
+            "done",
+            "",
+            'cd "$MACT_ROOT"',
+            'case "$RUN_DIR" in',
+            '  "$MACT_ROOT"/*) RUN_REL=${RUN_DIR#"$MACT_ROOT"/} ;;',
+            "  *)",
+            '    echo "RUN_DIR is not under MACT_ROOT: $RUN_DIR" >&2',
+            "    exit 2",
+            "    ;;",
+            "esac",
+            "",
+            'git add -f -- "$RUN_REL"',
+            'git status --short -- "$RUN_REL"',
+            "",
+            'if [[ -n "$COMMIT_MESSAGE" ]]; then',
+            '  if git diff --cached --quiet -- "$RUN_REL"; then',
+            '    echo "No staged checkpoint changes under $RUN_REL"',
+            "  else",
+            '    git commit -m "$COMMIT_MESSAGE" -- "$RUN_REL"',
+            "  fi",
+            '  if [[ "$PUSH_AFTER_COMMIT" == "1" ]]; then',
+            "    BRANCH=$(git branch --show-current)",
+            '    git push "$PUSH_REMOTE" "$BRANCH"',
+            "  fi",
+            "else",
+            '  echo "Staged checkpoint for $RUN_REL"',
+            '  echo "Remote backup option: bash $RUN_DIR/checkpoint_to_git.sh --commit \\"checkpoint: describe this run\\" --push"',
+            "fi",
+            "",
+        ]
+    )
+
+
 def render_readme(config: Paired200Config, run_dir: Path, manifest: Mapping[str, Any]) -> str:
     api_key_env = manifest.get("api_key_env")
     api_key_lines = []
@@ -283,11 +348,11 @@ def render_readme(config: Paired200Config, run_dir: Path, manifest: Mapping[str,
             f"bash {run_dir}/run_eval_and_compare.sh",
             "```",
             "",
-            "Do not start this run unless Gate-150 still shows a competitive candidate. Keep all outputs under this MACT run directory and force-add it after each checkpoint.",
+            "Do not start this run unless Gate-150 still shows a competitive candidate. Keep all outputs under this MACT run directory and checkpoint after each dataset script. The script runs `git add -f` for this run only; add `--commit ... --push` when the remote backup should be updated immediately.",
             "",
             "```bash",
-            f"cd {config.mact_root}",
-            f"git add -f {run_dir}",
+            f"bash {run_dir}/checkpoint_to_git.sh",
+            f"bash {run_dir}/checkpoint_to_git.sh --commit \"checkpoint: {manifest.get('model_tag', 'candidate')} paired200\" --push",
             "```",
             "",
         ]
@@ -350,6 +415,7 @@ def prepare_paired200_run(config: Paired200Config) -> dict[str, Any]:
             render_mact_script(config, run_dir, gate_manifest, dataset, dataset_path),
         )
     write_executable(run_dir / "run_eval_and_compare.sh", render_eval_compare_script(config, run_dir, gate_manifest))
+    write_executable(run_dir / "checkpoint_to_git.sh", render_checkpoint_script(config, run_dir))
     (run_dir / "README.md").write_text(render_readme(config, run_dir, gate_manifest), encoding="utf-8")
     manifest = build_manifest(config, run_dir, gate_manifest)
     (run_dir / "paired200_run_manifest.json").write_text(

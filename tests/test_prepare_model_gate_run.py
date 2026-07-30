@@ -14,6 +14,34 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "server"))
 from prepare_model_gate_run import GateRunConfig, prepare_gate_run, safe_slug  # noqa: E402
 
 
+def assert_checkpoint_script_stages_ignored_run_dir(
+    testcase: unittest.TestCase,
+    mact_root: Path,
+    run_dir: Path,
+    marker_relative_path: str,
+) -> None:
+    subprocess.run(["git", "-C", str(mact_root), "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (mact_root / ".gitignore").write_text("outputs/\n", encoding="utf-8")
+    marker = run_dir / marker_relative_path
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text('{"ok": true}\n', encoding="utf-8")
+
+    checkpoint = run_dir / "checkpoint_to_git.sh"
+    testcase.assertTrue(checkpoint.stat().st_mode & stat.S_IXUSR)
+    subprocess.run(["bash", "-n", str(checkpoint)], check=True)
+    subprocess.run(["bash", str(checkpoint)], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    staged = subprocess.run(
+        ["git", "-C", str(mact_root), "diff", "--cached", "--name-only"],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    ).stdout.splitlines()
+    run_relative = run_dir.relative_to(mact_root)
+    testcase.assertIn(str(run_relative / "checkpoint_to_git.sh"), staged)
+    testcase.assertIn(str(run_relative / marker_relative_path), staged)
+
+
 class PrepareModelGateRunTests(unittest.TestCase):
     def test_safe_slug_keeps_model_tags_path_safe(self):
         self.assertEqual(safe_slug("DeepSeek/R1 Distill Qwen-32B"), "DeepSeek_R1_Distill_Qwen-32B")
@@ -112,6 +140,13 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertIn("gate150_summary.json", readme)
             self.assertIn("run_gate150.sh", readme)
             self.assertIn("git add -f", readme)
+
+            assert_checkpoint_script_stages_ignored_run_dir(
+                self,
+                mact_root,
+                run_dir,
+                "myagent_gate10/merged/wtq_deepseek-r1-qwen32b-local.jsonl",
+            )
 
     def test_prepare_gate_run_rejects_known_tested_local_model_by_default(self):
         """Catches accidentally spending GPU time on a local model already ruled in/out by prior gates."""

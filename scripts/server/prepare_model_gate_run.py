@@ -298,6 +298,71 @@ def render_gate_script(config: GateRunConfig, run_dir: Path, gate_name: str, lim
     return "\n".join(lines)
 
 
+def render_checkpoint_script(config: GateRunConfig, run_dir: Path) -> str:
+    return "\n".join(
+        [
+            "#!/usr/bin/env bash",
+            "set -euo pipefail",
+            f"MACT_ROOT={shell_quote(config.mact_root)}",
+            f"RUN_DIR={shell_quote(run_dir)}",
+            'COMMIT_MESSAGE=""',
+            'PUSH_AFTER_COMMIT="0"',
+            'PUSH_REMOTE="${PUSH_REMOTE:-origin}"',
+            "",
+            "while [[ $# -gt 0 ]]; do",
+            '  case "$1" in',
+            "    --commit)",
+            "      shift",
+            '      if [[ $# -eq 0 ]]; then',
+            '        echo "missing commit message after --commit" >&2',
+            "        exit 2",
+            "      fi",
+            '      COMMIT_MESSAGE="$1"',
+            "      shift",
+            "      ;;",
+            "    --push)",
+            '      PUSH_AFTER_COMMIT="1"',
+            "      shift",
+            "      ;;",
+            "    *)",
+            '      echo "unknown argument: $1" >&2',
+            '      echo "usage: $0 [--commit MESSAGE] [--push]" >&2',
+            "      exit 2",
+            "      ;;",
+            "  esac",
+            "done",
+            "",
+            'cd "$MACT_ROOT"',
+            'case "$RUN_DIR" in',
+            '  "$MACT_ROOT"/*) RUN_REL=${RUN_DIR#"$MACT_ROOT"/} ;;',
+            "  *)",
+            '    echo "RUN_DIR is not under MACT_ROOT: $RUN_DIR" >&2',
+            "    exit 2",
+            "    ;;",
+            "esac",
+            "",
+            'git add -f -- "$RUN_REL"',
+            'git status --short -- "$RUN_REL"',
+            "",
+            'if [[ -n "$COMMIT_MESSAGE" ]]; then',
+            '  if git diff --cached --quiet -- "$RUN_REL"; then',
+            '    echo "No staged checkpoint changes under $RUN_REL"',
+            "  else",
+            '    git commit -m "$COMMIT_MESSAGE" -- "$RUN_REL"',
+            "  fi",
+            '  if [[ "$PUSH_AFTER_COMMIT" == "1" ]]; then',
+            "    BRANCH=$(git branch --show-current)",
+            '    git push "$PUSH_REMOTE" "$BRANCH"',
+            "  fi",
+            "else",
+            '  echo "Staged checkpoint for $RUN_REL"',
+            '  echo "Remote backup option: bash $RUN_DIR/checkpoint_to_git.sh --commit \\"checkpoint: describe this run\\" --push"',
+            "fi",
+            "",
+        ]
+    )
+
+
 def render_readme(config: GateRunConfig, run_dir: Path) -> str:
     return "\n".join(
         [
@@ -324,11 +389,11 @@ def render_readme(config: GateRunConfig, run_dir: Path) -> str:
             "",
             "Do not commit API keys. `vllm.env` contains only a local placeholder key by default.",
             "",
-            "After a gate completes, force-add this ignored MACT output directory:",
+            "After a gate completes, checkpoint this ignored MACT output directory. The script runs `git add -f` for this run only; add `--commit ... --push` when the remote backup should be updated immediately.",
             "",
             "```bash",
-            f"cd {config.mact_root}",
-            f"git add -f {run_dir}",
+            f"bash {run_dir}/checkpoint_to_git.sh",
+            f"bash {run_dir}/checkpoint_to_git.sh --commit \"checkpoint: {config.model_tag} gate\" --push",
             "```",
             "",
         ]
@@ -406,6 +471,7 @@ def prepare_gate_run(config: GateRunConfig) -> dict[str, Any]:
     write_executable(run_dir / "run_gate10.sh", render_gate_script(config, run_dir, "gate10", 10))
     write_executable(run_dir / "run_gate50.sh", render_gate_script(config, run_dir, "gate50", 50))
     write_executable(run_dir / "run_gate150.sh", render_gate_script(config, run_dir, "gate150", 150))
+    write_executable(run_dir / "checkpoint_to_git.sh", render_checkpoint_script(config, run_dir))
     (run_dir / "README.md").write_text(render_readme(config, run_dir), encoding="utf-8")
 
     manifest = build_manifest(config, run_dir)
