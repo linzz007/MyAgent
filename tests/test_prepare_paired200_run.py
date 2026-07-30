@@ -15,6 +15,23 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def write_gate150_paired200_summary(gate_run: Path) -> None:
+    write_json(
+        gate_run / "gate150_summary.json",
+        {
+            "gate_name": "gate150",
+            "decision": "paired200",
+            "decision_reasons": ["gate150_criteria_passed"],
+            "overall": {"correct": 335, "rows": 450, "datasets_at_least_reference": 2},
+            "criteria": {
+                "reference_correct": 333,
+                "dataset_reference_correct": {"wtq": 105, "tabfact": 131, "crt": 97},
+                "min_datasets_at_reference": 2,
+            },
+        },
+    )
+
+
 class PreparePaired200RunTests(unittest.TestCase):
     def test_cli_prepares_local_paired200_run_from_gate_manifest(self):
         """Catches final-candidate paired-200 expansion that still needs hand-written scripts."""
@@ -45,6 +62,7 @@ class PreparePaired200RunTests(unittest.TestCase):
                     "endpoints": ["http://127.0.0.1:8000/v1", "http://127.0.0.1:8001/v1"],
                 },
             )
+            write_gate150_paired200_summary(gate_run)
 
             completed = subprocess.run(
                 [
@@ -139,6 +157,7 @@ class PreparePaired200RunTests(unittest.TestCase):
                     "endpoints": ["https://openrouter.ai/api/v1"],
                 },
             )
+            write_gate150_paired200_summary(gate_run)
 
             completed = subprocess.run(
                 [
@@ -175,6 +194,60 @@ class PreparePaired200RunTests(unittest.TestCase):
             self.assertIn("OPENROUTER_API_KEY", all_text)
             self.assertNotIn("sk-", all_text)
             self.assertNotIn("real-key", all_text)
+
+    def test_cli_rejects_paired200_run_when_gate150_decision_is_not_paired200(self):
+        """Catches silently expanding no-go Gate-150 candidates into expensive paired-200 runs."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            gate_run = mact_root / "outputs" / "server_runs" / "weak_gate50_20260730"
+            paired_run = mact_root / "outputs" / "server_runs" / "weak_paired200_20260731"
+            myagent_root.mkdir()
+            (gate_run / "vllm.env").parent.mkdir(parents=True)
+            (gate_run / "vllm.env").write_text(
+                "export SERVED_MODEL_NAME=weak-local\nexport LOCAL_VLLM_API_KEY=local-placeholder\n",
+                encoding="utf-8",
+            )
+            write_json(
+                gate_run / "gate_run_manifest.json",
+                {
+                    "backend": "local-vllm",
+                    "model_tag": "weak_model",
+                    "served_model_name": "weak-local",
+                    "endpoints": ["http://127.0.0.1:8000/v1"],
+                },
+            )
+            write_json(
+                gate_run / "gate150_summary.json",
+                {
+                    "gate_name": "gate150",
+                    "decision": "no-go",
+                    "decision_reasons": ["datasets_at_reference_below_threshold"],
+                },
+            )
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "scripts" / "server" / "prepare_paired200_run.py"),
+                    "--myagent-root",
+                    str(myagent_root),
+                    "--mact-root",
+                    str(mact_root),
+                    "--gate-run-dir",
+                    str(gate_run),
+                    "--run-dir",
+                    str(paired_run),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("Gate-150 decision must be paired200", completed.stderr)
+            self.assertFalse(paired_run.exists())
 
 
 if __name__ == "__main__":

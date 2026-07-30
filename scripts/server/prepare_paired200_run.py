@@ -64,6 +64,17 @@ def source_env_name(backend: str) -> str:
     return "api.env" if backend == "api" else "vllm.env"
 
 
+def validate_gate150_approval(gate_run_dir: Path) -> dict[str, Any]:
+    summary_path = gate_run_dir / "gate150_summary.json"
+    if not summary_path.exists():
+        raise FileNotFoundError(f"missing Gate-150 summary: {summary_path}")
+    summary = read_json(summary_path)
+    decision = summary.get("decision")
+    if decision != "paired200":
+        raise ValueError(f"Gate-150 decision must be paired200 before paired-200 expansion; got {decision!r}")
+    return summary
+
+
 def endpoints_for_manifest(manifest: Mapping[str, Any]) -> list[str]:
     endpoints = manifest.get("endpoints")
     if not isinstance(endpoints, list) or not endpoints:
@@ -251,6 +262,7 @@ def render_readme(config: Paired200Config, run_dir: Path, manifest: Mapping[str,
 
 
 def build_manifest(config: Paired200Config, run_dir: Path, gate_manifest: Mapping[str, Any]) -> dict[str, Any]:
+    gate150_summary = validate_gate150_approval(config.gate_run_dir)
     return {
         "run_dir": str(run_dir),
         "source_gate_run_dir": str(config.gate_run_dir),
@@ -262,6 +274,9 @@ def build_manifest(config: Paired200Config, run_dir: Path, gate_manifest: Mappin
         "endpoints": endpoints_for_manifest(gate_manifest),
         "api_key_env": gate_manifest.get("api_key_env"),
         "paired_limit": PAIRED_LIMIT,
+        "gate150_summary_path": str(config.gate_run_dir / "gate150_summary.json"),
+        "gate150_decision": gate150_summary.get("decision"),
+        "gate150_decision_reasons": gate150_summary.get("decision_reasons") or [],
         "datasets": {
             "wtq": config.wtq_dataset,
             "tabfact": config.tabfact_dataset,
@@ -277,6 +292,7 @@ def prepare_paired200_run(config: Paired200Config) -> dict[str, Any]:
     if not gate_manifest_path.exists():
         raise FileNotFoundError(f"missing gate manifest: {gate_manifest_path}")
     gate_manifest = read_json(gate_manifest_path)
+    validate_gate150_approval(config.gate_run_dir)
     backend = str(gate_manifest.get("backend") or "local-vllm")
     env_path = config.gate_run_dir / source_env_name(backend)
     if not env_path.exists():

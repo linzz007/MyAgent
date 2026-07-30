@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 21:07:27 CST
+最后更新：2026-07-30 21:11:24 CST
 
 ## 0. 下一次启动先看这里
 
@@ -81,7 +81,7 @@ MyAgent 仓库只负责代码、脚本和本文档；除非临时调试，不再
 /home/ubuntu/lzz/MyAgent/scripts/server/summarize_model_gate_results.py
 ```
 
-作用：`audit_qwen3_experiment_state.py` 从 MACT 已保存结果生成机器可读 JSON 和中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”。`prepare_model_gate_run.py` 在新增本地模型或外部 API 候选后自动生成 MACT run 目录、双服务 vLLM env 或 API profile、Gate-10/Gate-50/Gate-150 runner 和 manifest，但不启动服务；`run_gate50.sh` 和 `run_gate150.sh` 会分别生成 gate summary。`prepare_paired200_run.py` 从已通过 Gate-150 的 run manifest 生成 MACT paired-200 run 目录、myAgent/MACT runner、eval/compare 脚本和 manifest，避免手写正式候选扩样流程。`summarize_model_gate_results.py` 读取 Gate-50/Gate-150 三个 eval JSON，输出 `gate50_summary.json/md` 或 `gate150_summary.json/md`；Gate-50 通过时 decision 为 `gate150`，Gate-150 通过 Qwen3-32B frozen150 overall reference `333/450`，且至少 2 个数据集达到单项 reference 时 decision 为 `paired200`。
+作用：`audit_qwen3_experiment_state.py` 从 MACT 已保存结果生成机器可读 JSON 和中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”。`prepare_model_gate_run.py` 在新增本地模型或外部 API 候选后自动生成 MACT run 目录、双服务 vLLM env 或 API profile、Gate-10/Gate-50/Gate-150 runner 和 manifest，但不启动服务；`run_gate50.sh` 和 `run_gate150.sh` 会分别生成 gate summary。`prepare_paired200_run.py` 从 Gate run manifest 生成 MACT paired-200 run 目录、myAgent/MACT runner、eval/compare 脚本和 manifest，同时强制要求 `gate150_summary.json` 存在且 `decision=paired200`，避免 no-go 候选被静默扩样。`summarize_model_gate_results.py` 读取 Gate-50/Gate-150 三个 eval JSON，输出 `gate50_summary.json/md` 或 `gate150_summary.json/md`；Gate-50 通过时 decision 为 `gate150`，Gate-150 通过 Qwen3-32B frozen150 overall reference `333/450`，且至少 2 个数据集达到单项 reference 时 decision 为 `paired200`。
 
 ## 1. 最大目标
 
@@ -794,7 +794,7 @@ myAgent blind200 stress result：
 | 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json` 和 `latest_expert_evidence_summary.md`，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
 | 外部 API key readiness 检测 | done | `audit_qwen3_experiment_state.py` 已从只识别 OpenAI/DeepSeek/DashScope/Anthropic 扩展到 SiliconFlow、Moonshot、Zhipu、Gemini/Google、OpenRouter、Together、Fireworks、Ark、Volc、Azure OpenAI，并新增单测保护 |
 | 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地 vLLM 模型或外部 OpenAI-compatible API 候选生成 MACT run 目录、Gate-10/Gate-50/Gate-150 runner 和 `gate_run_manifest.json`；本地默认 GPU `4,5;6,7`、端口 `8000/8001`，外部 API backend 只写 `api.env`/`api_profile.md` 且不写 secret |
-| Paired-200 run 准备脚本 | done | `scripts/server/prepare_paired200_run.py` 可从 Gate run manifest 生成最终候选的 MACT paired-200 run 目录，包含 myAgent blind200 runner、WTQ/TabFact/CRT MACT one-by-one runner、eval/compare 脚本、README 和 `paired200_run_manifest.json`；外部 API 场景只记录 key 变量名，不写 secret |
+| Paired-200 run 准备脚本 | done | `scripts/server/prepare_paired200_run.py` 可从 Gate run manifest 生成最终候选的 MACT paired-200 run 目录，包含 myAgent blind200 runner、WTQ/TabFact/CRT MACT one-by-one runner、eval/compare 脚本、README 和 `paired200_run_manifest.json`；脚本会拒绝缺失 `gate150_summary.json` 或 `decision != paired200` 的 Gate run；外部 API 场景只记录 key 变量名，不写 secret |
 | Gate-50/Gate-150 自动决策脚本 | done | `scripts/server/summarize_model_gate_results.py` 汇总 WTQ/TabFact/CRT eval；Gate-50 按 reference `124/150`、failure <= `2%`、token ratio <= `0.75` 输出 `no-go` 或 `gate150`；Gate-150 按当前 Qwen3-32B frozen150 overall reference `333/450`，并要求至少 2 个数据集达到单项 reference：WTQ `105/150`、TabFact `131/150`、CRT `97/150`，输出 `no-go` 或 `paired200` |
 | 本地临时文件 ignore | done | `configs/server/*.env.bak.*` 和早期 context 试跑脚本 `restart_qwen3_context_try.sh` 不进入远端恢复路径；正式入口以 PRD 第 14 节和 `prepare_model_gate_run.py` 为准 |
 | 完整 MyAgent 输出归档 | done | 2026-07-30 已将 MyAgent `outputs/server_runs` 完整压缩到 MACT `myagent_server_runs_archive_20260730_2020`，并生成 `SHA256SUMS`、`inventory.tsv`、`run_directories.txt`、`source_size.txt` 和 README |
@@ -863,7 +863,7 @@ full200 对 MACT 是全面显著胜出。
 | P1 | WTQ 最小修复实验 | done measured debug50: old myAgent `0/50` -> new `14/50`；但 MACT `40/50`，这是 adversarial subset，不能作为总体结论 |
 | P1 | WTQ 代表性回归切片 | done measured: 新 myAgent `69/100`，旧 myAgent `69/100`，MACT `79/100`；恢复 3 条、回退 3 条，无净提升 |
 | P1 | 新模型筛选 | waiting: 2026-07-30 19:53 已复扫模型目录/缓存和外部 API env，仍无新增候选；GPU `4,5` 和 `6,7` 可用于下个候选的双服务 Gate，但除非新增/挂载模型或提供外部 API key，否则不继续启动模型 |
-| P1 | Gate-150 到 paired-200 准备链路 | done: `run_gate150.sh` 会生成 `gate150_summary.json/md`；只有 overall 和至少 2 个 dataset-level reference 均通过、decision 为 `paired200` 时，才用 `prepare_paired200_run.py` 从 Gate run 目录生成 same-ID paired-200 正式候选目录、runner、eval/compare 和 manifest |
+| P1 | Gate-150 到 paired-200 准备链路 | done: `run_gate150.sh` 会生成 `gate150_summary.json/md`；只有 overall 和至少 2 个 dataset-level reference 均通过、decision 为 `paired200` 时，`prepare_paired200_run.py` 才会从 Gate run 目录生成 same-ID paired-200 正式候选目录、runner、eval/compare 和 manifest；no-go 或缺 summary 会直接报错 |
 | P2 | 正式实验方案定稿 | ready next: 本文第 13 节已给出 gate-based 方案；下一步只在新增模型/API 后执行，不做全模型全量枚举 |
 
 ## 11. 当前决策建议
@@ -1088,6 +1088,7 @@ Gate-150 默认参考当前 Qwen3-32B frozen150 结果：overall `333/450`，WTQ
 paired-200 准备和执行：
 
 ```bash
+test "$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["decision"])' "$RUN_DIR/gate150_summary.json")" = paired200
 PAIRED_MANIFEST_JSON=$(python scripts/server/prepare_paired200_run.py \
   --myagent-root /home/ubuntu/lzz/MyAgent \
   --mact-root /home/ubuntu/lzz/MACT \
@@ -1182,6 +1183,7 @@ bash "$RUN_DIR/run_gate150.sh"
 外部 API 若进入 paired-200，也使用同一个 paired-200 准备脚本；生成脚本会 source Gate run 目录里的 `api.env`，只读取 `API_BASE_URL`、`SERVED_MODEL_NAME` 和 `API_KEY_ENV`，不会把真实 key 写入 MACT：
 
 ```bash
+test "$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["decision"])' "$RUN_DIR/gate150_summary.json")" = paired200
 PAIRED_MANIFEST_JSON=$(python scripts/server/prepare_paired200_run.py \
   --myagent-root /home/ubuntu/lzz/MyAgent \
   --mact-root /home/ubuntu/lzz/MACT \
