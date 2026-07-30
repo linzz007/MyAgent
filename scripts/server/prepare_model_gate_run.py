@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from experiment_model_registry import KNOWN_TESTED_LOCAL_MODELS, known_tested_model_key
+
 
 DEFAULT_WTQ_DATASET = "datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl"
 DEFAULT_TABFACT_DATASET = "datasets_ready/frozen_qwen3_eval_150_2026-07-19/tabfact.jsonl"
@@ -21,13 +23,6 @@ DEFAULT_GPU_GROUPS = "4,5;6,7"
 DEFAULT_BASE_PORT = 8000
 DEFAULT_API_KEY = "local-vllm-key-change-me"
 DEFAULT_MACT_AVG_TOKENS = 11262.41
-KNOWN_TESTED_LOCAL_MODEL_KEYS = {
-    "qwen332b",
-    "qwen314bawq",
-    "qwen2514bawq",
-    "qwen2514binstructawq",
-    "qwen253binstruct",
-}
 
 
 @dataclass(frozen=True)
@@ -62,21 +57,10 @@ def safe_slug(value: str) -> str:
     return slug or "model"
 
 
-def normalized_model_key(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", value.lower()).removesuffix("local")
-
-
 def known_tested_local_model_key(config: GateRunConfig) -> str | None:
     if config.backend != "local-vllm":
         return None
-    values = [config.model_tag, config.served_model_name]
-    if config.model_id is not None:
-        values.extend([config.model_id.name, str(config.model_id)])
-    for value in values:
-        key = normalized_model_key(value)
-        if key in KNOWN_TESTED_LOCAL_MODEL_KEYS:
-            return key
-    return None
+    return known_tested_model_key(config.model_tag, config.served_model_name, config.model_id)
 
 
 def shell_quote(value: Any) -> str:

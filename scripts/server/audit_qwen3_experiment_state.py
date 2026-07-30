@@ -10,18 +10,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from experiment_model_registry import KNOWN_TESTED_LOCAL_MODELS, known_tested_model_key
+
 
 FULL200_RUN = "qwen3_32b_blind200_mact_full200_20260723"
 CRT_CURRENT_RUN = "qwen3_32b_crt_full200_current_20260730_1822"
 WTQ_REP_RUN = "qwen3_32b_wtq_extreme_fix_representative100_20260730_1805"
-
-KNOWN_TESTED_LOCAL_MODELS = {
-    "Qwen3-32B",
-    "Qwen3-14B-AWQ",
-    "Qwen2.5-14B-Instruct-AWQ",
-    "Qwen2.5-14B-AWQ",
-    "Qwen2.5-3B-Instruct",
-}
 API_KEY_NAMES = (
     "OPENAI_API_KEY",
     "DEEPSEEK_API_KEY",
@@ -192,7 +186,7 @@ def present_api_keys(env: Mapping[str, str]) -> list[str]:
 
 def summarize_model_readiness(model_roots: Sequence[Path], env: Mapping[str, str]) -> dict[str, Any]:
     local_models = discover_local_models(model_roots)
-    untested = sorted(model for model in local_models if model not in KNOWN_TESTED_LOCAL_MODELS)
+    untested = sorted(model for model in local_models if known_tested_model_key(model) is None)
     api_keys = present_api_keys(env)
     can_start = bool(untested or api_keys)
     return {

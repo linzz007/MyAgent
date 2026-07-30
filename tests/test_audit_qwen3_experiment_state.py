@@ -255,6 +255,26 @@ class AuditQwen3ExperimentStateTests(unittest.TestCase):
         self.assertEqual(audit["model_readiness"]["api_keys_present"], ["OPENAI_API_KEY"])
         self.assertEqual(audit["model_readiness"]["next_action"], "run_gate10_then_gate50")
 
+    def test_build_audit_treats_known_model_alias_directory_as_tested(self):
+        """Catches known model aliases being rediscovered as fresh candidates after remounting models."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            model_root = tmp / "models"
+            (model_root / "qwen25_14b_awq").mkdir(parents=True)
+            (model_root / "qwen25_14b_awq" / "config.json").write_text("{}", encoding="utf-8")
+
+            audit = build_audit(
+                myagent_root=myagent_root,
+                mact_root=mact_root,
+                model_roots=[model_root],
+                env={},
+            )
+
+        self.assertEqual(audit["model_readiness"]["untested_local_models"], [])
+        self.assertFalse(audit["model_readiness"]["can_start_new_experiment"])
+
     def test_build_audit_allows_gate_for_openai_compatible_provider_keys(self):
         """Catches missing OpenAI-compatible API providers in readiness detection."""
         with tempfile.TemporaryDirectory() as tmp_name:
