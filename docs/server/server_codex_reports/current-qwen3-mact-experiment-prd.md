@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 17:59:05 CST
+最后更新：2026-07-30 19:12:00 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,13 +11,13 @@
 | item | status |
 |---|---|
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
-| 暂停的数据集 | 无；Qwen3-32B full200 raw/eval/paired/overall 已完成，后续不要继续恢复 CRT runner |
-| 当前进程状态 | 本轮 vLLM 和 runner 均已关停；复核时无 vLLM / MACT runner / shard runner 进程 |
+| 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
+| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；GPU 4-7 显存已释放 |
 | 当前本机模型候选 | `/home/ubuntu/models` 只有 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
-| full200 阶段证据 | WTQ+TabFact+CRT 已完成 600 条：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708` |
+| full200 阶段证据 | 原 full200：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708`；替换为 2026-07-30 当前 CRT 复跑后：myAgent `456/600` vs MACT `450/600`，token ratio `0.5708` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
-| 下一步建议 | 当前不要重跑旧本地 no-go 模型；Qwen3-32B 若继续优化，先跑代表性 WTQ 回归切片，再决定是否回归 blind200 |
+| 下一步建议 | 结果已校验并关停进程，下一步只需从 GitHub 恢复后查看本文档和 MACT run 目录；WTQ extreme/only 修复代表性前 100 条无净提升，暂不把 WTQ 单点优化作为下一阶段主方向 |
 
 下一次恢复命令入口：
 
@@ -102,6 +102,12 @@ PRD:
 
 WTQ extreme/only 修复 debug50 实测 run:
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_wtq_extreme_fix_debug50_20260730_173740
+
+WTQ extreme/only 修复代表性 WTQ100 回归 run:
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_wtq_extreme_fix_representative100_20260730_1805
+
+当前 MyAgent CRT full200 复跑 run:
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_crt_full200_current_20260730_1822
 ```
 
 ## 4. 当前实验口径
@@ -136,6 +142,8 @@ WTQ extreme/only 修复 debug50 实测 run:
 | WTQ gold 行列覆盖诊断 | completed | `wtq_gold_rowcol_loss_diagnostics.md/json` 已保存到 MACT；50 条中 22 条 gold cell 已保留，19 条 literal-gold 被行/列压缩丢失，9 条为非字面计数/计算 |
 | WTQ 候选修复收益估计 | completed | `wtq_fix_candidate_coverage_estimate.md/json` 已保存到 MACT；优先验证 WTQ extreme/only 全局行策略，其次验证行匹配扫描全行 |
 | WTQ extreme/only 全局行最小修复 | completed measured debug50 | MyAgent 已加入 `only/top/first/last/earliest/latest` global-row 触发词；debug50 从旧 myAgent `0/50` 提升到新 myAgent `14/50`，18 条新触发全行里 `10/18` 正确，10 条 strict recoverable 里 `7/10` 正确 |
+| WTQ extreme/only 代表性 WTQ100 回归 | completed measured | 新 myAgent `69/100`，旧 myAgent `69/100`，MACT `79/100`；new/MACT token ratio `0.5790`，new/old token ratio `1.0091`；恢复 3 条、回退 3 条，无净提升 |
+| 当前 MyAgent CRT full200 复跑 | completed measured | 新 myAgent `140/200`，旧 myAgent `137/200`，MACT `113/200`；new/MACT token ratio `0.8461`，new/old token ratio `1.0001`；failed/missing 为 0 |
 | numpy array runtime 边界修复 | completed | debug50 的 `nu-4299` 暴露 `verification_gap` 和 JSON 序列化对 numpy array 的崩溃；已加单测并修复 |
 | 当前本机模型候选盘点 | completed | 仅发现 4 个本地模型目录；3 个非主模型已 no-go；未发现可直接使用的 DeepSeek/OpenAI/DashScope API key |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
@@ -171,7 +179,7 @@ nu-2633
 |---|---:|---|---|
 | WTQ | 200/200 | complete; MACT `148/200`, myAgent `131/200`, token ratio `0.5926`; 5 context overflow failures | `run_wtq_resume.sh` |
 | TabFact | 200/200 | complete; MACT `189/200`, myAgent `185/200`, token ratio `0.2241`; 0 failures | `run_tabfact_resume.sh` |
-| CRT | 200/200 | complete; MACT `113/200`, myAgent `137/200`, token ratio `0.8461`; 0 failures | `run_crt_resume.sh`; final tail used `run_crt_shard_121_160.sh` and `run_crt_shard_161_200.sh` |
+| CRT | 200/200 | original complete: MACT `113/200`, old myAgent `137/200`, token ratio `0.8461`; 2026-07-30 current myAgent rerun: `140/200`, token ratio `0.8461`, failed/missing `0/0` | MACT baseline: `run_crt_resume.sh`; current myAgent rerun: `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_crt_full200_current_20260730_1822` |
 
 full200 的 100 行 seed 来自 core100 raw/log/summary；后续用 `--limit 200 --resume` 只补第 101-200 行，不重跑前 100。
 
