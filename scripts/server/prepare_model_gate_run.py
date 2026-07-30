@@ -23,6 +23,12 @@ DEFAULT_GPU_GROUPS = "4,5;6,7"
 DEFAULT_BASE_PORT = 8000
 DEFAULT_API_KEY = "local-vllm-key-change-me"
 DEFAULT_MACT_AVG_TOKENS = 11262.41
+API_PROVIDER_DEFAULTS = {
+    "openrouter": {
+        "api_base_url": "https://openrouter.ai/api/v1",
+        "api_key_env": "OPENROUTER_API_KEY",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -60,6 +66,14 @@ def safe_slug(value: str) -> str:
 
 def default_served_model_name(model_name: str) -> str:
     return f"{safe_slug(model_name).lower().replace('_', '-')}-local"
+
+
+def normalize_provider(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def api_provider_defaults(provider: str) -> dict[str, str]:
+    return API_PROVIDER_DEFAULTS.get(normalize_provider(provider), {})
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -427,7 +441,11 @@ def main() -> None:
         model_name = model_id.name
 
     model_tag = safe_slug(args.model_tag or model_name)
-    served_model_name = args.served_model_name or (default_served_model_name(model_name) if model_name else "")
+    api_defaults = api_provider_defaults(args.api_provider) if args.backend == "api" else {}
+    if args.backend == "api":
+        served_model_name = args.served_model_name or model_name
+    else:
+        served_model_name = args.served_model_name or (default_served_model_name(model_name) if model_name else "")
     if not model_tag or not served_model_name:
         parser.error("--model-tag and --served-model-name are required unless --model-id or --readiness-audit provides a model name")
 
@@ -440,8 +458,8 @@ def main() -> None:
         run_dir=args.run_dir.resolve() if args.run_dir else None,
         backend=args.backend,
         api_provider=args.api_provider,
-        api_base_url=args.api_base_url,
-        api_key_env=args.api_key_env,
+        api_base_url=args.api_base_url or api_defaults.get("api_base_url", ""),
+        api_key_env=args.api_key_env or api_defaults.get("api_key_env", ""),
         readiness_audit_path=readiness_audit,
         gpu_groups=args.gpu_groups,
         base_port=args.base_port,

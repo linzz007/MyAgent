@@ -258,6 +258,50 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertNotIn("sk-", all_text)
             self.assertIn("OPENROUTER_API_KEY", all_text)
 
+    def test_cli_prepares_external_api_gate_run_with_provider_defaults(self):
+        """Catches hand-filled API base URL/key env mistakes for known OpenAI-compatible providers."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            run_dir = mact_root / "outputs" / "server_runs" / "openrouter_qwen3_default_gate50"
+            myagent_root.mkdir()
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "scripts" / "server" / "prepare_model_gate_run.py"),
+                    "--backend",
+                    "api",
+                    "--myagent-root",
+                    str(myagent_root),
+                    "--mact-root",
+                    str(mact_root),
+                    "--model-tag",
+                    "openrouter_qwen3",
+                    "--model-name",
+                    "qwen/qwen3-32b",
+                    "--run-dir",
+                    str(run_dir),
+                    "--api-provider",
+                    "OpenRouter",
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            manifest = json.loads((run_dir / "gate_run_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["api_base_url"], "https://openrouter.ai/api/v1")
+            self.assertEqual(manifest["api_key_env"], "OPENROUTER_API_KEY")
+            self.assertEqual(manifest["served_model_name"], "qwen/qwen3-32b")
+
+            api_env = (run_dir / "api.env").read_text(encoding="utf-8")
+            self.assertIn("export API_BASE_URL=https://openrouter.ai/api/v1", api_env)
+            self.assertIn("export SERVED_MODEL_NAME=qwen/qwen3-32b", api_env)
+            self.assertIn("export API_KEY_ENV=OPENROUTER_API_KEY", api_env)
+
     def test_cli_prepares_local_gate_run_from_readiness_audit(self):
         """Catches manually copying model paths from readiness audit into the Gate prep command."""
         with tempfile.TemporaryDirectory() as tmp_name:
