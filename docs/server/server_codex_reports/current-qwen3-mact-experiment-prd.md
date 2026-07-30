@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 16:50:48 CST
+最后更新：2026-07-30 17:00:51 CST
 
 ## 0. 下一次启动先看这里
 
@@ -12,9 +12,11 @@
 |---|---|
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；Qwen3-32B full200 raw/eval/paired/overall 已完成，后续不要继续恢复 CRT runner |
+| 当前进程状态 | 本轮 vLLM 和 runner 均已关停；复核时无 vLLM / MACT runner / shard runner 进程 |
+| 当前本机模型候选 | `/home/ubuntu/models` 只有 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | WTQ+TabFact+CRT 已完成 600 条：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708` |
-| 下一步建议 | 先提交/推送并关停本轮进程；专家材料可写“总体略高且 token 明显更低”，但必须写明 WTQ/TabFact 仍低于 MACT、只有 CRT 单项显著超过 |
+| 下一步建议 | 当前不要重跑旧本地模型；新增/挂载候选模型或提供外部 API key 后，先跑 myAgent-only Gate-50，再决定是否扩 Gate-150 / paired-200 |
 
 下一次恢复命令入口：
 
@@ -114,6 +116,7 @@ PRD:
 | MACT blind core100 paired raw/log | completed | WTQ 100/100，TabFact 100/100，CRT 100/100 |
 | core100 eval/paired/summary | completed | overall myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | MACT blind full200 seeded run | completed | full200 目录已完成 WTQ/TabFact/CRT 各 `200/200` raw/eval/paired；overall myAgent `453/600` vs MACT `450/600` |
+| 当前本机模型候选盘点 | completed | 仅发现 4 个本地模型目录；3 个非主模型已 no-go；未发现可直接使用的 DeepSeek/OpenAI/DashScope API key |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
 ## 6. 当前 core100 实时状态
@@ -476,6 +479,17 @@ myAgent blind200 stress result：
 
 这些模型没有进入 MACT paired 扩样，因为 Gate-50 已明显低于当前 Qwen3-32B 主模型，也低于 MACT Gate-50 reference。
 
+截至 2026-07-30 17:00:51 CST，本机可见模型目录只有：
+
+```text
+/home/ubuntu/models/Qwen2.5-14B-Instruct-AWQ
+/home/ubuntu/models/Qwen2.5-3B-Instruct
+/home/ubuntu/models/Qwen3-14B-AWQ
+/home/ubuntu/models/Qwen3-32B
+```
+
+因此当前没有新的本地模型需要启动。继续跑旧模型只会重复已知 no-go 结论；下一轮模型实验需要先新增/挂载一个未测候选模型，或提供可直接调用的外部模型 API key。当前环境变量检查没有发现可用的 DeepSeek / OpenAI / DashScope API key。
+
 ## 8. 已做优化和修复
 
 | item | status | impact |
@@ -542,8 +556,8 @@ full200 对 MACT 是全面显著胜出。
 | P0 | WTQ full200 完成后生成 eval/paired | done: WTQ full200 myAgent `131/200` vs MACT `148/200` |
 | P1 | TabFact full200 tail100 | done: TabFact `200/200` raw/eval/paired complete |
 | P1 | CRT full200 tail100 | done: CRT `200/200` raw/eval/paired complete；121-160/161-200 用双服务 shard 并行 |
-| P1 | 新模型筛选 | 当前本地 3 个非主模型已 no-go；除非新增/挂载模型，否则不继续跑 |
-| P2 | 正式实验方案定稿 | pending: 使用 full200 结果修订专家材料措辞和 gate-based 正式实验方案 |
+| P1 | 新模型筛选 | waiting: 当前本地 3 个非主模型已 no-go；除非新增/挂载模型或提供外部 API key，否则不继续启动模型 |
+| P2 | 正式实验方案定稿 | pending: 使用 full200 结果修订专家材料措辞和 gate-based 正式实验方案；正式跑只扩最终候选，不做全模型全量枚举 |
 
 ## 11. 当前决策建议
 
@@ -573,8 +587,9 @@ CRT full200:     myAgent 137/200 vs MACT 113/200
 1. 专家/专利材料可以先使用 `blind50 + blind100` 作为 staged paired evidence。
 2. 不要写“三个数据集全部超过”；core100 可写“TabFact/CRT 贡献优势，WTQ 为短板”，full200 则应写“优势主要来自 CRT，WTQ/TabFact 仍低于 MACT”。
 3. 本轮 full200 已完成并准备同步；不再继续恢复 CRT runner。
-4. 若换新模型，先跑 myAgent-only Gate-50/Gate-150；只有接近或超过 Qwen3-32B 的模型才补 MACT paired。
-5. 正式实验建议采用“分阶段抽样 + 最终候选扩样”，不是全模型全数据集暴力跑。
+4. 当前本机没有未测候选模型，不建议启动服务重跑 Qwen3-14B-AWQ、Qwen2.5-14B-AWQ 或 Qwen2.5-3B-Instruct。
+5. 若新增模型，先跑 myAgent-only Gate-50；只有 overall 接近或超过 Qwen3-32B，且失败率不超过 2%，才扩 Gate-150。
+6. 只有 Gate-150 仍有竞争力的最终候选，才补 MACT same-ID paired-200。
 
 ## 12. 如果服务器清空后的恢复方式
 
@@ -648,3 +663,12 @@ setsid -f bash /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact
 3. Paired-200：只给最终候选模型补 MACT same-ID paired 200 条；如果服务器时间不够，优先保留 Qwen3-32B 的 blind100 / blind200 staged evidence。
 
 当前已经可以用于专家材料的证据链是 core50 + core100 + full200。full200 支持“总体略高且 token 明显更低”，但也暴露 WTQ/TabFact 单项仍低于 MACT；正式材料应把该限制写清楚。
+
+新增模型的实际执行规则：
+
+1. 先创建独立 run 目录，命名包含模型名、样本规模和日期，避免覆盖当前 Qwen3-32B 结果。
+2. 可选 Gate-10 smoke：WTQ / TabFact / CRT 各 10 条，只验证服务、schema、token 统计和失败处理。
+3. Gate-50 必跑：三数据集各 50 条 myAgent-only；若 overall 明显低于 Qwen3-32B Gate-50 reference `124/150`，直接 no-go。
+4. Gate-150 条件：Gate-50 overall 接近或超过 `124/150`，执行失败率 <= `2%`，平均 token 没有明显失控。
+5. Paired-200 条件：Gate-150 仍接近或超过 Qwen3-32B，并且至少两个数据集不弱于当前 Qwen3-32B 或有明确论文/专利价值。
+6. MACT paired 只在最终候选上跑；raw、eval、paired、summary 和 ledger 仍保存到 MACT run 目录并推送。
