@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 17:00:51 CST
+最后更新：2026-07-30 17:04:22 CST
 
 ## 0. 下一次启动先看这里
 
@@ -42,6 +42,14 @@ wc -l /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_
 
 不要重跑 WTQ/TabFact，除非明确创建新的 run 目录和新的实验口径。
 
+新增模型时，所有新实验产物默认写到 MACT：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/<model_tag>_gate50_<date>/
+```
+
+MyAgent 仓库只负责代码、脚本和本文档；除非临时调试，不再把新实验主结果分散写到 MyAgent 的 `outputs/server_runs/`。
+
 ## 1. 最大目标
 
 验证当前 `myAgent` 在 Qwen3-32B 本地模型下，是否能在 WTQ / TabFact / CRT 三个数据集的同口径评测中总体超过 MACT，并且 token 成本明显低于 MACT；在此基础上形成可写入专家/专利材料的实验结论与正式实验方案。
@@ -68,7 +76,7 @@ MACT run 目录里的 `LIVE_LEDGER.md` 只作为运行证据账本存在，不�
 
 | repo | path | branch | sync rule | role |
 |---|---|---|---|---|
-| MyAgent | `/home/ubuntu/lzz/MyAgent` | `codex/selective-risk-collaboration` | 以 GitHub 分支最新提交为准 | PRD、myAgent 输出、评估脚本 |
+| MyAgent | `/home/ubuntu/lzz/MyAgent` | `codex/selective-risk-collaboration` | 以 GitHub 分支最新提交为准 | PRD、评估脚本、历史 myAgent 输出 |
 | MACT | `/home/ubuntu/lzz/MACT` | `main` | 以 GitHub 分支最新提交为准 | MACT raw/log/eval/paired 实验结果 |
 
 关键入口：
@@ -672,3 +680,121 @@ setsid -f bash /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact
 4. Gate-150 条件：Gate-50 overall 接近或超过 `124/150`，执行失败率 <= `2%`，平均 token 没有明显失控。
 5. Paired-200 条件：Gate-150 仍接近或超过 Qwen3-32B，并且至少两个数据集不弱于当前 Qwen3-32B 或有明确论文/专利价值。
 6. MACT paired 只在最终候选上跑；raw、eval、paired、summary 和 ledger 仍保存到 MACT run 目录并推送。
+
+## 14. 下一次新增模型的执行模板
+
+本节是扩容/清空后继续实验的最小可执行入口。只在出现新模型目录或新 API key 后使用；当前四个本地模型不要重跑。
+
+### 14.1 本地 vLLM 候选模型
+
+先在 MACT 下创建 run 目录和 env 文件：
+
+```bash
+MODEL_TAG=<model_tag>
+RUN_DIR=/home/ubuntu/lzz/MACT/outputs/server_runs/${MODEL_TAG}_gate50_$(date +%Y%m%d_%H%M%S)
+mkdir -p "$RUN_DIR"/logs
+
+cat > "$RUN_DIR/vllm.env" <<'EOF'
+export HF_HOME=/home/ubuntu/models
+export HF_HUB_ENABLE_HF_TRANSFER=1
+export MODEL_ID=/home/ubuntu/models/<model_dir>
+export SERVED_MODEL_NAME=<served_model_name>
+export GPU_GROUPS="4,5"
+export BASE_PORT=8000
+export VLLM_API_KEY=local-vllm-key-change-me
+export VLLM_MAX_MODEL_LEN=8192
+export VLLM_GPU_MEMORY_UTILIZATION=0.88
+export VLLM_DTYPE=auto
+export VLLM_EXTRA_ARGS="--trust-remote-code"
+export LOCAL_VLLM_API_KEY="${VLLM_API_KEY}"
+EOF
+```
+
+启动和健康检查：
+
+```bash
+cd /home/ubuntu/lzz/MyAgent
+source /home/ubuntu/miniconda3/etc/profile.d/conda.sh
+conda activate lzz-agent
+
+bash scripts/server/start_vllm_pool.sh "$RUN_DIR/vllm.env"
+bash scripts/server/healthcheck_vllm_pool.sh "$RUN_DIR/vllm.env"
+```
+
+可选 Gate-10 smoke：
+
+```bash
+source "$RUN_DIR/vllm.env"
+python scripts/server/run_sharded_tqa.py \
+  --repo-root . \
+  --tasks wtq,tabfact,crt \
+  --wtq-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl \
+  --tabfact-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/tabfact.jsonl \
+  --crt-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/crt.jsonl \
+  --endpoints http://127.0.0.1:8000/v1 \
+  --model "$SERVED_MODEL_NAME" \
+  --api-key-env LOCAL_VLLM_API_KEY \
+  --output-root "$RUN_DIR/myagent_gate10" \
+  --limit-per-task 10 \
+  --max-replan 2 \
+  --mact-avg-tokens 11262.41 \
+  --resume
+```
+
+Gate-10 若有连接错误、缺行、schema 错误或明显 context 问题，先排查服务，不进入 Gate-50。
+
+Gate-50：
+
+```bash
+source "$RUN_DIR/vllm.env"
+python scripts/server/run_sharded_tqa.py \
+  --repo-root . \
+  --tasks wtq,tabfact,crt \
+  --wtq-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl \
+  --tabfact-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/tabfact.jsonl \
+  --crt-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/crt.jsonl \
+  --endpoints http://127.0.0.1:8000/v1 \
+  --model "$SERVED_MODEL_NAME" \
+  --api-key-env LOCAL_VLLM_API_KEY \
+  --output-root "$RUN_DIR/myagent_gate50" \
+  --limit-per-task 50 \
+  --max-replan 2 \
+  --mact-avg-tokens 11262.41 \
+  --resume
+```
+
+Gate-50 完成后必须检查：
+
+```bash
+wc -l "$RUN_DIR"/myagent_gate50/merged/*.jsonl
+cat "$RUN_DIR"/myagent_gate50/eval/*_eval.json
+rg -n "Connection refused|APIConnectionError|context length|BadRequest|Traceback" "$RUN_DIR"/myagent_gate50/logs || true
+```
+
+Gate-50 决策：
+
+| decision | condition |
+|---|---|
+| no-go | overall 明显低于 Qwen3-32B Gate-50 reference `124/150`，或 failed/missing > `2%`，或 token 明显失控 |
+| Gate-150 | overall 接近或超过 `124/150`，三数据集均完整，失败率 <= `2%` |
+| paired-200 | Gate-150 后仍有竞争力，且值得为专家/专利主表补 MACT same-ID 对照 |
+
+每次阶段结束都同步：
+
+```bash
+cd /home/ubuntu/lzz/MACT
+git add -f "$RUN_DIR"
+git commit -m "Record ${MODEL_TAG} gate results"
+git push origin main
+
+cd /home/ubuntu/lzz/MyAgent
+git add docs/server/server_codex_reports/current-qwen3-mact-experiment-prd.md
+git commit -m "Update ${MODEL_TAG} gate status"
+git push origin codex/selective-risk-collaboration
+```
+
+### 14.2 外部 API 候选模型
+
+如果是 DeepSeek / OpenAI / DashScope 等外部模型，不启动 vLLM；只在 `RUN_DIR` 中保存一个不含 secret 的 `api_profile.md`，记录 provider、base URL、model name、temperature、max tokens 和样本口径。API key 只放环境变量，不写入 Git。
+
+执行时把 `--endpoints` 指到外部 OpenAI-compatible base URL，并把 `--api-key-env` 改成对应环境变量。其它 Gate-10/Gate-50/Gate-150/paired-200 条件不变。
