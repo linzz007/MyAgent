@@ -202,16 +202,45 @@ def discover_local_models(model_roots: Sequence[Path]) -> list[str]:
     return sorted(discover_local_model_paths(model_roots))
 
 
-def present_api_keys(env: Mapping[str, str]) -> list[str]:
-    return sorted(name for name in API_KEY_NAMES if env.get(name))
+def has_env_value(value: str) -> bool:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        value = value[1:-1].strip()
+    return bool(value)
 
 
-def summarize_model_readiness(model_roots: Sequence[Path], env: Mapping[str, str]) -> dict[str, Any]:
+def present_api_keys(env: Mapping[str, str], env_files: Sequence[Path] = ()) -> list[str]:
+    api_keys = {name for name in API_KEY_NAMES if env.get(name)}
+    for env_file in env_files:
+        try:
+            lines = env_file.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if stripped.startswith("export "):
+                stripped = stripped[len("export ") :].strip()
+            key, separator, value = stripped.partition("=")
+            if separator != "=":
+                continue
+            key = key.strip()
+            if key in API_KEY_NAMES and has_env_value(value):
+                api_keys.add(key)
+    return sorted(api_keys)
+
+
+def summarize_model_readiness(
+    model_roots: Sequence[Path],
+    env: Mapping[str, str],
+    env_files: Sequence[Path] = (),
+) -> dict[str, Any]:
     local_model_paths = discover_local_model_paths(model_roots)
     local_models = sorted(local_model_paths)
     untested = sorted(model for model in local_models if known_tested_model_key(model) is None)
     untested_paths = {model: local_model_paths[model] for model in untested}
-    api_keys = present_api_keys(env)
+    api_keys = present_api_keys(env, env_files=env_files)
     can_start = bool(untested or api_keys)
     return {
         "local_models": local_models,
@@ -220,6 +249,7 @@ def summarize_model_readiness(model_roots: Sequence[Path], env: Mapping[str, str
         "untested_local_models": untested,
         "untested_local_model_paths": untested_paths,
         "api_keys_present": api_keys,
+        "api_env_files_checked": [{"path": str(path), "present": path.exists()} for path in env_files],
         "api_provider_profiles": provider_profiles_for_api_keys(api_keys),
         "can_start_new_experiment": can_start,
         "next_action": "run_gate10_then_gate50" if can_start else "wait_for_new_model_or_api_key",
@@ -317,8 +347,9 @@ def build_audit(
     mact_root: Path,
     model_roots: Sequence[Path],
     env: Mapping[str, str] | None = None,
+    env_files: Sequence[Path] = (),
 ) -> dict[str, Any]:
-    env = env or os.environ
+    env = os.environ if env is None else env
     full200_path = evidence_path(mact_root, FULL200_RUN, "overall_mact_full200_summary.json")
     crt_current_path = evidence_path(mact_root, CRT_CURRENT_RUN, "crt_full200_current_comparison.json")
     wtq_rep_path = evidence_path(mact_root, WTQ_REP_RUN, "wtq_representative100_extreme_fix_comparison.json")
@@ -342,7 +373,7 @@ def build_audit(
         "canonical_full200": summarize_full200(full200_summary),
         "current_crt_staged_composite": summarize_staged_composite(crt_current),
         "wtq_representative100": summarize_wtq_representative(wtq_rep),
-        "model_readiness": summarize_model_readiness(model_roots, env),
+        "model_readiness": summarize_model_readiness(model_roots, env, env_files=env_files),
     }
 
 
@@ -360,6 +391,7 @@ def main() -> None:
     parser.add_argument("--myagent-root", type=Path, default=Path.cwd())
     parser.add_argument("--mact-root", type=Path, default=Path("/home/ubuntu/lzz/MACT"))
     parser.add_argument("--model-root", action="append", type=Path, dest="model_roots")
+    parser.add_argument("--env-file", action="append", type=Path, dest="env_files")
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--markdown-output", type=Path, default=None)
     args = parser.parse_args()
@@ -368,6 +400,7 @@ def main() -> None:
         myagent_root=args.myagent_root.resolve(),
         mact_root=args.mact_root.resolve(),
         model_roots=[path.resolve() for path in (args.model_roots or default_model_roots())],
+        env_files=[path.resolve() for path in (args.env_files or [])],
         env=os.environ,
     )
     output_text = json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True)

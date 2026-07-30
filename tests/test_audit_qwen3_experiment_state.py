@@ -362,6 +362,42 @@ class AuditQwen3ExperimentStateTests(unittest.TestCase):
         )
         self.assertEqual(audit["model_readiness"]["next_action"], "run_gate10_then_gate50")
 
+    def test_build_audit_detects_api_key_names_from_env_files_without_leaking_values(self):
+        """Catches readiness missing keys stored in a run-specific .env file."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            model_root = tmp / "models"
+            env_file = tmp / "api.env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "# provider credentials for local smoke test",
+                        "export OPENROUTER_API_KEY=sk-test-secret-value",
+                        "TOGETHER_API_KEY=",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            audit = build_audit(
+                myagent_root=myagent_root,
+                mact_root=mact_root,
+                model_roots=[model_root],
+                env={},
+                env_files=[env_file],
+            )
+
+        self.assertTrue(audit["model_readiness"]["can_start_new_experiment"])
+        self.assertEqual(audit["model_readiness"]["api_keys_present"], ["OPENROUTER_API_KEY"])
+        self.assertIn("OpenRouter", audit["model_readiness"]["api_provider_profiles"])
+        self.assertEqual(
+            audit["model_readiness"]["api_env_files_checked"],
+            [{"path": str(env_file), "present": True}],
+        )
+        self.assertNotIn("sk-test-secret-value", json.dumps(audit, ensure_ascii=False))
+
     def test_render_expert_summary_states_claims_limits_and_next_action(self):
         """Catches patent-facing summaries that overclaim or omit gating instructions."""
         audit = {
