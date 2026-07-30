@@ -99,6 +99,27 @@ class SummarizeModelGateResultsTests(unittest.TestCase):
         self.assertIn("335/450", markdown)
         self.assertIn("paired200", markdown)
 
+    def test_no_go_when_gate150_overall_passes_but_too_few_datasets_match_reference(self):
+        """Catches overall-only Gate-150 expansion when dataset-level evidence is too weak."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            gate_root = Path(tmp_name) / "myagent_gate150"
+            write_eval(gate_root / "eval" / "wtq_model_eval.json", samples=150, accuracy=0.9933333333, tokens=2000)
+            write_eval(gate_root / "eval" / "tabfact_model_eval.json", samples=150, accuracy=0.84, tokens=2000)
+            write_eval(gate_root / "eval" / "crt_model_eval.json", samples=150, accuracy=0.5133333333, tokens=2000)
+
+            summary = summarize_gate_results(
+                gate_root=gate_root,
+                model_tag="lopsided_candidate",
+                gate_name="gate150",
+                mact_avg_tokens=11262.41,
+            )
+
+        self.assertEqual(summary["overall"]["correct"], 352)
+        self.assertEqual(summary["criteria"]["dataset_reference_correct"], {"wtq": 105, "tabfact": 131, "crt": 97})
+        self.assertEqual(summary["overall"]["datasets_at_least_reference"], 1)
+        self.assertEqual(summary["decision"], "no-go")
+        self.assertIn("datasets_at_reference_below_threshold", summary["decision_reasons"])
+
     def test_incomplete_when_any_dataset_eval_is_missing(self):
         """Catches silent decisions from partial WTQ/TabFact/CRT outputs."""
         with tempfile.TemporaryDirectory() as tmp_name:

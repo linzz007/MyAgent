@@ -12,6 +12,8 @@ from typing import Any, Mapping
 TASKS = ("wtq", "tabfact", "crt")
 DEFAULT_REFERENCE_CORRECT = 124
 DEFAULT_REFERENCE_CORRECT_BY_GATE = {"gate50": 124, "gate150": 333}
+DEFAULT_DATASET_REFERENCE_CORRECT_BY_GATE = {"gate150": {"wtq": 105, "tabfact": 131, "crt": 97}}
+DEFAULT_MIN_DATASETS_AT_REFERENCE_BY_GATE = {"gate150": 2}
 PASS_DECISION_BY_GATE = {"gate50": "gate150", "gate150": "paired200"}
 DEFAULT_MACT_AVG_TOKENS = 11262.41
 DEFAULT_MAX_FAILURE_RATE = 0.02
@@ -67,6 +69,8 @@ def choose_decision(
     bad_rows: int,
     token_ratio: float,
     reference_correct: int,
+    datasets_at_least_reference: int,
+    min_datasets_at_reference: int,
     max_failure_rate: float,
     max_token_ratio: float,
     pass_decision: str,
@@ -82,11 +86,21 @@ def choose_decision(
         reasons.append("failure_rate_above_threshold")
     if token_ratio > max_token_ratio:
         reasons.append("token_ratio_above_threshold")
+    if datasets_at_least_reference < min_datasets_at_reference:
+        reasons.append("datasets_at_reference_below_threshold")
     return ("no-go", reasons) if reasons else (pass_decision, [pass_reason])
 
 
 def default_reference_for(gate_name: str) -> int:
     return DEFAULT_REFERENCE_CORRECT_BY_GATE.get(gate_name, DEFAULT_REFERENCE_CORRECT)
+
+
+def dataset_reference_for(gate_name: str) -> dict[str, int]:
+    return dict(DEFAULT_DATASET_REFERENCE_CORRECT_BY_GATE.get(gate_name, {}))
+
+
+def min_datasets_at_reference_for(gate_name: str) -> int:
+    return DEFAULT_MIN_DATASETS_AT_REFERENCE_BY_GATE.get(gate_name, 0)
 
 
 def pass_decision_for(gate_name: str) -> str:
@@ -110,6 +124,8 @@ def summarize_gate_results(
     max_token_ratio: float = DEFAULT_MAX_TOKEN_RATIO,
 ) -> dict[str, Any]:
     resolved_reference_correct = default_reference_for(gate_name) if reference_correct is None else reference_correct
+    dataset_reference_correct = dataset_reference_for(gate_name)
+    min_datasets_at_reference = min_datasets_at_reference_for(gate_name)
     eval_dir = gate_root / "eval"
     per_dataset: dict[str, dict[str, Any]] = {}
     missing_tasks: list[str] = []
@@ -118,7 +134,11 @@ def summarize_gate_results(
         if eval_path is None:
             missing_tasks.append(task)
             continue
-        per_dataset[task] = summarize_eval(eval_path)
+        result = summarize_eval(eval_path)
+        if task in dataset_reference_correct:
+            result["reference_correct"] = dataset_reference_correct[task]
+            result["at_least_reference"] = result["correct"] >= dataset_reference_correct[task]
+        per_dataset[task] = result
 
     items = list(per_dataset.values())
     rows = sum(item["rows"] for item in items)
@@ -126,6 +146,9 @@ def summarize_gate_results(
     bad_rows = sum(item["bad_rows"] for item in items)
     avg_tokens = weighted_average(items, "avg_total_tokens")
     token_ratio = avg_tokens / mact_avg_tokens if mact_avg_tokens else 0.0
+    datasets_at_least_reference = sum(
+        1 for task, reference in dataset_reference_correct.items() if per_dataset.get(task, {}).get("correct", -1) >= reference
+    )
     decision, reasons = choose_decision(
         missing_tasks=missing_tasks,
         correct=correct,
@@ -133,6 +156,8 @@ def summarize_gate_results(
         bad_rows=bad_rows,
         token_ratio=token_ratio,
         reference_correct=resolved_reference_correct,
+        datasets_at_least_reference=datasets_at_least_reference,
+        min_datasets_at_reference=min_datasets_at_reference,
         max_failure_rate=max_failure_rate,
         max_token_ratio=max_token_ratio,
         pass_decision=pass_decision_for(gate_name),
@@ -154,9 +179,12 @@ def summarize_gate_results(
             "token_ratio_to_mact": token_ratio,
             "bad_rows": bad_rows,
             "failure_rate": bad_rows / rows if rows else 1.0,
+            "datasets_at_least_reference": datasets_at_least_reference,
         },
         "criteria": {
             "reference_correct": resolved_reference_correct,
+            "dataset_reference_correct": dataset_reference_correct,
+            "min_datasets_at_reference": min_datasets_at_reference,
             "max_failure_rate": max_failure_rate,
             "max_token_ratio": max_token_ratio,
         },
@@ -171,6 +199,7 @@ def format_percent(value: float, digits: int = 1) -> str:
 
 def render_markdown(summary: Mapping[str, Any]) -> str:
     overall = summary["overall"]
+    criteria = summary.get("criteria") or {}
     lines = [
         f"# {gate_label(str(summary.get('gate_name') or 'gate50'))} Summary: {summary['model_tag']}",
         "",
@@ -182,10 +211,21 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
         f"| token ratio to MACT | {overall['token_ratio_to_mact']:.4f} |",
         f"| bad rows | {overall['bad_rows']} |",
         f"| decision | {summary['decision']} |",
-        "",
-        "| dataset | correct | accuracy | avg tokens | bad rows |",
-        "|---|---:|---:|---:|---:|",
     ]
+    if criteria.get("dataset_reference_correct"):
+        lines.extend(
+            [
+                f"| datasets at reference | {overall.get('datasets_at_least_reference', 0)} |",
+                f"| min datasets at reference | {criteria.get('min_datasets_at_reference', 0)} |",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "| dataset | correct | accuracy | avg tokens | bad rows |",
+            "|---|---:|---:|---:|---:|",
+        ]
+    )
     for task in TASKS:
         result = summary["per_dataset"].get(task)
         if not result:
