@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 20:51:37 CST
+最后更新：2026-07-30 20:57:05 CST
 
 ## 0. 下一次启动先看这里
 
@@ -12,10 +12,10 @@
 |---|---|
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
-| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 20:28 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
+| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 20:56 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
 | 下次本地模型服务资源 | 用户 2026-07-30 20:20 再次确认当前服务器卡还够，可使用 GPU `4,5` 和 GPU `6,7` 各启动一个模型服务；默认端口 `8000/8001` |
-| 当前本机模型候选 | 2026-07-30 20:28 复扫 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]` |
-| 当前外部 API 候选 | 2026-07-30 20:32 环境变量未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量 |
+| 当前本机模型候选 | 2026-07-30 20:56 复扫 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；历史表里的 `Qwen2.5-14B-AWQ` 是该 Instruct-AWQ 本地目录的实验简称 |
+| 当前外部 API 候选 | 2026-07-30 20:56 环境变量未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量 |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 原 full200：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708`；替换为 2026-07-30 当前 CRT 复跑后：myAgent `456/600` vs MACT `450/600`，token ratio `0.5708` |
 | 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
