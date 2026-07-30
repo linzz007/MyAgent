@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 19:12:00 CST
+最后更新：2026-07-30 19:17:42 CST
 
 ## 0. 下一次启动先看这里
 
@@ -58,6 +58,17 @@ MyAgent 仓库只负责代码、脚本和本文档；除非临时调试，不再
 验证当前 `myAgent` 在 Qwen3-32B 本地模型下，是否能在 WTQ / TabFact / CRT 三个数据集的同口径评测中总体超过 MACT，并且 token 成本明显低于 MACT；在此基础上形成可写入专家/专利材料的实验结论与正式实验方案。
 
 这个目标不是继续单独优化 TabFact，而是优先判断整体方法是否成立：总体准确率是否超过 MACT、token 是否显著更低、运行链路是否可恢复、结果是否可审计。
+
+## 1.1 当前阶段验收判断
+
+| question | current answer |
+|---|---|
+| 总体准确率是否超过 MACT | 是。canonical full200 为 `453/600` vs `450/600`；替换当前 CRT 复跑后 staged composite 为 `456/600` vs `450/600` |
+| token 是否仍明显低于 MACT | 是。full200 token ratio 为 `0.5708`，约为 MACT 的 `57.1%` |
+| 三个数据集是否都超过 MACT | 否。WTQ 和 TabFact 在 full200 单项仍低于 MACT，优势主要来自 CRT |
+| 当前项目是否可作为阶段证据 | 可以作为 staged evidence；不能写成 full dataset 全量完成或全面显著胜出 |
+| 现在是否继续跑旧本地模型 | 不建议。现有非主模型均已 Gate-50 no-go；下一轮等待新增模型或可用外部 API key |
+| 下一步实验策略 | 使用 Gate-10 / Gate-50 / Gate-150 / Paired-200 漏斗，只扩大最终候选，避免全模型全数据集暴力跑 |
 
 ## 2. 唯一文档规则
 
@@ -406,12 +417,13 @@ same-ID paired 分歧净贡献：
 8. 已完成第一步最小代码实验：`TableCompressor._needs_global_rows` 新增 `only/top/first/last/earliest/latest` 触发词。新增单测先失败后通过；离线检查显示 50 条 WTQ debug subset 中 18 条新触发全行，10 条 strict literal gold row-loss case 可恢复。该结果只证明压缩覆盖改善，不等价于模型准确率提升。
 9. 已完成 debug50 模型实测：修复后 myAgent 在该 adversarial subset 上 `14/50`，旧 myAgent 为 `0/50`，MACT 为 `40/50`。新触发全行的 18 条里 `10/18` 正确，strict recoverable 的 10 条里 `7/10` 正确；平均 token 为 MACT 的 `0.6009`，相对旧 myAgent 增加约 `2.1%`。
 
-下一步问题排查建议：
+当前问题排查结论：
 
 1. 不要再用 debug50 代表总体准确率；它是从旧 myAgent 错例里抽出的 adversarial subset。
-2. 下一步应跑代表性 WTQ 回归切片，例如 blind200/frozen150 中的 WTQ-only gate，验证 `14/50` debug 恢复是否带来总体收益、是否引入 token 或答案选择回退。
-3. 若代表性 WTQ 回归仍不足，再测试 `_match_rows` 从只扫前 3 个单元扩展为低噪声全行 token 扫描。
-4. 只接受能跨样本解释问题的通用修复，不接受按 ID/table 硬编码；正式 600 条回归必须在小切片收益明确后再跑。
+2. 代表性 WTQ100 回归已完成：新 myAgent `69/100`，旧 myAgent `69/100`，MACT `79/100`；恢复 3 条、回退 3 条，无净提升。
+3. 因此不应把 WTQ extreme/only 全局行策略继续扩大成主线优化；它可保留为小范围修复，但不是当前总体提升来源。
+4. 若用户明确继续投入 WTQ，下一步才考虑 `_match_rows` 从只扫前 3 个单元扩展为低噪声全行 token 扫描，并先跑小 gate；不能直接重跑 full200。
+5. 只接受能跨样本解释问题的通用修复，不接受按 ID/table 硬编码；正式回归必须在小切片收益明确后再跑。
 
 ## 6.3 WTQ extreme/only debug50 实测
 
@@ -447,7 +459,7 @@ same-ID paired 分歧净贡献：
 1. `selective_collaboration.verification_gap` 遇到 numpy array execution result 时，不能用 `not in (None, "", [])` 做非空判断。
 2. `tqa._to_serializable` 和 `_json_default` 遇到多元素 numpy array 时，不能直接 `.item()`，需要优先 `.tolist()`。
 
-本节结论：extreme/only 全局行修复对 WTQ 目标错例有实际收益，但仍不足以在该 adversarial subset 上超过 MACT；下一步需要代表性 WTQ 回归切片，而不是继续只在 debug50 上调参。
+本节结论：extreme/only 全局行修复对 WTQ 目标错例有实际收益，但仍不足以在该 adversarial subset 上超过 MACT。后续代表性 WTQ100 回归已经证明该修复没有净总体收益，因此暂不把 WTQ 单点优化作为下一阶段主方向。
 
 ## 6.4 当前执行流程
 
@@ -523,6 +535,52 @@ same-ID paired 分歧净贡献：
 | `run_crt_shard_161_200.sh` | CRT shard 161-200 runner |
 
 这些文件按 checkpoint 强制加入 MACT Git，因为 MACT 默认忽略 `outputs/`。
+
+### 7.0.1 当前 MyAgent CRT full200 复跑结果
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_crt_full200_current_20260730_1822/
+```
+
+| file | current content |
+|---|---|
+| `LIVE_LEDGER.md` | 当前 CRT full200 复跑 ledger，记录双服务启动、运行、评估和关停 |
+| `input/crt_blind200.jsonl` | CRT blind200 输入副本 |
+| `myagent_crt200/merged/crt_qwen3-32b-local.jsonl` | 当前代码 CRT full200 merged：`200/200` |
+| `myagent_crt200/eval/crt_qwen3-32b-local_eval.json` | 当前代码 CRT eval：`140/200 = 0.7000`，0 failed，0 missing |
+| `crt_full200_current_comparison.md` | 当前代码、旧 myAgent、MACT 的 CRT full200 对比摘要 |
+| `crt_full200_current_comparison.json` | CRT full200 对比结构化结果，含 old/new transition 和 staged composite |
+| `qwen3_32b_4gpu_2svc.env` | 本次复跑双服务 vLLM profile：GPU `4,5;6,7`，端口 `8000/8001` |
+
+关键结论：
+
+| metric | value |
+|---|---:|
+| current myAgent CRT | 140/200 |
+| old myAgent CRT | 137/200 |
+| MACT CRT | 113/200 |
+| new / MACT token ratio | 0.8461 |
+| new / old myAgent token ratio | 1.0001 |
+| failed / missing | 0 / 0 |
+| staged composite if replacing CRT only | myAgent `456/600 = 0.7600` vs MACT `450/600 = 0.7500` |
+
+### 7.0.2 WTQ representative100 回归结果
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_wtq_extreme_fix_representative100_20260730_1805/
+```
+
+| file | current content |
+|---|---|
+| `LIVE_LEDGER.md` | WTQ representative100 回归 ledger |
+| `input/wtq_blind200_first100.jsonl` | WTQ blind200 前 100 条代表性输入 |
+| `myagent_wtq100/merged/wtq_qwen3-32b-local.jsonl` | 修复后 myAgent WTQ100 merged：`100/100` |
+| `myagent_wtq100/eval/wtq_qwen3-32b-local_eval.json` | 修复后 WTQ100 eval：`69/100 = 0.6900`，0 failed，0 missing |
+| `wtq_representative100_extreme_fix_comparison.md` | 新旧 myAgent 与 MACT 的 WTQ100 对比摘要 |
+| `wtq_representative100_extreme_fix_comparison.json` | WTQ100 对比结构化结果 |
+| `qwen3_32b_4gpu_2svc.env` | 本次双服务 vLLM profile：GPU `4,5;6,7`，端口 `8000/8001` |
+
+关键结论：新 myAgent `69/100`、旧 myAgent `69/100`、MACT `79/100`；new/MACT token ratio `0.5790`，new/old token ratio `1.0091`。该代表性切片恢复 3 条、回退 3 条，无净提升，所以 WTQ extreme/only 全局行修复不应继续作为主线扩大。
 
 ### 7.1 WTQ extreme/only debug50 实测结果
 
@@ -613,6 +671,15 @@ myAgent blind200 stress result：
 | CRT | 137/200 | 0.6850 | 10,838.25 | 24.899s | 0 | 0 |
 | Overall | 453/600 | 0.7550 | 6,497.36 | 17.198s | 0 | 0 |
 
+2026-07-30 当前代码只复跑了 CRT full200，WTQ/TabFact 沿用上述 current blind200 结果时的 staged composite：
+
+| dataset | correct | accuracy | avg tokens | failed | missing |
+|---|---:|---:|---:|---:|---:|
+| WTQ | 131/200 | 0.6550 | 6,226.93 | 0 | 0 |
+| TabFact | 185/200 | 0.9250 | 2,426.89 | 0 | 0 |
+| CRT current rerun | 140/200 | 0.7000 | 10,839.17 | 0 | 0 |
+| Overall staged composite | 456/600 | 0.7600 | 6,497.66 | 0 | 0 |
+
 ### 7.5 多模型 Gate-50 结果位置
 
 这些是已经完成的 myAgent-only Gate-50 筛选。结论是三个非主模型都不进入扩大实验。
@@ -645,7 +712,7 @@ myAgent blind200 stress result：
 | vLLM stale pid / live port 检查 | done | 避免 pid stale 时重复启动服务 |
 | MACT one-by-one + `--resume` | done | 单条失败不丢整批，服务器中断后可继续 |
 | detached resume scripts | done | 防止 Codex 前台 session 断开导致长跑停止 |
-| 周期性 Git checkpoint | done for current stop point | core100 已 final 推送；full200 WTQ/TabFact/CRT raw/eval/paired/overall 已准备最终同步 |
+| 周期性 Git checkpoint | done for current stop point | core100、full200 WTQ/TabFact/CRT raw/eval/paired/overall、WTQ representative100、CRT current rerun 均已同步到 GitHub |
 | context length failure 保留为 failed/missing | ongoing | WTQ 中 MACT 的 `nu-4299`、`nu-2633`、`nu-3290`、`nu-3139`、`nu-3487` 当前被严格计入失败；后续 repair 需显式标注 |
 | full200 seed 复用 | done | 从 core100 复制前 100 行，full200 只补 tail100，避免重跑已完成样本 |
 | CRT 双服务 shard 并行 | done | 用户确认 GPU 资源可用后，使用 `4,5` 和 `6,7` 两个 Qwen3-32B 服务，将 CRT 121-160/161-200 分文件运行并按 ID 合并，避免双 runner 抢写同一 jsonl |
@@ -665,8 +732,12 @@ myAgent 总体准确率高于 MACT：124/150 vs 119/150，
 在 blind100 core 实验中，myAgent 总体准确率继续高于 MACT：
 237/300 vs 227/300，平均 token 为 MACT 的 59.1%。
 
-在 blind200 full200 三数据集 same-ID paired 实验中，myAgent 总体准确率略高于 MACT：
-453/600 vs 450/600，平均 token 为 MACT 的 57.1%。
+在 canonical blind200 full200 三数据集 same-ID paired 实验中，
+myAgent 总体准确率略高于 MACT：453/600 vs 450/600，
+平均 token 为 MACT 的 57.1%。
+
+在 2026-07-30 只替换当前 CRT full200 复跑结果的 staged composite 中，
+myAgent 为 456/600 vs MACT 450/600，平均 token 仍约为 MACT 的 57.1%。
 ```
 
 必须带限制：
@@ -677,9 +748,10 @@ TabFact 小幅超过 MACT：95/100 vs 93/100。
 CRT 明显超过 MACT：73/100 vs 55/100。
 因此当前可以写“总体超过且 token 明显更低”，不能写“三个数据集全部超过”。
 
-full200 中 WTQ 仍低于 MACT：131/200 vs 148/200。
-full200 中 TabFact 仍低于 MACT：185/200 vs 189/200。
-full200 中 CRT 明显超过 MACT：137/200 vs 113/200。
+canonical full200 中 WTQ 仍低于 MACT：131/200 vs 148/200。
+canonical full200 中 TabFact 仍低于 MACT：185/200 vs 189/200。
+canonical full200 中 CRT 明显超过 MACT：137/200 vs 113/200。
+当前 CRT 复跑后 CRT 为 140/200 vs MACT 113/200。
 因此 full200 可以写“总体略高且 token 明显更低”，但必须写明优势主要来自 CRT，WTQ/TabFact 仍是短板。
 ```
 
@@ -687,12 +759,12 @@ full200 中 CRT 明显超过 MACT：137/200 vs 113/200。
 
 ```text
 三个数据集全部超过 MACT。
-full dataset 已完成。
+官方完整 full dataset 已完成。
 所有本地模型都超过 MACT。
 full200 对 MACT 是全面显著胜出。
 ```
 
-新增限制：full200 acceptance 的“至少两个数据集不低于 MACT”未通过，只有 CRT 单项超过；总体只是 `453/600` vs `450/600` 的小幅领先，应作为 staged evidence，而不是最终强结论。
+新增限制：full200 acceptance 的“至少两个数据集不低于 MACT”未通过，只有 CRT 单项超过；canonical full200 总体只是 `453/600` vs `450/600` 的小幅领先，current CRT staged composite 是 `456/600` vs `450/600`。两者都应作为 staged evidence，而不是最终强结论。
 
 ## 10. 下一步小目标
 
@@ -710,43 +782,50 @@ full200 对 MACT 是全面显著胜出。
 | P1 | WTQ 压缩/预测信号诊断 | done: MACT-only 中 not-found-like/header prediction 明显集中；下一步验证检索/压缩是否漏关键行列 |
 | P1 | WTQ 行列覆盖与候选修复排序 | done: 优先级为 extreme/only 全局行策略，其次行匹配扫描全行；大范围列保留不是第一优先 |
 | P1 | WTQ 最小修复实验 | done measured debug50: old myAgent `0/50` -> new `14/50`；但 MACT `40/50`，这是 adversarial subset，不能作为总体结论 |
-| P1 | WTQ 代表性回归切片 | pending: 用修复后代码跑 WTQ-only representative slice，确认 debug50 收益是否转成总体 WTQ 提升、token 是否仍低于 MACT |
+| P1 | WTQ 代表性回归切片 | done measured: 新 myAgent `69/100`，旧 myAgent `69/100`，MACT `79/100`；恢复 3 条、回退 3 条，无净提升 |
 | P1 | 新模型筛选 | waiting: 当前本地 3 个非主模型已 no-go；除非新增/挂载模型或提供外部 API key，否则不继续启动模型 |
-| P2 | 正式实验方案定稿 | pending: 使用 full200 结果修订专家材料措辞和 gate-based 正式实验方案；正式跑只扩最终候选，不做全模型全量枚举 |
+| P2 | 正式实验方案定稿 | ready next: 本文第 13 节已给出 gate-based 方案；下一步只在新增模型/API 后执行，不做全模型全量枚举 |
 
 ## 11. 当前决策建议
 
-core100 和 full200 结果都满足“总体超过 MACT 且 token 明显更低”的阶段目标，但 full200 领先幅度很小：
+core100、canonical full200、current CRT staged composite 都满足“总体超过 MACT 且 token 明显更低”的阶段目标，但 full200 领先幅度较小：
 
 ```text
+core100:
 myAgent: 237/300 = 0.7900
 MACT:    227/300 = 0.7567
 token ratio: 0.5913
 
-full200:
+canonical full200:
 myAgent: 453/600 = 0.7550
+MACT:    450/600 = 0.7500
+token ratio: 0.5708
+
+current CRT staged composite:
+myAgent: 456/600 = 0.7600
 MACT:    450/600 = 0.7500
 token ratio: 0.5708
 ```
 
-但 WTQ/TabFact 在 full200 单项仍低于 MACT：
+WTQ/TabFact 在 full200 单项仍低于 MACT，CRT 是主要正贡献：
 
 ```text
-WTQ full200:     myAgent 131/200 vs MACT 148/200
-TabFact full200: myAgent 185/200 vs MACT 189/200
-CRT full200:     myAgent 137/200 vs MACT 113/200
+WTQ full200:            myAgent 131/200 vs MACT 148/200
+TabFact full200:        myAgent 185/200 vs MACT 189/200
+CRT canonical full200:  myAgent 137/200 vs MACT 113/200
+CRT current rerun:      myAgent 140/200 vs MACT 113/200
 ```
 
 因此建议：
 
-1. 专家/专利材料可以先使用 `blind50 + blind100` 作为 staged paired evidence。
-2. 不要写“三个数据集全部超过”；core100 可写“TabFact/CRT 贡献优势，WTQ 为短板”，full200 则应写“优势主要来自 CRT，WTQ/TabFact 仍低于 MACT”。
-3. 本轮 full200 已完成并准备同步；不再继续恢复 CRT runner。
+1. 专家/专利材料可以使用 `blind50 + blind100 + canonical full200 + current CRT staged composite` 作为 staged evidence。
+2. 不要写“三个数据集全部超过”；core100 可写“TabFact/CRT 贡献优势，WTQ 为短板”，full200 应写“优势主要来自 CRT，WTQ/TabFact 仍低于 MACT”。
+3. 本轮 full200、WTQ representative100、CRT current rerun 都已同步；不再继续恢复旧 CRT runner。
 4. 当前本机没有未测候选模型，不建议启动服务重跑 Qwen3-14B-AWQ、Qwen2.5-14B-AWQ 或 Qwen2.5-3B-Instruct。
-5. 若新增模型，先跑 myAgent-only Gate-50；只有 overall 接近或超过 Qwen3-32B，且失败率不超过 2%，才扩 Gate-150。
+5. 若新增模型，先跑 Gate-10 smoke 和 myAgent-only Gate-50；只有 overall 接近或超过 Qwen3-32B，且失败率不超过 2%，才扩 Gate-150。
 6. 只有 Gate-150 仍有竞争力的最终候选，才补 MACT same-ID paired-200。
-7. 当前代码已完成 WTQ extreme/only global-row 的第一步最小修复和 debug50 模型实测；不要再把 TabFact 当作首要优化目标。
-8. 下一步先跑 WTQ 代表性回归切片，确认 debug50 收益是否能提升 full200 短板；如果收益不足，再测试 `_match_rows` 从只扫前 3 个单元扩展为低噪声全行 token 扫描。列保留兜底收益较小，放在后面。
+7. 当前代码已完成 WTQ extreme/only global-row 的第一步最小修复、debug50 模型实测和 representative100 回归；代表性切片没有净收益，因此暂不把 WTQ 单点优化作为下一阶段主方向。
+8. 若用户后续仍要继续优化 WTQ，优先候选是 `_match_rows` 低噪声全行 token 扫描，但必须先过小 gate，再考虑 full200。
 
 ## 12. 如果服务器清空后的恢复方式
 
@@ -813,13 +892,16 @@ setsid -f bash /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact
 
 ## 13. 正式实验策略
 
-正式实验不建议全量枚举所有模型、所有数据集、所有样本。当前建议采用三层漏斗：
+正式实验不建议全量枚举所有模型、所有数据集、所有样本。当前建议采用四层漏斗，目标是用小样本快速淘汰明显不行的模型，只把服务器时间花在最终候选上：
 
-1. Gate-50：所有候选模型先跑 myAgent-only WTQ / TabFact / CRT 各 50 条；总体明显低于 Qwen3-32B 或 token 明显失控的模型直接 no-go。
-2. Gate-150：接近 Qwen3-32B 的模型再跑各 150 条 myAgent-only，并检查失败率、平均 token、平均耗时。
-3. Paired-200：只给最终候选模型补 MACT same-ID paired 200 条；如果服务器时间不够，优先保留 Qwen3-32B 的 blind100 / blind200 staged evidence。
+1. Gate-10 smoke：每个候选模型先跑 WTQ / TabFact / CRT 各 10 条，只验证服务、schema、token 统计、失败保留和评估链路；任一数据集出现系统性 schema/connectivity failure，先修环境，不进入 Gate-50。
+2. Gate-50：所有候选模型跑 myAgent-only WTQ / TabFact / CRT 各 50 条；总体明显低于 Qwen3-32B reference `124/150` 或 token 明显失控的模型直接 no-go。
+3. Gate-150：Gate-50 接近 Qwen3-32B 的模型再跑各 150 条 myAgent-only，并检查失败率、平均 token、平均耗时。
+4. Paired-200：只给最终候选模型补 MACT same-ID paired 200 条；如果服务器时间不够，优先保留 Qwen3-32B 的 blind100 / blind200 staged evidence，不补所有候选的 MACT。
 
-当前已经可以用于专家材料的证据链是 core50 + core100 + full200。full200 支持“总体略高且 token 明显更低”，但也暴露 WTQ/TabFact 单项仍低于 MACT；正式材料应把该限制写清楚。
+当前已经可以用于专家材料的证据链是 core50 + core100 + canonical full200 + current CRT staged composite。full200 支持“总体略高且 token 明显更低”，current CRT 复跑把 staged composite 提到 `456/600`；但 WTQ/TabFact 单项仍低于 MACT，正式材料应把该限制写清楚。
+
+当前阶段不要求跑官方完整 full dataset。只有当最终候选在 Paired-200 上稳定超过 MACT，且服务器预算允许时，才考虑官方完整测试集或更大 blind sample；否则专家材料采用 staged evidence，更符合时间成本约束。
 
 新增模型的实际执行规则：
 
@@ -829,6 +911,7 @@ setsid -f bash /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact
 4. Gate-150 条件：Gate-50 overall 接近或超过 `124/150`，执行失败率 <= `2%`，平均 token 没有明显失控。
 5. Paired-200 条件：Gate-150 仍接近或超过 Qwen3-32B，并且至少两个数据集不弱于当前 Qwen3-32B 或有明确论文/专利价值。
 6. MACT paired 只在最终候选上跑；raw、eval、paired、summary 和 ledger 仍保存到 MACT run 目录并推送。
+7. 本地 Qwen 系列大模型默认使用两个 vLLM 服务并行：GPU `4,5` -> port `8000`，GPU `6,7` -> port `8001`；runner 按 shard 写入不同 raw 文件，最后按原始 ID 顺序合并，避免两个进程抢写同一个 jsonl。
 
 ## 14. 下一次新增模型的执行模板
 
