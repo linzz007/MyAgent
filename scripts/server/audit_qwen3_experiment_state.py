@@ -231,6 +231,19 @@ def present_api_keys(env: Mapping[str, str], env_files: Sequence[Path] = ()) -> 
     return sorted(api_keys)
 
 
+def default_env_files(myagent_root: Path) -> list[Path]:
+    server_config = myagent_root / "configs" / "server"
+    if not server_config.is_dir():
+        return []
+    env_files = []
+    for path in sorted(server_config.glob("*.env")):
+        name = path.name
+        if ".example" in name or ".bak" in name:
+            continue
+        env_files.append(path)
+    return env_files
+
+
 def summarize_model_readiness(
     model_roots: Sequence[Path],
     env: Mapping[str, str],
@@ -350,6 +363,7 @@ def build_audit(
     env_files: Sequence[Path] = (),
 ) -> dict[str, Any]:
     env = os.environ if env is None else env
+    env_files = tuple(env_files) or tuple(default_env_files(myagent_root))
     full200_path = evidence_path(mact_root, FULL200_RUN, "overall_mact_full200_summary.json")
     crt_current_path = evidence_path(mact_root, CRT_CURRENT_RUN, "crt_full200_current_comparison.json")
     wtq_rep_path = evidence_path(mact_root, WTQ_REP_RUN, "wtq_representative100_extreme_fix_comparison.json")

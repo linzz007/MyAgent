@@ -398,6 +398,39 @@ class AuditQwen3ExperimentStateTests(unittest.TestCase):
         )
         self.assertNotIn("sk-test-secret-value", json.dumps(audit, ensure_ascii=False))
 
+    def test_build_audit_scans_default_server_env_files_but_skips_examples_and_backups(self):
+        """Catches the PRD recovery command missing API keys stored in standard env files."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            model_root = tmp / "models"
+            server_config = myagent_root / "configs" / "server"
+            server_config.mkdir(parents=True)
+            active_env = server_config / "api.env"
+            active_env.write_text("OPENROUTER_API_KEY=sk-active-secret\n", encoding="utf-8")
+            (server_config / "api.env.example").write_text("TOGETHER_API_KEY=sk-example-secret\n", encoding="utf-8")
+            (server_config / "api.env.bak.20260730").write_text(
+                "FIREWORKS_API_KEY=sk-backup-secret\n",
+                encoding="utf-8",
+            )
+
+            audit = build_audit(
+                myagent_root=myagent_root,
+                mact_root=mact_root,
+                model_roots=[model_root],
+                env={},
+            )
+
+        readiness = audit["model_readiness"]
+        self.assertTrue(readiness["can_start_new_experiment"])
+        self.assertEqual(readiness["api_keys_present"], ["OPENROUTER_API_KEY"])
+        self.assertEqual(readiness["api_env_files_checked"], [{"path": str(active_env), "present": True}])
+        serialized = json.dumps(audit, ensure_ascii=False)
+        self.assertNotIn("sk-active-secret", serialized)
+        self.assertNotIn("sk-example-secret", serialized)
+        self.assertNotIn("sk-backup-secret", serialized)
+
     def test_render_expert_summary_states_claims_limits_and_next_action(self):
         """Catches patent-facing summaries that overclaim or omit gating instructions."""
         audit = {
