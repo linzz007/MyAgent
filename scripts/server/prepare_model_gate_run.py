@@ -185,10 +185,14 @@ def render_service_script(config: GateRunConfig, run_dir: Path, action: str) -> 
         if action == "start":
             command = 'source "$RUN_DIR/api.env"; echo "[api] no local service to start for $API_PROVIDER"'
         elif action == "healthcheck":
-            command = (
-                'source "$RUN_DIR/api.env"; '
-                'if [[ -z "${!API_KEY_ENV:-}" ]]; then echo "missing API key env: $API_KEY_ENV" >&2; exit 1; fi; '
-                'echo "[api] env ready: $API_PROVIDER $API_BASE_URL"'
+            command = "\n".join(
+                [
+                    'source "$RUN_DIR/api.env"',
+                    "python scripts/server/healthcheck_openai_compatible.py \\",
+                    '  --api-base-url "$API_BASE_URL" \\',
+                    '  --model "$SERVED_MODEL_NAME" \\',
+                    '  --api-key-env "$API_KEY_ENV"',
+                ]
             )
         elif action == "stop":
             command = 'source "$RUN_DIR/api.env"; echo "[api] no local service to stop for $API_PROVIDER"'

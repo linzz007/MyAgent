@@ -219,8 +219,14 @@ class PrepareModelGateRunTests(unittest.TestCase):
 
             gate10 = run_dir / "run_gate10.sh"
             gate50 = run_dir / "run_gate50.sh"
+            healthcheck = run_dir / "healthcheck_services.sh"
             gate10_text = gate10.read_text(encoding="utf-8")
             gate50_text = gate50.read_text(encoding="utf-8")
+            healthcheck_text = healthcheck.read_text(encoding="utf-8")
+            self.assertIn("healthcheck_openai_compatible.py", healthcheck_text)
+            self.assertIn('--api-base-url "$API_BASE_URL"', healthcheck_text)
+            self.assertIn('--model "$SERVED_MODEL_NAME"', healthcheck_text)
+            self.assertIn('--api-key-env "$API_KEY_ENV"', healthcheck_text)
             self.assertIn('source "$RUN_DIR/api.env"', gate10_text)
             self.assertIn('--endpoints "$API_BASE_URL"', gate10_text)
             self.assertIn('--api-key-env "$API_KEY_ENV"', gate10_text)
