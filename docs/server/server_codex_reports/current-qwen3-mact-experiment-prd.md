@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 17:09:20 CST
+最后更新：2026-07-30 17:27:32 CST
 
 ## 0. 下一次启动先看这里
 
@@ -16,7 +16,7 @@
 | 当前本机模型候选 | `/home/ubuntu/models` 只有 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | WTQ+TabFact+CRT 已完成 600 条：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708` |
-| full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集和 WTQ 压缩桶诊断已保存到 MACT；WTQ 是主要负贡献，TabFact 不是当前优先优化项，CRT 是主要正贡献 |
+| full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖和候选修复收益估计已保存到 MACT |
 | 下一步建议 | 当前不要重跑旧本地模型；新增/挂载候选模型或提供外部 API key 后，先跑 myAgent-only Gate-50，再决定是否扩 Gate-150 / paired-200 |
 
 下一次恢复命令入口：
@@ -48,6 +48,8 @@ wc -l /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_
 ```text
 /home/ubuntu/lzz/MACT/outputs/server_runs/<model_tag>_gate50_<date>/
 ```
+
+新增本地 vLLM 模型时，默认按当前服务器资源开两个服务：GPU `4,5` 绑定端口 `8000`，GPU `6,7` 绑定端口 `8001`；Gate-10 / Gate-50 直接传两个 endpoint 并行跑。
 
 MyAgent 仓库只负责代码、脚本和本文档；除非临时调试，不再把新实验主结果分散写到 MyAgent 的 `outputs/server_runs/`。
 
@@ -128,6 +130,8 @@ PRD:
 | full200 分歧诊断 | completed | `full200_disagreement_diagnostics.md/json` 已保存到 MACT full200 run 目录；WTQ net `-17`，TabFact net `-4`，CRT net `+24` |
 | WTQ discordant 调试子集 | completed | `wtq_discordant_debug_subset_50.jsonl/md` 已保存到 MACT；40 条 `mact_only` + 10 条优先 `neither` |
 | WTQ 压缩桶诊断 | completed | `wtq_compression_bucket_diagnostics.md/json` 已保存到 MACT；MACT-only 中位压缩比例 `0.25`，有 7 条 not-found-like、3 条 header-prediction 信号 |
+| WTQ gold 行列覆盖诊断 | completed | `wtq_gold_rowcol_loss_diagnostics.md/json` 已保存到 MACT；50 条中 22 条 gold cell 已保留，19 条 literal-gold 被行/列压缩丢失，9 条为非字面计数/计算 |
+| WTQ 候选修复收益估计 | completed | `wtq_fix_candidate_coverage_estimate.md/json` 已保存到 MACT；优先验证 WTQ extreme/only 全局行策略，其次验证行匹配扫描全行 |
 | 当前本机模型候选盘点 | completed | 仅发现 4 个本地模型目录；3 个非主模型已 no-go；未发现可直接使用的 DeepSeek/OpenAI/DashScope API key |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
@@ -358,6 +362,12 @@ full200 三数据集最终合计：
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_discordant_debug_subset_50.jsonl
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_compression_bucket_diagnostics.md
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_compression_bucket_diagnostics.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_gold_rowcol_loss_diagnostics.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_gold_rowcol_loss_diagnostics.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_compressor_hypothesis_diagnostics.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_compressor_hypothesis_diagnostics.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_fix_candidate_coverage_estimate.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_fix_candidate_coverage_estimate.json
 ```
 
 same-ID paired 分歧净贡献：
@@ -376,6 +386,8 @@ same-ID paired 分歧净贡献：
 3. CRT 是主要正贡献，myAgent-only 36 行、MACT-only 12 行；说明 selective-risk pipeline 的强项主要体现在 CRT 复杂比较/闭集问答。
 4. MACT 的 5 个 WTQ context overflow 已严格保留为失败行；如果做 repaired baseline，必须新建口径，不能覆盖 canonical full200。
 5. WTQ MACT-only 行的压缩比例中位数为 `0.25`，低于 both-correct 的 `0.375`；同时出现 7 条 not-found-like prediction 和 3 条 header-prediction。当前合理假设是检索/压缩后的信息定位不足叠加计数、时间边界错误，需要用 WTQ 子集继续验证，不能直接大改。
+6. WTQ 50 条 debug 子集的 gold 行列覆盖结果：22 条 gold cell 已在压缩表内但仍答错，19 条 literal-gold 被压缩丢失，9 条是计数/计算答案不适合字面覆盖判断。MACT-only 的 literal-gold 丢失主要是行丢失：12 条 `gold_col_kept_row_dropped`，4 条 `gold_row_kept_col_dropped`。
+7. 候选修复收益估计显示：`global_rows_for_wtq_extreme_or_only` 可覆盖 10 个 literal-gold 行丢失样本，其中 9 个是 MACT-only；`preserve_more_answer_columns_for_implicit_answer` 只覆盖 3 个样本。因此如果改代码，优先小范围验证 WTQ extreme/only 全局行策略，而不是先做大范围列保留。
 
 下一步问题排查建议：
 
@@ -433,6 +445,12 @@ same-ID paired 分歧净贡献：
 | `wtq_discordant_debug_subset_50.jsonl` | WTQ 调试子集结构化输入，保留 table、gold、myAgent/MACT prediction、tags、metrics |
 | `wtq_compression_bucket_diagnostics.md` | WTQ 按 paired bucket 的压缩比例、策略和 prediction signal 诊断摘要 |
 | `wtq_compression_bucket_diagnostics.json` | WTQ 压缩桶结构化诊断，用于定位检索/压缩和答案类型问题 |
+| `wtq_gold_rowcol_loss_diagnostics.md` | WTQ gold literal cell 在原表/压缩表中的行列覆盖诊断 |
+| `wtq_gold_rowcol_loss_diagnostics.json` | WTQ gold 行列覆盖结构化诊断 |
+| `wtq_compressor_hypothesis_diagnostics.md` | WTQ 压缩器与 planner/operation 错误假设映射 |
+| `wtq_compressor_hypothesis_diagnostics.json` | WTQ 假设映射结构化结果 |
+| `wtq_fix_candidate_coverage_estimate.md` | WTQ 候选修复方向的覆盖收益估计 |
+| `wtq_fix_candidate_coverage_estimate.json` | WTQ 候选修复收益估计结构化结果 |
 | `qwen3_32b_4gpu_2svc.env` | CRT tail 并行 shard 使用的两服务 vLLM profile：GPU `4,5;6,7`，端口 `8000/8001` |
 | `shards/crt_121_160.jsonl` | CRT shard input rows 121-160 |
 | `shards/crt_161_200.jsonl` | CRT shard input rows 161-200 |
@@ -614,6 +632,8 @@ full200 对 MACT 是全面显著胜出。
 | P1 | full200 分歧诊断 | done: 诊断文件保存到 MACT full200 run；确认 WTQ 是主要负贡献，TabFact 暂不优先 |
 | P1 | WTQ discordant subset 根因分析 | ready: 50 条调试子集已保存，下一步先分类错误类型，再决定是否改代码 |
 | P1 | WTQ 压缩/预测信号诊断 | done: MACT-only 中 not-found-like/header prediction 明显集中；下一步验证检索/压缩是否漏关键行列 |
+| P1 | WTQ 行列覆盖与候选修复排序 | done: 优先级为 extreme/only 全局行策略，其次行匹配扫描全行；大范围列保留不是第一优先 |
+| P1 | WTQ 最小修复实验 | pending: 只在 50 条 debug subset 上先做 red/green；通过后再回归 frozen150/blind200 |
 | P1 | 新模型筛选 | waiting: 当前本地 3 个非主模型已 no-go；除非新增/挂载模型或提供外部 API key，否则不继续启动模型 |
 | P2 | 正式实验方案定稿 | pending: 使用 full200 结果修订专家材料措辞和 gate-based 正式实验方案；正式跑只扩最终候选，不做全模型全量枚举 |
 
@@ -649,6 +669,7 @@ CRT full200:     myAgent 137/200 vs MACT 113/200
 5. 若新增模型，先跑 myAgent-only Gate-50；只有 overall 接近或超过 Qwen3-32B，且失败率不超过 2%，才扩 Gate-150。
 6. 只有 Gate-150 仍有竞争力的最终候选，才补 MACT same-ID paired-200。
 7. 若当前代码继续优化，应优先 WTQ discordant subset；不要再把 TabFact 当作首要优化目标。
+8. WTQ 下一步最小代码实验顺序：先测试 `only/top/first/last/earliest/latest` 等 extreme/only 问题触发 global rows，再测试 `_match_rows` 从只扫前 3 个单元扩展为低噪声全行 token 扫描；列保留兜底收益较小，放在后面。
 
 ## 12. 如果服务器清空后的恢复方式
 
@@ -750,7 +771,7 @@ export HF_HOME=/home/ubuntu/models
 export HF_HUB_ENABLE_HF_TRANSFER=1
 export MODEL_ID=/home/ubuntu/models/<model_dir>
 export SERVED_MODEL_NAME=<served_model_name>
-export GPU_GROUPS="4,5"
+export GPU_GROUPS="4,5;6,7"
 export BASE_PORT=8000
 export VLLM_API_KEY=local-vllm-key-change-me
 export VLLM_MAX_MODEL_LEN=8192
@@ -782,7 +803,7 @@ python scripts/server/run_sharded_tqa.py \
   --wtq-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl \
   --tabfact-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/tabfact.jsonl \
   --crt-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/crt.jsonl \
-  --endpoints http://127.0.0.1:8000/v1 \
+  --endpoints http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1 \
   --model "$SERVED_MODEL_NAME" \
   --api-key-env LOCAL_VLLM_API_KEY \
   --output-root "$RUN_DIR/myagent_gate10" \
@@ -804,7 +825,7 @@ python scripts/server/run_sharded_tqa.py \
   --wtq-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl \
   --tabfact-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/tabfact.jsonl \
   --crt-dataset datasets_ready/frozen_qwen3_eval_150_2026-07-19/crt.jsonl \
-  --endpoints http://127.0.0.1:8000/v1 \
+  --endpoints http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1 \
   --model "$SERVED_MODEL_NAME" \
   --api-key-env LOCAL_VLLM_API_KEY \
   --output-root "$RUN_DIR/myagent_gate50" \
