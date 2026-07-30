@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 20:28:44 CST
+最后更新：2026-07-30 20:32:35 CST
 
 ## 0. 下一次启动先看这里
 
@@ -15,7 +15,7 @@
 | 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 20:28 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
 | 下次本地模型服务资源 | 用户 2026-07-30 20:20 再次确认当前服务器卡还够，可使用 GPU `4,5` 和 GPU `6,7` 各启动一个模型服务；默认端口 `8000/8001` |
 | 当前本机模型候选 | 2026-07-30 20:28 复扫 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]` |
-| 当前外部 API 候选 | 2026-07-30 20:28 环境变量未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks 可用 key |
+| 当前外部 API 候选 | 2026-07-30 20:32 环境变量未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量 |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 原 full200：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708`；替换为 2026-07-30 当前 CRT 复跑后：myAgent `456/600` vs MACT `450/600`，token ratio `0.5708` |
 | 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
@@ -791,6 +791,7 @@ myAgent blind200 stress result：
 | numpy array execution result 判断 | done | `verification_gap` 改为显式判断非空执行结果，避免 numpy array truth-value 崩溃 |
 | numpy array 输出序列化 | done | `_to_serializable` 和 `_json_default` 优先使用 `.tolist()`，避免多元素 numpy array `.item()` 崩溃 |
 | 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json` 和 `latest_expert_evidence_summary.md`，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
+| 外部 API key readiness 检测 | done | `audit_qwen3_experiment_state.py` 已从只识别 OpenAI/DeepSeek/DashScope/Anthropic 扩展到 SiliconFlow、Moonshot、Zhipu、Gemini/Google、OpenRouter、Together、Fireworks、Ark、Volc、Azure OpenAI，并新增单测保护 |
 | 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地模型生成 MACT run 目录、`vllm.env`、启动/健康检查/停止脚本、Gate-10/Gate-50 runner 和 `gate_run_manifest.json`；默认 GPU `4,5;6,7`、端口 `8000/8001` |
 | Gate-50 自动决策脚本 | done | `scripts/server/summarize_model_gate_results.py` 汇总 WTQ/TabFact/CRT eval，按 reference `124/150`、failure <= `2%`、token ratio <= `0.75` 输出 `no-go` 或 `gate150` |
 | 本地临时文件 ignore | done | `configs/server/*.env.bak.*` 和早期 context 试跑脚本 `restart_qwen3_context_try.sh` 不进入远端恢复路径；正式入口以 PRD 第 14 节和 `prepare_model_gate_run.py` 为准 |

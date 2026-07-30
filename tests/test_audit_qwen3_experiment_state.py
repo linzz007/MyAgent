@@ -255,6 +255,54 @@ class AuditQwen3ExperimentStateTests(unittest.TestCase):
         self.assertEqual(audit["model_readiness"]["api_keys_present"], ["OPENAI_API_KEY"])
         self.assertEqual(audit["model_readiness"]["next_action"], "run_gate10_then_gate50")
 
+    def test_build_audit_allows_gate_for_openai_compatible_provider_keys(self):
+        """Catches missing OpenAI-compatible API providers in readiness detection."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            model_root = tmp / "models"
+
+            write_json(
+                mact_root
+                / "outputs"
+                / "server_runs"
+                / FULL200_RUN
+                / "overall_mact_full200_summary.json",
+                {
+                    "datasets": {},
+                    "overall": {
+                        "myagent": {"correct": 453, "num_samples": 600, "primary_accuracy": 0.755},
+                        "mact": {"correct": 450, "num_samples": 600, "primary_accuracy": 0.75},
+                    },
+                    "token_ratio_myagent_to_mact": 0.57,
+                    "acceptance_criteria": {
+                        "overall_accuracy_at_least_mact": True,
+                        "at_least_two_datasets_at_least_mact": False,
+                        "token_ratio_at_most_0_75": True,
+                        "execution_failure_rate_at_most_0_02": True,
+                    },
+                },
+            )
+
+            audit = build_audit(
+                myagent_root=myagent_root,
+                mact_root=mact_root,
+                model_roots=[model_root],
+                env={
+                    "FIREWORKS_API_KEY": "present",
+                    "OPENROUTER_API_KEY": "present",
+                    "TOGETHER_API_KEY": "present",
+                },
+            )
+
+        self.assertTrue(audit["model_readiness"]["can_start_new_experiment"])
+        self.assertEqual(
+            audit["model_readiness"]["api_keys_present"],
+            ["FIREWORKS_API_KEY", "OPENROUTER_API_KEY", "TOGETHER_API_KEY"],
+        )
+        self.assertEqual(audit["model_readiness"]["next_action"], "run_gate10_then_gate50")
+
     def test_render_expert_summary_states_claims_limits_and_next_action(self):
         """Catches patent-facing summaries that overclaim or omit gating instructions."""
         audit = {
