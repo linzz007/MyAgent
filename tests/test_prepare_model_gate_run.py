@@ -50,7 +50,7 @@ class PrepareModelGateRunTests(unittest.TestCase):
                 manifest_json["endpoints"],
                 ["http://127.0.0.1:8000/v1", "http://127.0.0.1:8001/v1"],
             )
-            self.assertEqual(manifest_json["gate_limits"], {"gate10": 10, "gate50": 50})
+            self.assertEqual(manifest_json["gate_limits"], {"gate10": 10, "gate50": 50, "gate150": 150})
 
             env_values = subprocess.run(
                 [
@@ -66,12 +66,16 @@ class PrepareModelGateRunTests(unittest.TestCase):
 
             gate10 = run_dir / "run_gate10.sh"
             gate50 = run_dir / "run_gate50.sh"
+            gate150 = run_dir / "run_gate150.sh"
             gate10_text = gate10.read_text(encoding="utf-8")
             gate50_text = gate50.read_text(encoding="utf-8")
+            gate150_text = gate150.read_text(encoding="utf-8")
             self.assertIn("--limit-per-task 10", gate10_text)
             self.assertIn("--limit-per-task 50", gate50_text)
+            self.assertIn("--limit-per-task 150", gate150_text)
             self.assertIn("--output-root \"$RUN_DIR/myagent_gate10\"", gate10_text)
             self.assertIn("--output-root \"$RUN_DIR/myagent_gate50\"", gate50_text)
+            self.assertIn("--output-root \"$RUN_DIR/myagent_gate150\"", gate150_text)
             self.assertIn("http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1", gate50_text)
             self.assertIn("summarize_model_gate_results.py", gate50_text)
             self.assertIn("--output \"$RUN_DIR/gate50_summary.json\"", gate50_text)
@@ -82,6 +86,7 @@ class PrepareModelGateRunTests(unittest.TestCase):
                 "healthcheck_services.sh",
                 "run_gate10.sh",
                 "run_gate50.sh",
+                "run_gate150.sh",
                 "stop_services.sh",
             ):
                 script_path = run_dir / script_name
@@ -91,6 +96,7 @@ class PrepareModelGateRunTests(unittest.TestCase):
             readme = (run_dir / "README.md").read_text(encoding="utf-8")
             self.assertIn("Do not commit API keys", readme)
             self.assertIn("gate50_summary.json", readme)
+            self.assertIn("run_gate150.sh", readme)
             self.assertIn("git add -f", readme)
 
     def test_cli_prepares_external_api_gate_run_without_writing_secret(self):
@@ -153,12 +159,15 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertIn('--endpoints "$API_BASE_URL"', gate10_text)
             self.assertIn('--api-key-env "$API_KEY_ENV"', gate10_text)
             self.assertIn("summarize_model_gate_results.py", gate50_text)
+            self.assertTrue((run_dir / "run_gate150.sh").exists())
+            self.assertIn('--output-root "$RUN_DIR/myagent_gate150"', (run_dir / "run_gate150.sh").read_text(encoding="utf-8"))
 
             for script_name in (
                 "start_services.sh",
                 "healthcheck_services.sh",
                 "run_gate10.sh",
                 "run_gate50.sh",
+                "run_gate150.sh",
                 "stop_services.sh",
             ):
                 script_path = run_dir / script_name

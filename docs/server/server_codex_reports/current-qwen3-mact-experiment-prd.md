@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 20:38:35 CST
+最后更新：2026-07-30 20:43:06 CST
 
 ## 0. 下一次启动先看这里
 
@@ -80,7 +80,7 @@ MyAgent 仓库只负责代码、脚本和本文档；除非临时调试，不再
 /home/ubuntu/lzz/MyAgent/scripts/server/summarize_model_gate_results.py
 ```
 
-作用：`audit_qwen3_experiment_state.py` 从 MACT 已保存结果生成机器可读 JSON 和中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”。`prepare_model_gate_run.py` 在新增本地模型后自动生成 MACT run 目录、双服务 vLLM env、Gate-10/Gate-50 runner 和 manifest，但不启动服务。`summarize_model_gate_results.py` 读取 Gate-50 三个 eval JSON，输出 `gate50_summary.json/md` 和 no-go/Gate-150 决策。
+作用：`audit_qwen3_experiment_state.py` 从 MACT 已保存结果生成机器可读 JSON 和中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”。`prepare_model_gate_run.py` 在新增本地模型或外部 API 候选后自动生成 MACT run 目录、双服务 vLLM env 或 API profile、Gate-10/Gate-50/Gate-150 runner 和 manifest，但不启动服务。`summarize_model_gate_results.py` 读取 Gate-50 三个 eval JSON，输出 `gate50_summary.json/md` 和 no-go/Gate-150 决策。
 
 ## 1. 最大目标
 
@@ -792,7 +792,7 @@ myAgent blind200 stress result：
 | numpy array 输出序列化 | done | `_to_serializable` 和 `_json_default` 优先使用 `.tolist()`，避免多元素 numpy array `.item()` 崩溃 |
 | 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json` 和 `latest_expert_evidence_summary.md`，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
 | 外部 API key readiness 检测 | done | `audit_qwen3_experiment_state.py` 已从只识别 OpenAI/DeepSeek/DashScope/Anthropic 扩展到 SiliconFlow、Moonshot、Zhipu、Gemini/Google、OpenRouter、Together、Fireworks、Ark、Volc、Azure OpenAI，并新增单测保护 |
-| 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地 vLLM 模型或外部 OpenAI-compatible API 候选生成 MACT run 目录、Gate-10/Gate-50 runner 和 `gate_run_manifest.json`；本地默认 GPU `4,5;6,7`、端口 `8000/8001`，外部 API backend 只写 `api.env`/`api_profile.md` 且不写 secret |
+| 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地 vLLM 模型或外部 OpenAI-compatible API 候选生成 MACT run 目录、Gate-10/Gate-50/Gate-150 runner 和 `gate_run_manifest.json`；本地默认 GPU `4,5;6,7`、端口 `8000/8001`，外部 API backend 只写 `api.env`/`api_profile.md` 且不写 secret |
 | Gate-50 自动决策脚本 | done | `scripts/server/summarize_model_gate_results.py` 汇总 WTQ/TabFact/CRT eval，按 reference `124/150`、failure <= `2%`、token ratio <= `0.75` 输出 `no-go` 或 `gate150` |
 | 本地临时文件 ignore | done | `configs/server/*.env.bak.*` 和早期 context 试跑脚本 `restart_qwen3_context_try.sh` 不进入远端恢复路径；正式入口以 PRD 第 14 节和 `prepare_model_gate_run.py` 为准 |
 | 完整 MyAgent 输出归档 | done | 2026-07-30 已将 MyAgent `outputs/server_runs` 完整压缩到 MACT `myagent_server_runs_archive_20260730_2020`，并生成 `SHA256SUMS`、`inventory.tsv`、`run_directories.txt`、`source_size.txt` 和 README |
@@ -1069,6 +1069,17 @@ Gate-50 决策：
 
 `run_gate50.sh` 会自动调用 `summarize_model_gate_results.py` 生成 `gate50_summary.json` 和 `gate50_summary.md`。下一步是否进入 Gate-150 以该 summary 的 `decision` 为准，人工只复核异常日志和数据行数。
 
+只有 `gate50_summary.json` 的 `decision` 为 `gate150` 时才运行 Gate-150：
+
+```bash
+bash "$RUN_DIR/run_gate150.sh"
+wc -l "$RUN_DIR"/myagent_gate150/merged/*.jsonl
+cat "$RUN_DIR"/myagent_gate150/eval/*_eval.json
+rg -n "Connection refused|APIConnectionError|context length|BadRequest|Traceback" "$RUN_DIR"/myagent_gate150/logs || true
+```
+
+Gate-150 仍接近或超过 Qwen3-32B，并且至少两个数据集不弱于当前 Qwen3-32B 或有明确论文/专利价值时，才进入 paired-200。
+
 每次阶段结束都同步：
 
 ```bash
@@ -1123,6 +1134,7 @@ api.env          # 只保存 provider/base URL/model/key 变量名，不保存 k
 api_profile.md  # 不含 secret 的外部 API profile
 run_gate10.sh
 run_gate50.sh
+run_gate150.sh
 gate_run_manifest.json
 ```
 
@@ -1133,6 +1145,8 @@ RUN_DIR=/home/ubuntu/lzz/MACT/outputs/server_runs/<model_tag>_gate50_<timestamp>
 bash "$RUN_DIR/healthcheck_services.sh"
 bash "$RUN_DIR/run_gate10.sh"
 bash "$RUN_DIR/run_gate50.sh"
+# 只有 gate50_summary.json 的 decision 为 gate150 时运行：
+bash "$RUN_DIR/run_gate150.sh"
 ```
 
 外部 API Gate-10/Gate-50/Gate-150/paired-200 的扩大条件与本地模型一致。每次阶段结束仍把 raw、eval、summary、profile、ledger 写入 MACT run 目录并 `git add -f "$RUN_DIR"` 后推送。

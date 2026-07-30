@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a MACT-hosted run directory for new-model Gate-10/Gate-50 screening."""
+"""Prepare a MACT-hosted run directory for new-model Gate screening."""
 
 from __future__ import annotations
 
@@ -226,10 +226,11 @@ def render_readme(config: GateRunConfig, run_dir: Path) -> str:
             f"bash {run_dir}/healthcheck_services.sh",
             f"bash {run_dir}/run_gate10.sh",
             f"bash {run_dir}/run_gate50.sh",
+            f"bash {run_dir}/run_gate150.sh",
             f"bash {run_dir}/stop_services.sh",
             "```",
             "",
-            "After Gate-50, inspect `gate50_summary.json` and `gate50_summary.md` before deciding whether to expand to Gate-150.",
+            "After Gate-50, inspect `gate50_summary.json` and `gate50_summary.md` before deciding whether to expand to Gate-150. Run `run_gate150.sh` only for candidates whose Gate-50 decision is `gate150`.",
             "",
             "Do not commit API keys. `vllm.env` contains only a local placeholder key by default.",
             "",
@@ -283,7 +284,7 @@ def build_manifest(config: GateRunConfig, run_dir: Path) -> dict[str, Any]:
         "gpu_groups": config.gpu_groups,
         "base_port": config.base_port,
         "endpoints": endpoints,
-        "gate_limits": {"gate10": 10, "gate50": 50},
+        "gate_limits": {"gate10": 10, "gate50": 50, "gate150": 150},
         "datasets": {
             "wtq": config.wtq_dataset,
             "tabfact": config.tabfact_dataset,
@@ -310,6 +311,7 @@ def prepare_gate_run(config: GateRunConfig) -> dict[str, Any]:
     write_executable(run_dir / "stop_services.sh", render_service_script(config, run_dir, "stop"))
     write_executable(run_dir / "run_gate10.sh", render_gate_script(config, run_dir, "gate10", 10))
     write_executable(run_dir / "run_gate50.sh", render_gate_script(config, run_dir, "gate50", 50))
+    write_executable(run_dir / "run_gate150.sh", render_gate_script(config, run_dir, "gate150", 150))
     (run_dir / "README.md").write_text(render_readme(config, run_dir), encoding="utf-8")
 
     manifest = build_manifest(config, run_dir)
