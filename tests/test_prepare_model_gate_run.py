@@ -302,6 +302,41 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertIn("export SERVED_MODEL_NAME=qwen/qwen3-32b", api_env)
             self.assertIn("export API_KEY_ENV=OPENROUTER_API_KEY", api_env)
 
+    def test_cli_unknown_api_provider_without_endpoint_fails_without_traceback(self):
+        """Catches confusing Python tracebacks when an API provider has no tested defaults."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            myagent_root.mkdir()
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "scripts" / "server" / "prepare_model_gate_run.py"),
+                    "--backend",
+                    "api",
+                    "--myagent-root",
+                    str(myagent_root),
+                    "--mact-root",
+                    str(mact_root),
+                    "--model-tag",
+                    "custom_provider_qwen3",
+                    "--model-name",
+                    "provider/qwen3",
+                    "--api-provider",
+                    "CustomProvider",
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertNotIn("Traceback", completed.stderr)
+            self.assertIn("--api-base-url", completed.stderr)
+            self.assertIn("--api-key-env", completed.stderr)
+
     def test_cli_prepares_local_gate_run_from_readiness_audit(self):
         """Catches manually copying model paths from readiness audit into the Gate prep command."""
         with tempfile.TemporaryDirectory() as tmp_name:

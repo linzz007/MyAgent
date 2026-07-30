@@ -444,6 +444,16 @@ def main() -> None:
     api_defaults = api_provider_defaults(args.api_provider) if args.backend == "api" else {}
     if args.backend == "api":
         served_model_name = args.served_model_name or model_name
+        if not args.api_base_url and not api_defaults.get("api_base_url"):
+            parser.error(
+                f"--api-base-url is required for API provider {args.api_provider!r}; "
+                "only providers with tested defaults can omit it"
+            )
+        if not args.api_key_env and not api_defaults.get("api_key_env"):
+            parser.error(
+                f"--api-key-env is required for API provider {args.api_provider!r}; "
+                "only providers with tested defaults can omit it"
+            )
     else:
         served_model_name = args.served_model_name or (default_served_model_name(model_name) if model_name else "")
     if not model_tag or not served_model_name:
