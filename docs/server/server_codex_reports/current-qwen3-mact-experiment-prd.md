@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 17:33:24 CST
+最后更新：2026-07-30 17:59:05 CST
 
 ## 0. 下一次启动先看这里
 
@@ -16,8 +16,8 @@
 | 当前本机模型候选 | `/home/ubuntu/models` 只有 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | WTQ+TabFact+CRT 已完成 600 条：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708` |
-| full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计和 extreme/only 离线修复检查已保存到 MACT |
-| 下一步建议 | 当前不要重跑旧本地模型；新增/挂载候选模型或提供外部 API key 后，先跑 myAgent-only Gate-50，再决定是否扩 Gate-150 / paired-200 |
+| full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
+| 下一步建议 | 当前不要重跑旧本地 no-go 模型；Qwen3-32B 若继续优化，先跑代表性 WTQ 回归切片，再决定是否回归 blind200 |
 
 下一次恢复命令入口：
 
@@ -99,6 +99,9 @@ PRD:
 
 当前 full200 live ledger:
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/LIVE_LEDGER.md
+
+WTQ extreme/only 修复 debug50 实测 run:
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_wtq_extreme_fix_debug50_20260730_173740
 ```
 
 ## 4. 当前实验口径
@@ -132,7 +135,8 @@ PRD:
 | WTQ 压缩桶诊断 | completed | `wtq_compression_bucket_diagnostics.md/json` 已保存到 MACT；MACT-only 中位压缩比例 `0.25`，有 7 条 not-found-like、3 条 header-prediction 信号 |
 | WTQ gold 行列覆盖诊断 | completed | `wtq_gold_rowcol_loss_diagnostics.md/json` 已保存到 MACT；50 条中 22 条 gold cell 已保留，19 条 literal-gold 被行/列压缩丢失，9 条为非字面计数/计算 |
 | WTQ 候选修复收益估计 | completed | `wtq_fix_candidate_coverage_estimate.md/json` 已保存到 MACT；优先验证 WTQ extreme/only 全局行策略，其次验证行匹配扫描全行 |
-| WTQ extreme/only 全局行最小修复 | completed offline | MyAgent 已加入 `only/top/first/last/earliest/latest` global-row 触发词；单测 red/green 通过；MACT 离线检查显示 18/50 debug rows 新触发全行，10 条 literal gold 行丢失可恢复 |
+| WTQ extreme/only 全局行最小修复 | completed measured debug50 | MyAgent 已加入 `only/top/first/last/earliest/latest` global-row 触发词；debug50 从旧 myAgent `0/50` 提升到新 myAgent `14/50`，18 条新触发全行里 `10/18` 正确，10 条 strict recoverable 里 `7/10` 正确 |
+| numpy array runtime 边界修复 | completed | debug50 的 `nu-4299` 暴露 `verification_gap` 和 JSON 序列化对 numpy array 的崩溃；已加单测并修复 |
 | 当前本机模型候选盘点 | completed | 仅发现 4 个本地模型目录；3 个非主模型已 no-go；未发现可直接使用的 DeepSeek/OpenAI/DashScope API key |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
@@ -392,15 +396,52 @@ same-ID paired 分歧净贡献：
 6. WTQ 50 条 debug 子集的 gold 行列覆盖结果：22 条 gold cell 已在压缩表内但仍答错，19 条 literal-gold 被压缩丢失，9 条是计数/计算答案不适合字面覆盖判断。MACT-only 的 literal-gold 丢失主要是行丢失：12 条 `gold_col_kept_row_dropped`，4 条 `gold_row_kept_col_dropped`。
 7. 候选修复收益估计显示：`global_rows_for_wtq_extreme_or_only` 可覆盖 10 个 literal-gold 行丢失样本，其中 9 个是 MACT-only；`preserve_more_answer_columns_for_implicit_answer` 只覆盖 3 个样本。因此如果改代码，优先小范围验证 WTQ extreme/only 全局行策略，而不是先做大范围列保留。
 8. 已完成第一步最小代码实验：`TableCompressor._needs_global_rows` 新增 `only/top/first/last/earliest/latest` 触发词。新增单测先失败后通过；离线检查显示 50 条 WTQ debug subset 中 18 条新触发全行，10 条 strict literal gold row-loss case 可恢复。该结果只证明压缩覆盖改善，不等价于模型准确率提升。
+9. 已完成 debug50 模型实测：修复后 myAgent 在该 adversarial subset 上 `14/50`，旧 myAgent 为 `0/50`，MACT 为 `40/50`。新触发全行的 18 条里 `10/18` 正确，strict recoverable 的 10 条里 `7/10` 正确；平均 token 为 MACT 的 `0.6009`，相对旧 myAgent 增加约 `2.1%`。
 
 下一步问题排查建议：
 
-1. 使用已保存的 WTQ 50 条 discordant subset 作为下一轮错误分类和 red/green 输入。
-2. 先人工/脚本标注错误类型：列选择、行压缩、计数边界、时间比较、最终答案归一化、shortcut 误触发。
-3. 只接受能跨样本解释问题的通用修复，不接受按 ID/table 硬编码。
-4. 修复必须先在 discordant subset 做 red/green，再回归 frozen150 和 blind200；没有 red/green 证据前不要重跑 600 条。
+1. 不要再用 debug50 代表总体准确率；它是从旧 myAgent 错例里抽出的 adversarial subset。
+2. 下一步应跑代表性 WTQ 回归切片，例如 blind200/frozen150 中的 WTQ-only gate，验证 `14/50` debug 恢复是否带来总体收益、是否引入 token 或答案选择回退。
+3. 若代表性 WTQ 回归仍不足，再测试 `_match_rows` 从只扫前 3 个单元扩展为低噪声全行 token 扫描。
+4. 只接受能跨样本解释问题的通用修复，不接受按 ID/table 硬编码；正式 600 条回归必须在小切片收益明确后再跑。
 
-## 6.3 当前执行流程
+## 6.3 WTQ extreme/only debug50 实测
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_wtq_extreme_fix_debug50_20260730_173740
+```
+
+| metric | value |
+|---|---:|
+| rows | 50 |
+| old myAgent correct | 0 |
+| new myAgent correct | 14 |
+| MACT correct | 40 |
+| new exec failures | 0 |
+| new missing answers | 0 |
+| new avg total tokens | 6857.72 |
+| MACT avg total tokens | 11412.10 |
+| token ratio new myAgent / MACT | 0.6009 |
+| token ratio new / old myAgent | 1.0213 |
+| new avg elapsed seconds | 16.8523 |
+
+细分结果：
+
+| scope | rows | new myAgent correct | MACT correct | note |
+|---|---:|---:|---:|---|
+| newly global-triggered | 18 | 10 | 15 | 新触发 `only/top/first/last/earliest/latest` 全局行 |
+| strict recoverable offline | 10 | 7 | 9 | 离线判断为 gold 列已保留、仅 gold 行丢失 |
+| mact_only bucket | 40 | 14 | 40 | 该 bucket 本来就是旧 MACT-only |
+| neither bucket | 10 | 0 | 0 | 双方旧结果都错，当前修复未改善 |
+
+这次实测还暴露并修复了两个 runtime 边界问题：
+
+1. `selective_collaboration.verification_gap` 遇到 numpy array execution result 时，不能用 `not in (None, "", [])` 做非空判断。
+2. `tqa._to_serializable` 和 `_json_default` 遇到多元素 numpy array 时，不能直接 `.item()`，需要优先 `.tolist()`。
+
+本节结论：extreme/only 全局行修复对 WTQ 目标错例有实际收益，但仍不足以在该 adversarial subset 上超过 MACT；下一步需要代表性 WTQ 回归切片，而不是继续只在 debug50 上调参。
+
+## 6.4 当前执行流程
 
 当前流程按“先小样本判方向，再只给候选方案补 paired”的原则执行：
 
@@ -475,7 +516,25 @@ same-ID paired 分歧净贡献：
 
 这些文件按 checkpoint 强制加入 MACT Git，因为 MACT 默认忽略 `outputs/`。
 
-### 7.1 MACT core100 当前结果
+### 7.1 WTQ extreme/only debug50 实测结果
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_wtq_extreme_fix_debug50_20260730_173740/
+```
+
+| file | current content |
+|---|---|
+| `LIVE_LEDGER.md` | debug50 实测 ledger，记录双服务启动、runtime bug、修复和最终指标 |
+| `input/wtq_debug50_with_answer.jsonl` | 从 full200 WTQ debug subset 派生的 50 条输入，补齐 `answer` 字段 |
+| `myagent_debug50/raw/wtq/wtq_shard00_out.jsonl` | shard00 25/25 raw |
+| `myagent_debug50/raw/wtq/wtq_shard01_out.jsonl` | shard01 25/25 raw；前 21 条来自初始 runner，后 4 条通过 `--append_output` 追加 |
+| `myagent_debug50/merged/wtq_qwen3-32b-local.jsonl` | 修复后 myAgent debug50 merged：50/50 |
+| `myagent_debug50/eval/wtq_qwen3-32b-local_eval.json` | 修复后 WTQ debug50 eval：`14/50 = 0.28`，0 exec failure，0 missing answer |
+| `wtq_debug50_extreme_fix_measured_comparison.md` | 新旧 myAgent 与 MACT 的同 ID debug50 measured comparison |
+| `wtq_debug50_extreme_fix_measured_comparison.json` | debug50 measured comparison 结构化结果 |
+| `qwen3_32b_4gpu_2svc.env` | 本次双服务 vLLM profile：GPU `4,5;6,7`，端口 `8000/8001` |
+
+### 7.2 MACT core100 当前结果
 
 ```text
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_core100_20260722/
@@ -514,7 +573,7 @@ core100 final result:
 | CRT | 73/100 | 55/100 | +18 | 0.913 |
 | Overall | 237/300 | 227/300 | +10 | 0.591 |
 
-### 7.2 MACT core50 final
+### 7.3 MACT core50 final
 
 ```text
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_core50_20260722
@@ -529,7 +588,7 @@ core100 final result:
 | CRT | 42/50 | 29/50 | 1.019 |
 | Overall | 124/150 | 119/150 | 0.626 |
 
-### 7.3 myAgent blind200 outputs
+### 7.4 myAgent blind200 outputs
 
 ```text
 /home/ubuntu/lzz/MyAgent/outputs/server_runs/qwen3_32b_current_blind200_wtq200_shortcutfix2_20260721/merged/wtq_qwen3-32b-local.jsonl
@@ -546,7 +605,7 @@ myAgent blind200 stress result：
 | CRT | 137/200 | 0.6850 | 10,838.25 | 24.899s | 0 | 0 |
 | Overall | 453/600 | 0.7550 | 6,497.36 | 17.198s | 0 | 0 |
 
-### 7.4 多模型 Gate-50 结果位置
+### 7.5 多模型 Gate-50 结果位置
 
 这些是已经完成的 myAgent-only Gate-50 筛选。结论是三个非主模型都不进入扩大实验。
 
@@ -582,7 +641,9 @@ myAgent blind200 stress result：
 | context length failure 保留为 failed/missing | ongoing | WTQ 中 MACT 的 `nu-4299`、`nu-2633`、`nu-3290`、`nu-3139`、`nu-3487` 当前被严格计入失败；后续 repair 需显式标注 |
 | full200 seed 复用 | done | 从 core100 复制前 100 行，full200 只补 tail100，避免重跑已完成样本 |
 | CRT 双服务 shard 并行 | done | 用户确认 GPU 资源可用后，使用 `4,5` 和 `6,7` 两个 Qwen3-32B 服务，将 CRT 121-160/161-200 分文件运行并按 ID 合并，避免双 runner 抢写同一 jsonl |
-| WTQ extreme/only 全局行触发 | done offline | `TableCompressor._needs_global_rows` 加入 `only/top/first/last/earliest/latest`；覆盖 10 条 strict literal gold row-loss debug case，下一步需要模型实测准确率和 token 影响 |
+| WTQ extreme/only 全局行触发 | done measured debug50 | `TableCompressor._needs_global_rows` 加入 `only/top/first/last/earliest/latest`；debug50 新 myAgent `14/50`，18 条新触发全行中 `10/18` 正确，strict recoverable 中 `7/10` 正确 |
+| numpy array execution result 判断 | done | `verification_gap` 改为显式判断非空执行结果，避免 numpy array truth-value 崩溃 |
+| numpy array 输出序列化 | done | `_to_serializable` 和 `_json_default` 优先使用 `.tolist()`，避免多元素 numpy array `.item()` 崩溃 |
 
 ## 9. 当前可以写的结论
 
@@ -640,7 +701,8 @@ full200 对 MACT 是全面显著胜出。
 | P1 | WTQ discordant subset 根因分析 | ready: 50 条调试子集已保存，下一步先分类错误类型，再决定是否改代码 |
 | P1 | WTQ 压缩/预测信号诊断 | done: MACT-only 中 not-found-like/header prediction 明显集中；下一步验证检索/压缩是否漏关键行列 |
 | P1 | WTQ 行列覆盖与候选修复排序 | done: 优先级为 extreme/only 全局行策略，其次行匹配扫描全行；大范围列保留不是第一优先 |
-| P1 | WTQ 最小修复实验 | done offline: extreme/only global-row 单测 red/green 通过；MACT 保存离线覆盖检查。next: 启动 Qwen3-32B 后先跑 WTQ debug subset/model-measured 回归，再决定是否进 frozen150/blind200 |
+| P1 | WTQ 最小修复实验 | done measured debug50: old myAgent `0/50` -> new `14/50`；但 MACT `40/50`，这是 adversarial subset，不能作为总体结论 |
+| P1 | WTQ 代表性回归切片 | pending: 用修复后代码跑 WTQ-only representative slice，确认 debug50 收益是否转成总体 WTQ 提升、token 是否仍低于 MACT |
 | P1 | 新模型筛选 | waiting: 当前本地 3 个非主模型已 no-go；除非新增/挂载模型或提供外部 API key，否则不继续启动模型 |
 | P2 | 正式实验方案定稿 | pending: 使用 full200 结果修订专家材料措辞和 gate-based 正式实验方案；正式跑只扩最终候选，不做全模型全量枚举 |
 
@@ -675,8 +737,8 @@ CRT full200:     myAgent 137/200 vs MACT 113/200
 4. 当前本机没有未测候选模型，不建议启动服务重跑 Qwen3-14B-AWQ、Qwen2.5-14B-AWQ 或 Qwen2.5-3B-Instruct。
 5. 若新增模型，先跑 myAgent-only Gate-50；只有 overall 接近或超过 Qwen3-32B，且失败率不超过 2%，才扩 Gate-150。
 6. 只有 Gate-150 仍有竞争力的最终候选，才补 MACT same-ID paired-200。
-7. 当前代码已完成 WTQ extreme/only global-row 的第一步最小修复；不要再把 TabFact 当作首要优化目标。
-8. 下一步先用 Qwen3-32B 对 WTQ debug subset 做模型实测，观察 10 条 strict row-loss 可恢复样本是否转化为准确率收益、token 是否仍可接受；如果收益不足，再测试 `_match_rows` 从只扫前 3 个单元扩展为低噪声全行 token 扫描。列保留兜底收益较小，放在后面。
+7. 当前代码已完成 WTQ extreme/only global-row 的第一步最小修复和 debug50 模型实测；不要再把 TabFact 当作首要优化目标。
+8. 下一步先跑 WTQ 代表性回归切片，确认 debug50 收益是否能提升 full200 短板；如果收益不足，再测试 `_match_rows` 从只扫前 3 个单元扩展为低噪声全行 token 扫描。列保留兜底收益较小，放在后面。
 
 ## 12. 如果服务器清空后的恢复方式
 

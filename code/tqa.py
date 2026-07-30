@@ -38,6 +38,11 @@ def _json_default(value):
         return value.to_dict()
     if hasattr(value, "as_dict"):
         return value.as_dict()
+    if hasattr(value, "tolist"):
+        try:
+            return value.tolist()
+        except (TypeError, ValueError):
+            pass
     if hasattr(value, "item"):
         return value.item()
     if hasattr(value, "isoformat"):
@@ -81,6 +86,11 @@ def _to_serializable(value):
         return {str(key): _to_serializable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_to_serializable(item) for item in value]
+    if hasattr(value, "tolist"):
+        try:
+            return _to_serializable(value.tolist())
+        except (TypeError, ValueError):
+            pass
     if hasattr(value, "item"):
         return value.item()
     return value

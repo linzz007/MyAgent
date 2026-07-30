@@ -3,6 +3,7 @@ import json
 import sys
 import unittest
 
+import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "code"))
@@ -13,6 +14,7 @@ from selective_collaboration import (  # noqa: E402
     CandidateAnswer,
     ThinkingSolver,
     answer_similarity,
+    verification_gap,
 )
 
 
@@ -63,6 +65,17 @@ class SelectiveCollaborationTests(unittest.TestCase):
         decision = judge.decide([left, right])
         self.assertTrue(decision.requires_fallback)
         self.assertGreater(decision.disagreement, 0.0)
+
+    def test_verification_gap_accepts_numpy_execution_result(self):
+        candidate = CandidateAnswer(
+            name="code",
+            raw_answer="jaycen joshua",
+            normalized_answer="jaycen joshua",
+            is_valid=True,
+            execution_result=np.array(["jaycen joshua", "rick ross"]),
+        )
+
+        self.assertEqual(verification_gap(candidate), 0.0)
 
     def test_thinking_solver_parses_json_answer(self):
         llm = FakeLLM(json.dumps({"answer": "true", "confidence": 0.7, "reasoning_summary": "checked rows"}))

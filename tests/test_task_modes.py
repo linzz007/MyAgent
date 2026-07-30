@@ -15,6 +15,7 @@ from tqa import (  # noqa: E402
     _json_default,
     _metric_delta,
     _state_observability,
+    _to_serializable,
     answer_mode_for_sample,
     answer_mode_for_task,
     runtime_contract_for_sample,
@@ -117,6 +118,19 @@ class TaskModeTests(unittest.TestCase):
         encoded = json.dumps({"answer": np.int64(17)}, default=_json_default)
 
         self.assertEqual(json.loads(encoded), {"answer": 17})
+
+    def test_numpy_array_is_json_serializable_at_output_boundary(self):
+        encoded = json.dumps(
+            {"answer": np.array(["jaycen joshua", "rick ross"])},
+            default=_json_default,
+        )
+
+        self.assertEqual(json.loads(encoded), {"answer": ["jaycen joshua", "rick ross"]})
+
+    def test_numpy_array_is_serialized_as_list_at_output_boundary(self):
+        payload = _to_serializable({"answer": np.array(["jaycen joshua", "rick ross"])})
+
+        self.assertEqual(payload, {"answer": ["jaycen joshua", "rick ross"]})
 
     def test_task_to_answer_mode_mapping(self):
         self.assertEqual(answer_mode_for_task("scitab"), "true_false")

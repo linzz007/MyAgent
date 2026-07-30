@@ -178,10 +178,29 @@ def answer_similarity(left: Any, right: Any, answer_contract) -> float:
     return 1.0 if normalize_atom(left_norm) == normalize_atom(right_norm) else 0.0
 
 
+def _has_execution_result(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value != ""
+    if isinstance(value, (list, tuple, set, dict)):
+        return bool(value)
+    size = getattr(value, "size", None)
+    if size is not None:
+        try:
+            return int(size) > 0
+        except (TypeError, ValueError):
+            pass
+    try:
+        return len(value) > 0
+    except TypeError:
+        return True
+
+
 def verification_gap(candidate: CandidateAnswer, evidence_pack: Any | None = None) -> float:
     if not candidate.is_valid:
         return 1.0
-    if candidate.execution_result not in (None, "", []):
+    if _has_execution_result(candidate.execution_result):
         return 0.0
     evidence_text = ""
     if evidence_pack is not None:
