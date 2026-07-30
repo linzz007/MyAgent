@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from experiment_api_registry import api_provider_defaults
 from experiment_model_registry import KNOWN_TESTED_LOCAL_MODELS, known_tested_model_key
 
 
@@ -23,12 +24,6 @@ DEFAULT_GPU_GROUPS = "4,5;6,7"
 DEFAULT_BASE_PORT = 8000
 DEFAULT_API_KEY = "local-vllm-key-change-me"
 DEFAULT_MACT_AVG_TOKENS = 11262.41
-API_PROVIDER_DEFAULTS = {
-    "openrouter": {
-        "api_base_url": "https://openrouter.ai/api/v1",
-        "api_key_env": "OPENROUTER_API_KEY",
-    },
-}
 
 
 @dataclass(frozen=True)
@@ -66,14 +61,6 @@ def safe_slug(value: str) -> str:
 
 def default_served_model_name(model_name: str) -> str:
     return f"{safe_slug(model_name).lower().replace('_', '-')}-local"
-
-
-def normalize_provider(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", value.lower())
-
-
-def api_provider_defaults(provider: str) -> dict[str, str]:
-    return API_PROVIDER_DEFAULTS.get(normalize_provider(provider), {})
 
 
 def read_json(path: Path) -> dict[str, Any]:

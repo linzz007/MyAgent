@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from experiment_api_registry import API_KEY_NAMES, provider_profiles_for_api_keys
 from experiment_model_registry import KNOWN_TESTED_LOCAL_MODELS, known_tested_model_key
 
 
@@ -17,23 +18,6 @@ FULL200_RUN = "qwen3_32b_blind200_mact_full200_20260723"
 CRT_CURRENT_RUN = "qwen3_32b_crt_full200_current_20260730_1822"
 WTQ_REP_RUN = "qwen3_32b_wtq_extreme_fix_representative100_20260730_1805"
 MAX_MODEL_DISCOVERY_DEPTH = 4
-API_KEY_NAMES = (
-    "OPENAI_API_KEY",
-    "DEEPSEEK_API_KEY",
-    "DASHSCOPE_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "SILICONFLOW_API_KEY",
-    "MOONSHOT_API_KEY",
-    "ZHIPU_API_KEY",
-    "GEMINI_API_KEY",
-    "GOOGLE_API_KEY",
-    "OPENROUTER_API_KEY",
-    "TOGETHER_API_KEY",
-    "FIREWORKS_API_KEY",
-    "ARK_API_KEY",
-    "VOLC_API_KEY",
-    "AZURE_OPENAI_API_KEY",
-)
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -236,6 +220,7 @@ def summarize_model_readiness(model_roots: Sequence[Path], env: Mapping[str, str
         "untested_local_models": untested,
         "untested_local_model_paths": untested_paths,
         "api_keys_present": api_keys,
+        "api_provider_profiles": provider_profiles_for_api_keys(api_keys),
         "can_start_new_experiment": can_start,
         "next_action": "run_gate10_then_gate50" if can_start else "wait_for_new_model_or_api_key",
     }

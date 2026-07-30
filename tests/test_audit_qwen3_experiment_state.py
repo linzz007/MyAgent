@@ -349,6 +349,17 @@ class AuditQwen3ExperimentStateTests(unittest.TestCase):
             audit["model_readiness"]["api_keys_present"],
             ["FIREWORKS_API_KEY", "OPENROUTER_API_KEY", "TOGETHER_API_KEY"],
         )
+        self.assertEqual(
+            audit["model_readiness"]["api_provider_profiles"],
+            {
+                "OpenRouter": {
+                    "api_base_url": "https://openrouter.ai/api/v1",
+                    "api_key_env": "OPENROUTER_API_KEY",
+                    "prepare_model_gate_run_args": ["--backend", "api", "--api-provider", "OpenRouter"],
+                    "requires_model_name": True,
+                }
+            },
+        )
         self.assertEqual(audit["model_readiness"]["next_action"], "run_gate10_then_gate50")
 
     def test_render_expert_summary_states_claims_limits_and_next_action(self):
