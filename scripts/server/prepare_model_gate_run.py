@@ -199,6 +199,8 @@ def render_gate_script(config: GateRunConfig, run_dir: Path, gate_name: str, lim
     ]
     if gate_name == "gate50":
         lines.extend(render_required_decision_check("gate10_summary.json", "gate50", "Gate-10"))
+    elif gate_name == "gate150":
+        lines.extend(render_required_decision_check("gate50_summary.json", "gate150", "Gate-50"))
     lines.extend(
         [
         "python scripts/server/run_sharded_tqa.py \\",
