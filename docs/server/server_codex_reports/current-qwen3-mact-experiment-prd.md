@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 17:04:22 CST
+最后更新：2026-07-30 17:09:20 CST
 
 ## 0. 下一次启动先看这里
 
@@ -16,6 +16,7 @@
 | 当前本机模型候选 | `/home/ubuntu/models` 只有 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | WTQ+TabFact+CRT 已完成 600 条：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708` |
+| full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集和 WTQ 压缩桶诊断已保存到 MACT；WTQ 是主要负贡献，TabFact 不是当前优先优化项，CRT 是主要正贡献 |
 | 下一步建议 | 当前不要重跑旧本地模型；新增/挂载候选模型或提供外部 API key 后，先跑 myAgent-only Gate-50，再决定是否扩 Gate-150 / paired-200 |
 
 下一次恢复命令入口：
@@ -124,6 +125,9 @@ PRD:
 | MACT blind core100 paired raw/log | completed | WTQ 100/100，TabFact 100/100，CRT 100/100 |
 | core100 eval/paired/summary | completed | overall myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | MACT blind full200 seeded run | completed | full200 目录已完成 WTQ/TabFact/CRT 各 `200/200` raw/eval/paired；overall myAgent `453/600` vs MACT `450/600` |
+| full200 分歧诊断 | completed | `full200_disagreement_diagnostics.md/json` 已保存到 MACT full200 run 目录；WTQ net `-17`，TabFact net `-4`，CRT net `+24` |
+| WTQ discordant 调试子集 | completed | `wtq_discordant_debug_subset_50.jsonl/md` 已保存到 MACT；40 条 `mact_only` + 10 条优先 `neither` |
+| WTQ 压缩桶诊断 | completed | `wtq_compression_bucket_diagnostics.md/json` 已保存到 MACT；MACT-only 中位压缩比例 `0.25`，有 7 条 not-found-like、3 条 header-prediction 信号 |
 | 当前本机模型候选盘点 | completed | 仅发现 4 个本地模型目录；3 个非主模型已 no-go；未发现可直接使用的 DeepSeek/OpenAI/DashScope API key |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
@@ -343,7 +347,44 @@ full200 三数据集最终合计：
 
 这个阶段结果确认：full200 三数据集总体 myAgent 略高于 MACT，平均 token 仍明显更低。但 dataset-level 只有 CRT 超过，WTQ 和 TabFact 仍低于 MACT；因此不能写“三个数据集全部超过”，也不能把 full200 结论写成强显著全面胜出。
 
-## 6.2 当前执行流程
+## 6.2 full200 分歧诊断
+
+诊断文件：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/full200_disagreement_diagnostics.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/full200_disagreement_diagnostics.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_discordant_debug_subset_50.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_discordant_debug_subset_50.jsonl
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_compression_bucket_diagnostics.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/wtq_compression_bucket_diagnostics.json
+```
+
+same-ID paired 分歧净贡献：
+
+| dataset | both_correct | myAgent-only | MACT-only | neither | net |
+|---|---:|---:|---:|---:|---:|
+| WTQ | 108 | 23 | 40 | 29 | -17 |
+| TabFact | 178 | 7 | 11 | 4 | -4 |
+| CRT | 101 | 36 | 12 | 51 | +24 |
+| Overall | 387 | 66 | 63 | 84 | +3 |
+
+问题定位：
+
+1. WTQ 是 full200 没有通过 dataset-level acceptance 的主要负贡献，MACT-only 40 行集中在 temporal、count、superlative、negation_logic 标签；后续若做算法修复，应优先做 WTQ discordant subset，而不是继续 TabFact。
+2. TabFact full200 只净落后 4 行，且没有 MACT execution failure；当前不值得再优先局部优化。
+3. CRT 是主要正贡献，myAgent-only 36 行、MACT-only 12 行；说明 selective-risk pipeline 的强项主要体现在 CRT 复杂比较/闭集问答。
+4. MACT 的 5 个 WTQ context overflow 已严格保留为失败行；如果做 repaired baseline，必须新建口径，不能覆盖 canonical full200。
+5. WTQ MACT-only 行的压缩比例中位数为 `0.25`，低于 both-correct 的 `0.375`；同时出现 7 条 not-found-like prediction 和 3 条 header-prediction。当前合理假设是检索/压缩后的信息定位不足叠加计数、时间边界错误，需要用 WTQ 子集继续验证，不能直接大改。
+
+下一步问题排查建议：
+
+1. 使用已保存的 WTQ 50 条 discordant subset 作为下一轮错误分类和 red/green 输入。
+2. 先人工/脚本标注错误类型：列选择、行压缩、计数边界、时间比较、最终答案归一化、shortcut 误触发。
+3. 只接受能跨样本解释问题的通用修复，不接受按 ID/table 硬编码。
+4. 修复必须先在 discordant subset 做 red/green，再回归 frozen150 和 blind200；没有 red/green 证据前不要重跑 600 条。
+
+## 6.3 当前执行流程
 
 当前流程按“先小样本判方向，再只给候选方案补 paired”的原则执行：
 
@@ -386,6 +427,12 @@ full200 三数据集最终合计：
 | `crt_mact_full200_paired.json` | CRT full200 same-ID paired：myAgent `137/200` vs MACT `113/200` |
 | `overall_mact_full200_summary.json` | WTQ/TabFact/CRT full200 final summary：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708` |
 | `overall_mact_full200_summary.stdout.json` | 生成 overall 时保留的 stdout 镜像 |
+| `full200_disagreement_diagnostics.md` | full200 same-ID 分歧诊断；WTQ/TabFact/CRT 分歧净贡献和代表样本 |
+| `full200_disagreement_diagnostics.json` | full200 same-ID 分歧诊断结构化结果，供后续 WTQ discordant subset 抽样 |
+| `wtq_discordant_debug_subset_50.md` | WTQ 调试子集摘要：40 条 MACT-only + 10 条 prioritized neither |
+| `wtq_discordant_debug_subset_50.jsonl` | WTQ 调试子集结构化输入，保留 table、gold、myAgent/MACT prediction、tags、metrics |
+| `wtq_compression_bucket_diagnostics.md` | WTQ 按 paired bucket 的压缩比例、策略和 prediction signal 诊断摘要 |
+| `wtq_compression_bucket_diagnostics.json` | WTQ 压缩桶结构化诊断，用于定位检索/压缩和答案类型问题 |
 | `qwen3_32b_4gpu_2svc.env` | CRT tail 并行 shard 使用的两服务 vLLM profile：GPU `4,5;6,7`，端口 `8000/8001` |
 | `shards/crt_121_160.jsonl` | CRT shard input rows 121-160 |
 | `shards/crt_161_200.jsonl` | CRT shard input rows 161-200 |
@@ -564,6 +611,9 @@ full200 对 MACT 是全面显著胜出。
 | P0 | WTQ full200 完成后生成 eval/paired | done: WTQ full200 myAgent `131/200` vs MACT `148/200` |
 | P1 | TabFact full200 tail100 | done: TabFact `200/200` raw/eval/paired complete |
 | P1 | CRT full200 tail100 | done: CRT `200/200` raw/eval/paired complete；121-160/161-200 用双服务 shard 并行 |
+| P1 | full200 分歧诊断 | done: 诊断文件保存到 MACT full200 run；确认 WTQ 是主要负贡献，TabFact 暂不优先 |
+| P1 | WTQ discordant subset 根因分析 | ready: 50 条调试子集已保存，下一步先分类错误类型，再决定是否改代码 |
+| P1 | WTQ 压缩/预测信号诊断 | done: MACT-only 中 not-found-like/header prediction 明显集中；下一步验证检索/压缩是否漏关键行列 |
 | P1 | 新模型筛选 | waiting: 当前本地 3 个非主模型已 no-go；除非新增/挂载模型或提供外部 API key，否则不继续启动模型 |
 | P2 | 正式实验方案定稿 | pending: 使用 full200 结果修订专家材料措辞和 gate-based 正式实验方案；正式跑只扩最终候选，不做全模型全量枚举 |
 
@@ -598,6 +648,7 @@ CRT full200:     myAgent 137/200 vs MACT 113/200
 4. 当前本机没有未测候选模型，不建议启动服务重跑 Qwen3-14B-AWQ、Qwen2.5-14B-AWQ 或 Qwen2.5-3B-Instruct。
 5. 若新增模型，先跑 myAgent-only Gate-50；只有 overall 接近或超过 Qwen3-32B，且失败率不超过 2%，才扩 Gate-150。
 6. 只有 Gate-150 仍有竞争力的最终候选，才补 MACT same-ID paired-200。
+7. 若当前代码继续优化，应优先 WTQ discordant subset；不要再把 TabFact 当作首要优化目标。
 
 ## 12. 如果服务器清空后的恢复方式
 
