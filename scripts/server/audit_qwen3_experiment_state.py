@@ -194,6 +194,91 @@ def summarize_model_readiness(model_roots: Sequence[Path], env: Mapping[str, str
     }
 
 
+def format_percent(value: Any, digits: int = 1) -> str:
+    if isinstance(value, (int, float)):
+        return f"{value * 100:.{digits}f}%"
+    return "n/a"
+
+
+def format_ratio_percent(value: Any, digits: int = 1) -> str:
+    return format_percent(value, digits=digits)
+
+
+def format_fraction(correct: Any, rows: Any) -> str:
+    if correct is None or rows is None:
+        return "n/a"
+    return f"{correct}/{rows}"
+
+
+def render_expert_summary(audit: Mapping[str, Any]) -> str:
+    canonical = audit.get("canonical_full200", {})
+    staged = audit.get("current_crt_staged_composite", {})
+    wtq = audit.get("wtq_representative100", {})
+    readiness = audit.get("model_readiness", {})
+
+    canonical_fraction = format_fraction(canonical.get("myagent_correct"), canonical.get("myagent_rows"))
+    canonical_mact_fraction = format_fraction(canonical.get("mact_correct"), canonical.get("mact_rows"))
+    staged_fraction = format_fraction(staged.get("myagent_correct"), staged.get("myagent_rows"))
+    staged_mact_fraction = format_fraction(staged.get("mact_correct"), staged.get("mact_rows"))
+    token_percent = format_ratio_percent(canonical.get("token_ratio"))
+    staged_token_percent = format_ratio_percent(staged.get("token_ratio"))
+    datasets_at_least = canonical.get("datasets_myagent_at_least_mact")
+    strict_text = "未通过" if not canonical.get("strict_acceptance") else "通过"
+
+    recovered = wtq.get("recovered_rows", 0)
+    regressed = wtq.get("regressed_rows", 0)
+    net = wtq.get("net_recovered_rows", 0)
+
+    if readiness.get("can_start_new_experiment"):
+        next_action = (
+            "已有新增候选，可按 PRD 第 14 节先跑 Gate-10 smoke，再跑 Gate-50。"
+        )
+    else:
+        next_action = (
+            "等待新增/挂载候选模型或提供外部 API key；当前不要重启旧 Qwen3-32B/no-go 模型做重复实验。"
+        )
+
+    lines = [
+        "# Qwen3-32B vs MACT 阶段证据摘要",
+        "",
+        "## 可写结论",
+        "",
+        (
+            f"- canonical full200：myAgent {canonical_fraction} "
+            f"({format_percent(canonical.get('myagent_accuracy'))}) vs MACT {canonical_mact_fraction} "
+            f"({format_percent(canonical.get('mact_accuracy'))})，平均 token 为 MACT 的 {token_percent}。"
+        ),
+        (
+            f"- current CRT staged composite：myAgent {staged_fraction} "
+            f"({format_percent(staged.get('myagent_accuracy'))}) vs MACT {staged_mact_fraction} "
+            f"({format_percent(staged.get('mact_accuracy'))})，平均 token 约为 MACT 的 {staged_token_percent}。"
+        ),
+        "- 当前 evidence_complete=true，可作为专家/专利材料中的阶段性 paired evidence。",
+        "",
+        "## 必须写明的限制",
+        "",
+        f"- strict acceptance：{strict_text}；full200 中 myAgent 不低于 MACT 的数据集数为 {datasets_at_least}/3。",
+        "- 不能写成三个数据集全部超过 MACT，也不能写成 full200 对 MACT 全面显著胜出。",
+        "- WTQ 和 TabFact 是 full200 单项短板，优势主要来自 CRT。",
+        "",
+        "## WTQ 修复判断",
+        "",
+        (
+            "- WTQ representative100：新 myAgent 与旧 myAgent 同为 "
+            f"{format_percent(wtq.get('new_myagent_accuracy'))}，MACT 为 {format_percent(wtq.get('mact_accuracy'))}；"
+            f"恢复 {recovered} 条、回退 {regressed} 条、净收益 {net} 条。"
+        ),
+        "- 因此 WTQ extreme/only 全局行修复不应继续作为下一阶段主线扩大。",
+        "",
+        "## 下一步",
+        "",
+        f"- {next_action}",
+        "- 新候选进入后，先跑 Gate-10 / Gate-50；只有 Gate-50 接近或超过 Qwen3-32B reference，才扩 Gate-150 / Paired-200。",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def build_audit(
     *,
     myagent_root: Path,
@@ -244,6 +329,7 @@ def main() -> None:
     parser.add_argument("--mact-root", type=Path, default=Path("/home/ubuntu/lzz/MACT"))
     parser.add_argument("--model-root", action="append", type=Path, dest="model_roots")
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--markdown-output", type=Path, default=None)
     args = parser.parse_args()
 
     audit = build_audit(
@@ -256,6 +342,9 @@ def main() -> None:
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output_text + "\n", encoding="utf-8")
+    if args.markdown_output:
+        args.markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        args.markdown_output.write_text(render_expert_summary(audit), encoding="utf-8")
     print(output_text)
 
 

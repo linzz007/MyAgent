@@ -8,7 +8,7 @@ import unittest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "server"))
 
-from audit_qwen3_experiment_state import build_audit  # noqa: E402
+from audit_qwen3_experiment_state import build_audit, render_expert_summary  # noqa: E402
 
 
 FULL200_RUN = "qwen3_32b_blind200_mact_full200_20260723"
@@ -254,6 +254,62 @@ class AuditQwen3ExperimentStateTests(unittest.TestCase):
         )
         self.assertEqual(audit["model_readiness"]["api_keys_present"], ["OPENAI_API_KEY"])
         self.assertEqual(audit["model_readiness"]["next_action"], "run_gate10_then_gate50")
+
+    def test_render_expert_summary_states_claims_limits_and_next_action(self):
+        """Catches patent-facing summaries that overclaim or omit gating instructions."""
+        audit = {
+            "evidence_complete": True,
+            "canonical_full200": {
+                "myagent_correct": 453,
+                "myagent_rows": 600,
+                "myagent_accuracy": 0.755,
+                "mact_correct": 450,
+                "mact_rows": 600,
+                "mact_accuracy": 0.75,
+                "token_ratio": 0.5707972803761415,
+                "datasets_myagent_at_least_mact": 1,
+                "strict_acceptance": False,
+            },
+            "current_crt_staged_composite": {
+                "present": True,
+                "myagent_correct": 456,
+                "myagent_rows": 600,
+                "myagent_accuracy": 0.76,
+                "mact_correct": 450,
+                "mact_rows": 600,
+                "mact_accuracy": 0.75,
+                "token_ratio": 0.5708240748441236,
+            },
+            "wtq_representative100": {
+                "new_myagent_accuracy": 0.69,
+                "old_myagent_accuracy": 0.69,
+                "mact_accuracy": 0.79,
+                "recovered_rows": 3,
+                "regressed_rows": 3,
+                "net_recovered_rows": 0,
+                "decision": "do_not_expand_wtq_extreme_only_fix",
+            },
+            "model_readiness": {
+                "can_start_new_experiment": False,
+                "untested_local_models": [],
+                "api_keys_present": [],
+                "next_action": "wait_for_new_model_or_api_key",
+            },
+        }
+
+        summary = render_expert_summary(audit)
+
+        self.assertIn("Qwen3-32B vs MACT 阶段证据摘要", summary)
+        self.assertIn("canonical full200", summary)
+        self.assertIn("453/600", summary)
+        self.assertIn("450/600", summary)
+        self.assertIn("57.1%", summary)
+        self.assertIn("current CRT staged composite", summary)
+        self.assertIn("456/600", summary)
+        self.assertIn("不能写成三个数据集全部超过 MACT", summary)
+        self.assertIn("WTQ representative100", summary)
+        self.assertIn("恢复 3 条、回退 3 条、净收益 0 条", summary)
+        self.assertIn("等待新增/挂载候选模型或提供外部 API key", summary)
 
 
 if __name__ == "__main__":
