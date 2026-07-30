@@ -435,7 +435,10 @@ def main() -> None:
     model_name = args.model_name
     readiness_audit = args.readiness_audit.resolve() if args.readiness_audit else None
     if args.backend == "local-vllm" and model_id is None and readiness_audit is not None:
-        model_name, model_id = model_from_readiness_audit(readiness_audit, model_name)
+        try:
+            model_name, model_id = model_from_readiness_audit(readiness_audit, model_name)
+        except ValueError as exc:
+            parser.error(str(exc))
         model_id = model_id.resolve()
     if not model_name and model_id is not None:
         model_name = model_id.name

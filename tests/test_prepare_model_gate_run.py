@@ -389,6 +389,50 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertEqual(manifest["served_model_name"], "deepseek-r1-distill-qwen-32b-local")
             self.assertEqual(manifest["readiness_audit_path"], str(readiness_audit.resolve()))
 
+    def test_cli_multiple_readiness_models_without_model_name_fails_without_traceback(self):
+        """Catches confusing Python tracebacks when readiness audit has multiple local candidates."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            readiness_audit = tmp / "latest_experiment_readiness_audit.json"
+            myagent_root.mkdir()
+            readiness_audit.write_text(
+                json.dumps(
+                    {
+                        "model_readiness": {
+                            "untested_local_model_paths": {
+                                "DeepSeek-R1-Distill-Qwen-32B": [str(tmp / "deepseek")],
+                                "Mistral-7B-Instruct": [str(tmp / "mistral")],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "scripts" / "server" / "prepare_model_gate_run.py"),
+                    "--myagent-root",
+                    str(myagent_root),
+                    "--mact-root",
+                    str(mact_root),
+                    "--readiness-audit",
+                    str(readiness_audit),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertNotIn("Traceback", completed.stderr)
+            self.assertIn("--model-name", completed.stderr)
+            self.assertIn("DeepSeek-R1-Distill-Qwen-32B", completed.stderr)
+            self.assertIn("Mistral-7B-Instruct", completed.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

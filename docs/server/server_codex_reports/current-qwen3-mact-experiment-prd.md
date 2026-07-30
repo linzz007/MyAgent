@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 21:57:15 CST
+最后更新：2026-07-30 22:02:09 CST
 
 ## 0. 下一次启动先看这里
 
@@ -12,7 +12,7 @@
 |---|---|
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
-| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 21:57 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
+| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 22:02 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
 | 下次本地模型服务资源 | 用户 2026-07-30 21:25 再次确认当前服务器卡还够，可使用 GPU `4,5` 和 GPU `6,7` 各启动一个模型服务；默认端口 `8000/8001` |
 | 当前本机模型候选 | 2026-07-30 21:44 复扫 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计 JSON 现在包含 `local_model_paths` 和 `untested_local_model_paths`，新候选出现时可直接取路径传给 `--model-id` |
 | 当前外部 API 候选 | 2026-07-30 21:53 环境变量未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量；`prepare_model_gate_run.py` 已支持 OpenRouter provider 默认 `api_base_url` / `api_key_env` |
@@ -199,7 +199,7 @@ WTQ extreme/only 修复代表性 WTQ100 回归 run:
 | Gate summary 失败/缺答案计数修复 | completed | `summarize_model_gate_results.py` 将门禁异常行从 `max(failed, missing)` 改为 `min(rows, failed + missing)`；新增单测覆盖 failed 与 missing 同时出现并超过 2% failure budget 的 no-go 场景 |
 | 已测本地模型重跑保护 | completed | `experiment_model_registry.py` 集中维护 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ / Instruct-AWQ、Qwen2.5-3B-Instruct 等已测本地模型及 alias；`audit_qwen3_experiment_state.py` 和 `prepare_model_gate_run.py` 共用该 registry，避免 alias 目录被误判为新候选；人工复现实验必须加 `--allow-known-tested-model`，并在 manifest 标记 override |
 | 嵌套模型目录发现修复 | completed | `audit_qwen3_experiment_state.py` 的本地模型发现从一层目录扩展为有限深度递归，并特殊处理 HuggingFace cache 的 `models--org--repo` 目录；readiness JSON 输出 `local_model_paths` / `untested_local_model_paths`，新增单测覆盖挂载盘嵌套未测模型不被漏掉且能返回可启动路径 |
-| readiness 自动准备 Gate run | completed | `prepare_model_gate_run.py` 支持 `--readiness-audit latest_experiment_readiness_audit.json --model-name <name>`，自动从 `untested_local_model_paths` 取本地模型路径并派生 `model_tag` / `served_model_name`，减少下次扩容后手工复制路径错误 |
+| readiness 自动准备 Gate run | completed | `prepare_model_gate_run.py` 支持 `--readiness-audit latest_experiment_readiness_audit.json --model-name <name>`，自动从 `untested_local_model_paths` 取本地模型路径并派生 `model_tag` / `served_model_name`；如果只有一个未测本地模型可省略 `--model-name`，多个候选漏传时会提示候选列表 |
 | OpenRouter API 默认准备 | completed | `prepare_model_gate_run.py --backend api --api-provider OpenRouter --model-name <provider_model>` 会自动填 `api_base_url=https://openrouter.ai/api/v1` 和 `api_key_env=OPENROUTER_API_KEY`；新增单测确保不会写入真实 key；未知 provider 缺少 endpoint/key env 时会给出 CLI 参数提示而不是 Python traceback |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
@@ -799,7 +799,7 @@ myAgent blind200 stress result：
 | numpy array 输出序列化 | done | `_to_serializable` 和 `_json_default` 优先使用 `.tolist()`，避免多元素 numpy array `.item()` 崩溃 |
 | 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json` 和 `latest_expert_evidence_summary.md`；模型发现支持有限深度递归和 HuggingFace cache 目录，并输出可直接用于 `prepare_model_gate_run.py --model-id` 的模型路径；已测模型判断使用共享 registry 的 alias 规则，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
 | 外部 API key readiness 检测 | done | `audit_qwen3_experiment_state.py` 已从只识别 OpenAI/DeepSeek/DashScope/Anthropic 扩展到 SiliconFlow、Moonshot、Zhipu、Gemini/Google、OpenRouter、Together、Fireworks、Ark、Volc、Azure OpenAI，并新增单测保护 |
-| 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地 vLLM 模型或外部 OpenAI-compatible API 候选生成 MACT run 目录、Gate-10/Gate-50/Gate-150 runner 和 `gate_run_manifest.json`；本地默认 GPU `4,5;6,7`、端口 `8000/8001`，外部 API backend 只写 `api.env`/`api_profile.md` 且不写 secret；本地候选可直接用 `--readiness-audit` + `--model-name` 从审计 JSON 自动取 `model_id` 并派生 tag/served name；OpenRouter API 候选可只传 `--api-provider OpenRouter --model-name <provider_model>`，脚本自动填 `https://openrouter.ai/api/v1` 和 `OPENROUTER_API_KEY`；未知 API provider 若未显式传 `--api-base-url` / `--api-key-env` 会直接报 CLI 参数错误；已测本地模型默认按共享 registry 拒绝，显式 override 会写入 manifest；Gate-50 runner 会拒绝缺失或未通过 Gate-10 summary 的 run，Gate-150 runner 会拒绝缺失或未通过 Gate-50 summary 的 run |
+| 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地 vLLM 模型或外部 OpenAI-compatible API 候选生成 MACT run 目录、Gate-10/Gate-50/Gate-150 runner 和 `gate_run_manifest.json`；本地默认 GPU `4,5;6,7`、端口 `8000/8001`，外部 API backend 只写 `api.env`/`api_profile.md` 且不写 secret；本地候选可直接用 `--readiness-audit` 从审计 JSON 自动取 `model_id` 并派生 tag/served name，多个候选时再补 `--model-name`；OpenRouter API 候选可只传 `--api-provider OpenRouter --model-name <provider_model>`，脚本自动填 `https://openrouter.ai/api/v1` 和 `OPENROUTER_API_KEY`；未知 API provider 若未显式传 `--api-base-url` / `--api-key-env` 会直接报 CLI 参数错误；已测本地模型默认按共享 registry 拒绝，显式 override 会写入 manifest；Gate-50 runner 会拒绝缺失或未通过 Gate-10 summary 的 run，Gate-150 runner 会拒绝缺失或未通过 Gate-50 summary 的 run |
 | Paired-200 run 准备脚本 | done | `scripts/server/prepare_paired200_run.py` 可从 Gate run manifest 生成最终候选的 MACT paired-200 run 目录，包含 myAgent blind200 runner、WTQ/TabFact/CRT MACT one-by-one runner、eval/compare 脚本、README 和 `paired200_run_manifest.json`；脚本会拒绝缺失 `gate150_summary.json` 或 `decision != paired200` 的 Gate run；外部 API 场景只记录 key 变量名，不写 secret |
 | Gate-10/Gate-50/Gate-150 自动决策脚本 | done | `scripts/server/summarize_model_gate_results.py` 汇总 WTQ/TabFact/CRT eval；异常行按 `min(rows, failed + missing)` 保守计入 failure rate；Gate-10 只检查三数据集完整、失败/缺答案和 token 是否过线，输出 `no-go` 或 `gate50`；Gate-50 按 reference `124/150`、failure <= `2%`、token ratio <= `0.75` 输出 `no-go` 或 `gate150`；Gate-150 按当前 Qwen3-32B frozen150 overall reference `333/450`，并要求至少 2 个数据集达到单项 reference：WTQ `105/150`、TabFact `131/150`、CRT `97/150`，输出 `no-go` 或 `paired200` |
 | 本地临时文件 ignore | done | `configs/server/*.env.bak.*` 和早期 context 试跑脚本 `restart_qwen3_context_try.sh` 不进入远端恢复路径；正式入口以 PRD 第 14 节和 `prepare_model_gate_run.py` 为准 |
@@ -868,7 +868,7 @@ full200 对 MACT 是全面显著胜出。
 | P1 | WTQ 行列覆盖与候选修复排序 | done: 优先级为 extreme/only 全局行策略，其次行匹配扫描全行；大范围列保留不是第一优先 |
 | P1 | WTQ 最小修复实验 | done measured debug50: old myAgent `0/50` -> new `14/50`；但 MACT `40/50`，这是 adversarial subset，不能作为总体结论 |
 | P1 | WTQ 代表性回归切片 | done measured: 新 myAgent `69/100`，旧 myAgent `69/100`，MACT `79/100`；恢复 3 条、回退 3 条，无净提升 |
-| P1 | 新模型筛选 | waiting: 2026-07-30 21:48 已递归复扫模型目录/缓存/挂载盘和外部 API env，仍无新增候选；GPU `4,5` 和 `6,7` 可用于下个候选的双服务 Gate；若审计 JSON 出现 `untested_local_model_paths`，可用 `prepare_model_gate_run.py --readiness-audit ... --model-name ...` 直接生成 Gate run |
+| P1 | 新模型筛选 | waiting: 2026-07-30 22:01 已递归复扫模型目录/缓存/挂载盘和外部 API env，仍无新增候选；GPU `4,5` 和 `6,7` 可用于下个候选的双服务 Gate；若审计 JSON 出现 `untested_local_model_paths`，可用 `prepare_model_gate_run.py --readiness-audit ...` 直接生成 Gate run，多个候选时补 `--model-name` |
 | P1 | Gate-150 到 paired-200 准备链路 | done: `run_gate150.sh` 会生成 `gate150_summary.json/md`；只有 overall 和至少 2 个 dataset-level reference 均通过、decision 为 `paired200` 时，`prepare_paired200_run.py` 才会从 Gate run 目录生成 same-ID paired-200 正式候选目录、runner、eval/compare 和 manifest；no-go 或缺 summary 会直接报错 |
 | P2 | 正式实验方案定稿 | ready next: 本文第 13 节已给出 gate-based 方案；下一步只在新增模型/API 后执行，不做全模型全量枚举 |
 
@@ -1027,7 +1027,6 @@ audit = json.loads(Path("/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_bli
 print(json.dumps(audit["model_readiness"].get("untested_local_model_paths", {}), ensure_ascii=False, indent=2))
 PY
 
-MODEL_NAME=<model_name_from_untested_local_model_paths>
 READINESS_AUDIT=/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json
 
 cd /home/ubuntu/lzz/MyAgent
@@ -1037,11 +1036,10 @@ conda activate lzz-agent
 python scripts/server/prepare_model_gate_run.py \
   --myagent-root /home/ubuntu/lzz/MyAgent \
   --mact-root /home/ubuntu/lzz/MACT \
-  --readiness-audit "$READINESS_AUDIT" \
-  --model-name "$MODEL_NAME"
+  --readiness-audit "$READINESS_AUDIT"
 ```
 
-脚本会从 `untested_local_model_paths[MODEL_NAME]` 取第一个路径作为 `model_id`，并自动派生 `model_tag` 和 `served_model_name`。如果 `MODEL_NAME` 命中已测试本地模型，脚本会报 `known tested local model` 并停止；只有为了复现实验且已经在本文档/MACT ledger 里写明原因时，才加 `--allow-known-tested-model`。
+如果 `untested_local_model_paths` 只有一个模型，脚本会直接取第一个路径作为 `model_id`，并自动派生 `model_tag` 和 `served_model_name`。如果有多个模型，脚本会提示候选列表，此时重跑命令并补 `--model-name <model_name_from_untested_local_model_paths>`。如果模型命中已测试本地模型，脚本会报 `known tested local model` 并停止；只有为了复现实验且已经在本文档/MACT ledger 里写明原因时，才加 `--allow-known-tested-model`。
 
 脚本会输出 `run_dir`。后续从 `gate_run_manifest.json` 或 stdout 取 `RUN_DIR`：
 
