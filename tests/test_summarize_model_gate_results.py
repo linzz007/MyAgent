@@ -114,6 +114,27 @@ class SummarizeModelGateResultsTests(unittest.TestCase):
         self.assertIn("124/150", markdown)
         self.assertIn("gate150", markdown)
 
+    def test_no_go_when_failed_and_missing_together_exceed_failure_budget(self):
+        """Catches undercounting bad rows by taking max(failed, missing) instead of a conservative total."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            gate_root = Path(tmp_name) / "myagent_gate50"
+            write_eval(gate_root / "eval" / "wtq_model_eval.json", samples=50, accuracy=0.70, tokens=6000, failed=2, missing=2)
+            write_eval(gate_root / "eval" / "tabfact_model_eval.json", samples=50, accuracy=0.96, tokens=2500)
+            write_eval(gate_root / "eval" / "crt_model_eval.json", samples=50, accuracy=0.82, tokens=9000)
+
+            summary = summarize_gate_results(
+                gate_root=gate_root,
+                model_tag="anomalous_candidate",
+                reference_correct=124,
+                mact_avg_tokens=11262.41,
+            )
+
+        self.assertEqual(summary["overall"]["correct"], 124)
+        self.assertEqual(summary["per_dataset"]["wtq"]["bad_rows"], 4)
+        self.assertEqual(summary["overall"]["bad_rows"], 4)
+        self.assertEqual(summary["decision"], "no-go")
+        self.assertIn("failure_rate_above_threshold", summary["decision_reasons"])
+
     def test_paired200_when_gate150_reference_failures_and_tokens_pass(self):
         """Catches Gate-150 results that still require hand-written paired-200 decisions."""
         with tempfile.TemporaryDirectory() as tmp_name:

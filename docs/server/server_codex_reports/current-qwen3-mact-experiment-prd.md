@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 21:19:30 CST
+最后更新：2026-07-30 21:25:09 CST
 
 ## 0. 下一次启动先看这里
 
@@ -13,7 +13,7 @@
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
 | 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 20:56 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
-| 下次本地模型服务资源 | 用户 2026-07-30 20:20 再次确认当前服务器卡还够，可使用 GPU `4,5` 和 GPU `6,7` 各启动一个模型服务；默认端口 `8000/8001` |
+| 下次本地模型服务资源 | 用户 2026-07-30 21:25 再次确认当前服务器卡还够，可使用 GPU `4,5` 和 GPU `6,7` 各启动一个模型服务；默认端口 `8000/8001` |
 | 当前本机模型候选 | 2026-07-30 20:56 复扫 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；历史表里的 `Qwen2.5-14B-AWQ` 是该 Instruct-AWQ 本地目录的实验简称 |
 | 当前外部 API 候选 | 2026-07-30 20:56 环境变量未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量 |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
@@ -81,7 +81,7 @@ MyAgent 仓库只负责代码、脚本和本文档；除非临时调试，不再
 /home/ubuntu/lzz/MyAgent/scripts/server/summarize_model_gate_results.py
 ```
 
-作用：`audit_qwen3_experiment_state.py` 从 MACT 已保存结果生成机器可读 JSON 和中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”。`prepare_model_gate_run.py` 在新增本地模型或外部 API 候选后自动生成 MACT run 目录、双服务 vLLM env 或 API profile、Gate-10/Gate-50/Gate-150 runner 和 manifest，但不启动服务；`run_gate10.sh`、`run_gate50.sh` 和 `run_gate150.sh` 会分别生成 gate summary，且 `run_gate50.sh` 会强制要求 `gate10_summary.json` 的 decision 为 `gate50`，`run_gate150.sh` 会强制要求 `gate50_summary.json` 的 decision 为 `gate150`。`prepare_paired200_run.py` 从 Gate run manifest 生成 MACT paired-200 run 目录、myAgent/MACT runner、eval/compare 脚本和 manifest，同时强制要求 `gate150_summary.json` 存在且 `decision=paired200`，避免 no-go 候选被静默扩样。`summarize_model_gate_results.py` 读取 Gate-10/Gate-50/Gate-150 三个 eval JSON，输出对应 `gate*_summary.json/md`；Gate-10 通过时 decision 为 `gate50`，Gate-50 通过时 decision 为 `gate150`，Gate-150 通过 Qwen3-32B frozen150 overall reference `333/450`，且至少 2 个数据集达到单项 reference 时 decision 为 `paired200`。
+作用：`audit_qwen3_experiment_state.py` 从 MACT 已保存结果生成机器可读 JSON 和中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”。`prepare_model_gate_run.py` 在新增本地模型或外部 API 候选后自动生成 MACT run 目录、双服务 vLLM env 或 API profile、Gate-10/Gate-50/Gate-150 runner 和 manifest，但不启动服务；`run_gate10.sh`、`run_gate50.sh` 和 `run_gate150.sh` 会分别生成 gate summary，且 `run_gate50.sh` 会强制要求 `gate10_summary.json` 的 decision 为 `gate50`，`run_gate150.sh` 会强制要求 `gate50_summary.json` 的 decision 为 `gate150`。`prepare_paired200_run.py` 从 Gate run manifest 生成 MACT paired-200 run 目录、myAgent/MACT runner、eval/compare 脚本和 manifest，同时强制要求 `gate150_summary.json` 存在且 `decision=paired200`，避免 no-go 候选被静默扩样。`summarize_model_gate_results.py` 读取 Gate-10/Gate-50/Gate-150 三个 eval JSON，输出对应 `gate*_summary.json/md`；Gate summary 的异常行按 `min(rows, num_failed_exec + num_missing_answer)` 保守统计，避免 failed 与 missing 同时出现时低估失败率；Gate-10 通过时 decision 为 `gate50`，Gate-50 通过时 decision 为 `gate150`，Gate-150 通过 Qwen3-32B frozen150 overall reference `333/450`，且至少 2 个数据集达到单项 reference 时 decision 为 `paired200`。
 
 ## 1. 最大目标
 
@@ -195,6 +195,7 @@ WTQ extreme/only 修复代表性 WTQ100 回归 run:
 | canonical myAgent full200 raw artifacts 迁移到 MACT | completed | canonical full200 的 myAgent 源不是单一目录：WTQ 使用 `qwen3_32b_current_blind200_wtq200_shortcutfix2_20260721`，TabFact/CRT 使用 `qwen3_32b_current_blind200_20260721`；三项 raw/merged/eval/shards/logs 已复制到 MACT `qwen3_32b_canonical_myagent_full200_raw_artifacts_20260730_2008` |
 | 完整 MyAgent server_runs 归档到 MACT | completed | `/home/ubuntu/lzz/MyAgent/outputs/server_runs` 已压缩到 MACT `myagent_server_runs_archive_20260730_2020`；覆盖 43 个 run 目录、433 个文件、源目录 241M、压缩包约 27M，归档前敏感信息扫描无命中 |
 | 恢复就绪审计 | completed | `latest_recovery_readiness_audit.md` 已保存到 MACT full200 run；确认关键 PRD、summary、paired、diagnostics、Gate summaries/raw artifacts 均可从 Git 恢复，full200 本地 extra 仅为 tmp/pid |
+| Gate summary 失败/缺答案计数修复 | completed | `summarize_model_gate_results.py` 将门禁异常行从 `max(failed, missing)` 改为 `min(rows, failed + missing)`；新增单测覆盖 failed 与 missing 同时出现并超过 2% failure budget 的 no-go 场景 |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
 ## 6. 当前 core100 实时状态
@@ -795,7 +796,7 @@ myAgent blind200 stress result：
 | 外部 API key readiness 检测 | done | `audit_qwen3_experiment_state.py` 已从只识别 OpenAI/DeepSeek/DashScope/Anthropic 扩展到 SiliconFlow、Moonshot、Zhipu、Gemini/Google、OpenRouter、Together、Fireworks、Ark、Volc、Azure OpenAI，并新增单测保护 |
 | 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地 vLLM 模型或外部 OpenAI-compatible API 候选生成 MACT run 目录、Gate-10/Gate-50/Gate-150 runner 和 `gate_run_manifest.json`；本地默认 GPU `4,5;6,7`、端口 `8000/8001`，外部 API backend 只写 `api.env`/`api_profile.md` 且不写 secret；Gate-50 runner 会拒绝缺失或未通过 Gate-10 summary 的 run，Gate-150 runner 会拒绝缺失或未通过 Gate-50 summary 的 run |
 | Paired-200 run 准备脚本 | done | `scripts/server/prepare_paired200_run.py` 可从 Gate run manifest 生成最终候选的 MACT paired-200 run 目录，包含 myAgent blind200 runner、WTQ/TabFact/CRT MACT one-by-one runner、eval/compare 脚本、README 和 `paired200_run_manifest.json`；脚本会拒绝缺失 `gate150_summary.json` 或 `decision != paired200` 的 Gate run；外部 API 场景只记录 key 变量名，不写 secret |
-| Gate-10/Gate-50/Gate-150 自动决策脚本 | done | `scripts/server/summarize_model_gate_results.py` 汇总 WTQ/TabFact/CRT eval；Gate-10 只检查三数据集完整、失败/缺答案和 token 是否过线，输出 `no-go` 或 `gate50`；Gate-50 按 reference `124/150`、failure <= `2%`、token ratio <= `0.75` 输出 `no-go` 或 `gate150`；Gate-150 按当前 Qwen3-32B frozen150 overall reference `333/450`，并要求至少 2 个数据集达到单项 reference：WTQ `105/150`、TabFact `131/150`、CRT `97/150`，输出 `no-go` 或 `paired200` |
+| Gate-10/Gate-50/Gate-150 自动决策脚本 | done | `scripts/server/summarize_model_gate_results.py` 汇总 WTQ/TabFact/CRT eval；异常行按 `min(rows, failed + missing)` 保守计入 failure rate；Gate-10 只检查三数据集完整、失败/缺答案和 token 是否过线，输出 `no-go` 或 `gate50`；Gate-50 按 reference `124/150`、failure <= `2%`、token ratio <= `0.75` 输出 `no-go` 或 `gate150`；Gate-150 按当前 Qwen3-32B frozen150 overall reference `333/450`，并要求至少 2 个数据集达到单项 reference：WTQ `105/150`、TabFact `131/150`、CRT `97/150`，输出 `no-go` 或 `paired200` |
 | 本地临时文件 ignore | done | `configs/server/*.env.bak.*` 和早期 context 试跑脚本 `restart_qwen3_context_try.sh` 不进入远端恢复路径；正式入口以 PRD 第 14 节和 `prepare_model_gate_run.py` 为准 |
 | 完整 MyAgent 输出归档 | done | 2026-07-30 已将 MyAgent `outputs/server_runs` 完整压缩到 MACT `myagent_server_runs_archive_20260730_2020`，并生成 `SHA256SUMS`、`inventory.tsv`、`run_directories.txt`、`source_size.txt` 和 README |
 
@@ -1068,7 +1069,7 @@ Gate-50 决策：
 
 | decision | condition |
 |---|---|
-| no-go | overall 明显低于 Qwen3-32B Gate-50 reference `124/150`，或 failed/missing > `2%`，或 token 明显失控 |
+| no-go | overall 明显低于 Qwen3-32B Gate-50 reference `124/150`，或按 `min(rows, failed + missing)` 统计的异常行比例 > `2%`，或 token 明显失控 |
 | Gate-150 | overall 接近或超过 `124/150`，三数据集均完整，失败率 <= `2%` |
 | paired-200 | Gate-150 后仍有竞争力，且值得为专家/专利主表补 MACT same-ID 对照 |
 

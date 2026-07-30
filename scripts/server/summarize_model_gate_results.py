@@ -50,7 +50,7 @@ def summarize_eval(path: Path) -> dict[str, Any]:
         "avg_total_tokens": float(evaluation.get("avg_total_tokens") or 0.0),
         "num_failed_exec": failed,
         "num_missing_answer": missing,
-        "bad_rows": max(failed, missing),
+        "bad_rows": min(rows, failed + missing),
     }
 
 
