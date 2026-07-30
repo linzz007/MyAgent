@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 19:23:18 CST
+最后更新：2026-07-30 19:28:51 CST
 
 ## 0. 下一次启动先看这里
 
@@ -17,6 +17,7 @@
 | 当前外部 API 候选 | 2026-07-30 19:23 环境变量未发现 OpenAI / DeepSeek / DashScope / Anthropic 可用 key |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 原 full200：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708`；替换为 2026-07-30 当前 CRT 复跑后：myAgent `456/600` vs MACT `450/600`，token ratio `0.5708` |
+| 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 下一步建议 | 结果已校验并关停进程；当前不要重启旧 Qwen3-32B/no-go 模型做重复实验。只有新增/挂载候选模型或提供外部 API key 后，才按第 14 节启动双服务 Gate-10/Gate-50 |
 
@@ -32,6 +33,14 @@ git checkout main
 git pull
 
 wc -l /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/*_mact_full200.jsonl
+python scripts/server/audit_qwen3_experiment_state.py \
+  --myagent-root /home/ubuntu/lzz/MyAgent \
+  --mact-root /home/ubuntu/lzz/MACT \
+  --model-root /home/ubuntu/models \
+  --model-root /home/ubuntu/.cache/huggingface \
+  --model-root /data \
+  --model-root /mnt \
+  --output /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json
 ```
 
 当前 full200 已完成；恢复后优先复核这些结果文件，不要再启动 `run_crt_resume.sh`：
@@ -53,6 +62,14 @@ wc -l /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_
 新增本地 vLLM 模型时，默认按当前服务器资源开两个服务：GPU `4,5` 绑定端口 `8000`，GPU `6,7` 绑定端口 `8001`；Gate-10 / Gate-50 直接传两个 endpoint 并行跑。
 
 MyAgent 仓库只负责代码、脚本和本文档；除非临时调试，不再把新实验主结果分散写到 MyAgent 的 `outputs/server_runs/`。
+
+当前可复核审计脚本：
+
+```text
+/home/ubuntu/lzz/MyAgent/scripts/server/audit_qwen3_experiment_state.py
+```
+
+作用：从 MACT 已保存的 full200 summary、当前 CRT 复跑 comparison、WTQ representative100 comparison 和本机模型/API 状态生成机器可读 JSON，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”。
 
 ## 1. 最大目标
 
@@ -506,6 +523,7 @@ same-ID paired 分歧净贡献：
 | `crt_mact_full200_paired.json` | CRT full200 same-ID paired：myAgent `137/200` vs MACT `113/200` |
 | `overall_mact_full200_summary.json` | WTQ/TabFact/CRT full200 final summary：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708` |
 | `overall_mact_full200_summary.stdout.json` | 生成 overall 时保留的 stdout 镜像 |
+| `latest_experiment_readiness_audit.json` | 由 MyAgent 审计脚本生成的机器可读状态：evidence complete、canonical full200/staged composite 指标、新模型 readiness |
 | `full200_disagreement_diagnostics.md` | full200 same-ID 分歧诊断；WTQ/TabFact/CRT 分歧净贡献和代表样本 |
 | `full200_disagreement_diagnostics.json` | full200 same-ID 分歧诊断结构化结果，供后续 WTQ discordant subset 抽样 |
 | `wtq_discordant_debug_subset_50.md` | WTQ 调试子集摘要：40 条 MACT-only + 10 条 prioritized neither |
@@ -721,6 +739,7 @@ myAgent blind200 stress result：
 | WTQ extreme/only 全局行触发 | done measured debug50 | `TableCompressor._needs_global_rows` 加入 `only/top/first/last/earliest/latest`；debug50 新 myAgent `14/50`，18 条新触发全行中 `10/18` 正确，strict recoverable 中 `7/10` 正确 |
 | numpy array execution result 判断 | done | `verification_gap` 改为显式判断非空执行结果，避免 numpy array truth-value 崩溃 |
 | numpy array 输出序列化 | done | `_to_serializable` 和 `_json_default` 优先使用 `.tolist()`，避免多元素 numpy array `.item()` 崩溃 |
+| 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json`，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
 
 ## 9. 当前可以写的结论
 
