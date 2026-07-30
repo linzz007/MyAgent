@@ -108,6 +108,11 @@ class PreparePaired200RunTests(unittest.TestCase):
                 script = paired_run / script_name
                 self.assertTrue(script.stat().st_mode & stat.S_IXUSR)
                 subprocess.run(["bash", "-n", str(script)], check=True)
+            healthcheck_script = paired_run / "healthcheck_services.sh"
+            self.assertTrue(healthcheck_script.stat().st_mode & stat.S_IXUSR)
+            subprocess.run(["bash", "-n", str(healthcheck_script)], check=True)
+            healthcheck_text = healthcheck_script.read_text(encoding="utf-8")
+            self.assertIn('bash scripts/server/healthcheck_vllm_pool.sh "$SOURCE_GATE_RUN_DIR/vllm.env"', healthcheck_text)
 
             myagent_script = (paired_run / "run_myagent_paired200.sh").read_text(encoding="utf-8")
             self.assertIn("--limit-per-task 200", myagent_script)
@@ -180,11 +185,22 @@ class PreparePaired200RunTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             myagent_script = (paired_run / "run_myagent_paired200.sh").read_text(encoding="utf-8")
             mact_script = (paired_run / "run_mact_wtq_paired200.sh").read_text(encoding="utf-8")
+            healthcheck_script = paired_run / "healthcheck_services.sh"
+            self.assertTrue(healthcheck_script.stat().st_mode & stat.S_IXUSR)
+            subprocess.run(["bash", "-n", str(healthcheck_script)], check=True)
+            healthcheck_text = healthcheck_script.read_text(encoding="utf-8")
+            self.assertIn('source "$SOURCE_GATE_RUN_DIR/api.env"', healthcheck_text)
+            self.assertIn("healthcheck_openai_compatible.py", healthcheck_text)
+            self.assertIn('--api-base-url "$API_BASE_URL"', healthcheck_text)
+            self.assertIn('--model "$SERVED_MODEL_NAME"', healthcheck_text)
+            self.assertIn('--api-key-env "$API_KEY_ENV"', healthcheck_text)
             self.assertIn('source "$SOURCE_GATE_RUN_DIR/api.env"', myagent_script)
             self.assertIn('--endpoints "$API_BASE_URL"', myagent_script)
             self.assertIn('--api-key-env "$API_KEY_ENV"', myagent_script)
             self.assertIn("--api-base \"$API_BASE_URL\"", mact_script)
             self.assertIn("--api-key-env \"$API_KEY_ENV\"", mact_script)
+            readme = (paired_run / "README.md").read_text(encoding="utf-8")
+            self.assertLess(readme.index("healthcheck_services.sh"), readme.index("run_myagent_paired200.sh"))
 
             all_text = "\n".join(
                 path.read_text(encoding="utf-8")

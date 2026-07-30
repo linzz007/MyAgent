@@ -184,6 +184,38 @@ def render_mact_script(
     )
 
 
+def render_healthcheck_script(config: Paired200Config, run_dir: Path, manifest: Mapping[str, Any]) -> str:
+    backend = str(manifest.get("backend") or "local-vllm")
+    lines = [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        f"MYAGENT_ROOT={shell_quote(config.myagent_root)}",
+        f"PAIRED_RUN_DIR={shell_quote(run_dir)}",
+        f"SOURCE_GATE_RUN_DIR={shell_quote(config.gate_run_dir)}",
+        'cd "$MYAGENT_ROOT"',
+        "source /home/ubuntu/miniconda3/etc/profile.d/conda.sh",
+        "conda activate lzz-agent",
+        render_source_line(backend),
+    ]
+    if backend == "api":
+        lines.extend(
+            [
+                "python scripts/server/healthcheck_openai_compatible.py \\",
+                '  --api-base-url "$API_BASE_URL" \\',
+                '  --model "$SERVED_MODEL_NAME" \\',
+                '  --api-key-env "$API_KEY_ENV"',
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                'bash scripts/server/healthcheck_vllm_pool.sh "$SOURCE_GATE_RUN_DIR/vllm.env"',
+            ]
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def render_eval_compare_script(
     config: Paired200Config,
     run_dir: Path,
@@ -243,6 +275,7 @@ def render_readme(config: Paired200Config, run_dir: Path, manifest: Mapping[str,
             "Run order:",
             "",
             "```bash",
+            f"bash {run_dir}/healthcheck_services.sh",
             f"bash {run_dir}/run_myagent_paired200.sh",
             f"bash {run_dir}/run_mact_wtq_paired200.sh",
             f"bash {run_dir}/run_mact_tabfact_paired200.sh",
@@ -305,6 +338,7 @@ def prepare_paired200_run(config: Paired200Config) -> dict[str, Any]:
         (run_dir / subdir).mkdir()
 
     write_executable(run_dir / "run_myagent_paired200.sh", render_myagent_script(config, run_dir, gate_manifest))
+    write_executable(run_dir / "healthcheck_services.sh", render_healthcheck_script(config, run_dir, gate_manifest))
     dataset_paths = {
         "wtq": config.wtq_dataset,
         "tabfact": config.tabfact_dataset,

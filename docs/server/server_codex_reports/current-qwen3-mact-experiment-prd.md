@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 22:33:10 CST
+最后更新：2026-07-30 22:36:30 CST
 
 ## 0. 下一次启动先看这里
 
@@ -12,7 +12,7 @@
 |---|---|
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
-| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 22:33 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
+| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 22:36 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
 | 下次本地模型服务资源 | 用户 2026-07-30 22:07 再次确认当前服务器卡还够，可使用 GPU `4,5` 和 GPU `6,7` 各启动一个模型服务；默认端口 `8000/8001` |
 | 当前本机模型候选 | 2026-07-30 22:08 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计 JSON 现在包含 `local_model_paths` 和 `untested_local_model_paths`，新候选出现时可直接取路径传给 `--model-id` |
 | 当前外部 API 候选 | 2026-07-30 22:32 环境变量和现有实际 env 文件未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量，默认检查 `MyAgent/configs/server/*.env` 中的真实 env 文件并跳过 `.example`/`.bak`，也支持额外 `--env-file`，只读取 key 名不输出 secret 值；`experiment_api_registry.py` 统一维护 OpenRouter 默认 `api_base_url` / `api_key_env`，readiness JSON 会在 key 出现时输出 `api_provider_profiles`，`prepare_model_gate_run.py --backend api --readiness-audit ... --model-name <provider_model>` 可直接消费该 profile；API Gate healthcheck 会在 Gate-10 前检查 key、`/models` endpoint 和目标 model 是否列出 |
@@ -203,7 +203,7 @@ WTQ extreme/only 修复代表性 WTQ100 回归 run:
 | 嵌套模型目录发现修复 | completed | `audit_qwen3_experiment_state.py` 的本地模型发现从一层目录扩展为有限深度递归，并特殊处理 HuggingFace cache 的 `models--org--repo` 目录；readiness JSON 输出 `local_model_paths` / `untested_local_model_paths`，新增单测覆盖挂载盘嵌套未测模型不被漏掉且能返回可启动路径 |
 | readiness 自动准备 Gate run | completed | `prepare_model_gate_run.py` 支持 `--readiness-audit latest_experiment_readiness_audit.json --model-name <name>`，自动从 `untested_local_model_paths` 取本地模型路径并派生 `model_tag` / `served_model_name`；如果只有一个未测本地模型可省略 `--model-name`，多个候选漏传时会提示候选列表 |
 | OpenRouter API 默认准备 | completed | `experiment_api_registry.py` 集中维护 OpenRouter 的 `api_base_url=https://openrouter.ai/api/v1` 和 `api_key_env=OPENROUTER_API_KEY`；`audit_qwen3_experiment_state.py` 在检测到 `OPENROUTER_API_KEY` 时会输出 `api_provider_profiles.OpenRouter`；`prepare_model_gate_run.py --backend api --api-provider OpenRouter --model-name <provider_model>` 会自动填配置且不会写入真实 key；2026-07-30 22:24 起也可用 `--backend api --readiness-audit latest_experiment_readiness_audit.json --model-name <provider_model>` 自动消费单个 provider profile；未知 provider 缺少 endpoint/key env 时会给出 CLI 参数提示而不是 Python traceback |
-| 外部 API healthcheck 前置 | completed | 2026-07-30 22:30 新增 `healthcheck_openai_compatible.py`；`prepare_model_gate_run.py` 生成的 API `healthcheck_services.sh` 不再只检查 key env 存在，会调用 `/models` 验证 endpoint 连通性和目标 model 是否列出，错误信息不打印 secret |
+| 外部 API healthcheck 前置 | completed | 2026-07-30 22:30 新增 `healthcheck_openai_compatible.py`；`prepare_model_gate_run.py` 生成的 API `healthcheck_services.sh` 不再只检查 key env 存在，会调用 `/models` 验证 endpoint 连通性和目标 model 是否列出，错误信息不打印 secret；2026-07-30 22:36 `prepare_paired200_run.py` 生成的 paired-200 目录也包含 `healthcheck_services.sh`，API 场景复用 `/models` 检查，本地 vLLM 场景复用 `healthcheck_vllm_pool.sh`，README run order 要求先 healthcheck 再跑 myAgent/MACT 200 行 |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
 ## 6. 当前 core100 实时状态
@@ -803,7 +803,7 @@ myAgent blind200 stress result：
 | 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json` 和 `latest_expert_evidence_summary.md`；模型发现支持有限深度递归和 HuggingFace cache 目录，并输出可直接用于 `prepare_model_gate_run.py --model-id` 的模型路径；已测模型判断使用共享 registry 的 alias 规则，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
 | 外部 API key readiness 检测 | done | `audit_qwen3_experiment_state.py` 已从只识别 OpenAI/DeepSeek/DashScope/Anthropic 扩展到 SiliconFlow、Moonshot、Zhipu、Gemini/Google、OpenRouter、Together、Fireworks、Ark、Volc、Azure OpenAI；API key 名和 OpenRouter 默认 provider profile 均来自 `experiment_api_registry.py`；2026-07-30 22:20 已支持默认扫描 `MyAgent/configs/server/*.env` 真实 env 文件、跳过 `.example`/`.bak`，同时保留额外 `--env-file`，检测只记录 key 名和文件路径不泄漏 secret 值，新增单测保护 |
 | 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地 vLLM 模型或外部 OpenAI-compatible API 候选生成 MACT run 目录、Gate-10/Gate-50/Gate-150 runner 和 `gate_run_manifest.json`；本地默认 GPU `4,5;6,7`、端口 `8000/8001`，外部 API backend 只写 `api.env`/`api_profile.md` 且不写 secret；本地候选可直接用 `--readiness-audit` 从审计 JSON 自动取 `model_id` 并派生 tag/served name，多个候选时再补 `--model-name`；OpenRouter API 候选可只传 `--api-provider OpenRouter --model-name <provider_model>`，或在 readiness audit 已含单个 `api_provider_profiles` 时传 `--backend api --readiness-audit ... --model-name <provider_model>`，脚本自动填 `https://openrouter.ai/api/v1` 和 `OPENROUTER_API_KEY`；API `healthcheck_services.sh` 会在 Gate-10 前检查 key、endpoint 和 model 列表；未知 API provider 若未显式传 `--api-base-url` / `--api-key-env` 会直接报 CLI 参数错误；已测本地模型默认按共享 registry 拒绝，显式 override 会写入 manifest；Gate-50 runner 会拒绝缺失或未通过 Gate-10 summary 的 run，Gate-150 runner 会拒绝缺失或未通过 Gate-50 summary 的 run |
-| Paired-200 run 准备脚本 | done | `scripts/server/prepare_paired200_run.py` 可从 Gate run manifest 生成最终候选的 MACT paired-200 run 目录，包含 myAgent blind200 runner、WTQ/TabFact/CRT MACT one-by-one runner、eval/compare 脚本、README 和 `paired200_run_manifest.json`；脚本会拒绝缺失 `gate150_summary.json` 或 `decision != paired200` 的 Gate run；外部 API 场景只记录 key 变量名，不写 secret |
+| Paired-200 run 准备脚本 | done | `scripts/server/prepare_paired200_run.py` 可从 Gate run manifest 生成最终候选的 MACT paired-200 run 目录，包含 healthcheck、myAgent blind200 runner、WTQ/TabFact/CRT MACT one-by-one runner、eval/compare 脚本、README 和 `paired200_run_manifest.json`；脚本会拒绝缺失 `gate150_summary.json` 或 `decision != paired200` 的 Gate run；外部 API 场景只记录 key 变量名，不写 secret，且在 README run order 中先检查 API key/endpoint/model 再跑 200 行 |
 | Gate-10/Gate-50/Gate-150 自动决策脚本 | done | `scripts/server/summarize_model_gate_results.py` 汇总 WTQ/TabFact/CRT eval；异常行按 `min(rows, failed + missing)` 保守计入 failure rate；Gate-10 只检查三数据集完整、失败/缺答案和 token 是否过线，输出 `no-go` 或 `gate50`；Gate-50 按 reference `124/150`、failure <= `2%`、token ratio <= `0.75` 输出 `no-go` 或 `gate150`；Gate-150 按当前 Qwen3-32B frozen150 overall reference `333/450`，并要求至少 2 个数据集达到单项 reference：WTQ `105/150`、TabFact `131/150`、CRT `97/150`，输出 `no-go` 或 `paired200` |
 | 本地临时文件 ignore | done | `configs/server/*.env.bak.*` 和早期 context 试跑脚本 `restart_qwen3_context_try.sh` 不进入远端恢复路径；正式入口以 PRD 第 14 节和 `prepare_model_gate_run.py` 为准 |
 | 完整 MyAgent 输出归档 | done | 2026-07-30 已将 MyAgent `outputs/server_runs` 完整压缩到 MACT `myagent_server_runs_archive_20260730_2020`，并生成 `SHA256SUMS`、`inventory.tsv`、`run_directories.txt`、`source_size.txt` 和 README |
