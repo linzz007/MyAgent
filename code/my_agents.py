@@ -1734,7 +1734,8 @@ class TableCompressor:
         return bool(
             re.search(
                 r"\b(how many|how often|total number|average|mean|sum|proportion|percentage|"
-                r"at least|at most|most|least|highest|lowest|all|any|none)\b",
+                r"at least|at most|most|least|highest|lowest|top|first|last|earliest|latest|"
+                r"only|all|any|none)\b",
                 question,
                 flags=re.I,
             )

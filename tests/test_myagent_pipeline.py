@@ -838,6 +838,43 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(result.compression_info["compressed_rows"], 20)
 
+    def test_wtq_extreme_and_only_questions_keep_all_rows(self):
+        df = pd.DataFrame(
+            {
+                "Driver": [f"Driver {idx}" for idx in range(20)],
+                "Car": ["Ford"] * 14 + ["Saab"] + ["BMW"] * 5,
+                "Date": [f"2020-01-{idx + 1:02d}" for idx in range(20)],
+                "Speed": [100 + idx for idx in range(20)],
+            }
+        )
+        questions = [
+            "Which driver drove the only Saab car?",
+            "What was the latest date listed?",
+            "Which driver finished first?",
+            "Who had the top speed?",
+        ]
+
+        for question in questions:
+            with self.subTest(question=question):
+                state = TQASessionState(
+                    question=question,
+                    df=df,
+                    table_schema=_build_table_schema(df),
+                )
+                state.original_df = df
+                state.route_type = "COMPLEX"
+                state.difficulty_level = "easy"
+                state.structural_features = {
+                    "selected_rows": [],
+                    "selected_cols": ["Driver", "Car", "Date", "Speed"],
+                    "cell_score": 0.1,
+                }
+
+                result = TableCompressor(max_easy_rows=12).compress(state)
+
+                self.assertEqual(result.compression_info["compressed_rows"], 20)
+                self.assertIn("global_rows", result.compression_info["strategy"])
+
     def test_relative_row_compression_keeps_neighbor_and_label_column(self):
         df = pd.DataFrame(
             {
