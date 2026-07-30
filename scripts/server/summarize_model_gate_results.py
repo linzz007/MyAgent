@@ -11,10 +11,10 @@ from typing import Any, Mapping
 
 TASKS = ("wtq", "tabfact", "crt")
 DEFAULT_REFERENCE_CORRECT = 124
-DEFAULT_REFERENCE_CORRECT_BY_GATE = {"gate50": 124, "gate150": 333}
+DEFAULT_REFERENCE_CORRECT_BY_GATE = {"gate10": 0, "gate50": 124, "gate150": 333}
 DEFAULT_DATASET_REFERENCE_CORRECT_BY_GATE = {"gate150": {"wtq": 105, "tabfact": 131, "crt": 97}}
 DEFAULT_MIN_DATASETS_AT_REFERENCE_BY_GATE = {"gate150": 2}
-PASS_DECISION_BY_GATE = {"gate50": "gate150", "gate150": "paired200"}
+PASS_DECISION_BY_GATE = {"gate10": "gate50", "gate50": "gate150", "gate150": "paired200"}
 DEFAULT_MACT_AVG_TOKENS = 11262.41
 DEFAULT_MAX_FAILURE_RATE = 0.02
 DEFAULT_MAX_TOKEN_RATIO = 0.75
@@ -249,7 +249,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--gate-root", type=Path, required=True)
     parser.add_argument("--model-tag", required=True)
-    parser.add_argument("--gate-name", choices=("gate50", "gate150"), default="gate50")
+    parser.add_argument("--gate-name", choices=("gate10", "gate50", "gate150"), default="gate50")
     parser.add_argument("--reference-correct", type=int, default=None)
     parser.add_argument("--mact-avg-tokens", type=float, default=DEFAULT_MACT_AVG_TOKENS)
     parser.add_argument("--max-failure-rate", type=float, default=DEFAULT_MAX_FAILURE_RATE)

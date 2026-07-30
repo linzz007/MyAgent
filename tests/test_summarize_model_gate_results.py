@@ -30,6 +30,46 @@ def write_eval(path: Path, *, samples: int, accuracy: float, tokens: float, fail
 
 
 class SummarizeModelGateResultsTests(unittest.TestCase):
+    def test_gate50_when_gate10_smoke_has_all_outputs_low_failures_and_tokens(self):
+        """Catches Gate-10 smoke runs that need a machine-readable go/no-go decision."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            gate_root = Path(tmp_name) / "myagent_gate10"
+            write_eval(gate_root / "eval" / "wtq_model_eval.json", samples=10, accuracy=0.60, tokens=6000)
+            write_eval(gate_root / "eval" / "tabfact_model_eval.json", samples=10, accuracy=0.80, tokens=3000)
+            write_eval(gate_root / "eval" / "crt_model_eval.json", samples=10, accuracy=0.50, tokens=7000)
+
+            summary = summarize_gate_results(
+                gate_root=gate_root,
+                model_tag="smoke_candidate",
+                gate_name="gate10",
+                mact_avg_tokens=11262.41,
+            )
+            markdown = render_markdown(summary)
+
+        self.assertEqual(summary["criteria"]["reference_correct"], 0)
+        self.assertEqual(summary["decision"], "gate50")
+        self.assertIn("gate10_criteria_passed", summary["decision_reasons"])
+        self.assertIn("Gate-10 Summary", markdown)
+        self.assertIn("gate50", markdown)
+
+    def test_no_go_when_gate10_smoke_has_any_bad_rows(self):
+        """Catches expanding from a smoke run with failed execution or missing answers."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            gate_root = Path(tmp_name) / "myagent_gate10"
+            write_eval(gate_root / "eval" / "wtq_model_eval.json", samples=10, accuracy=0.60, tokens=6000)
+            write_eval(gate_root / "eval" / "tabfact_model_eval.json", samples=10, accuracy=0.80, tokens=3000)
+            write_eval(gate_root / "eval" / "crt_model_eval.json", samples=10, accuracy=0.50, tokens=7000, failed=1)
+
+            summary = summarize_gate_results(
+                gate_root=gate_root,
+                model_tag="broken_smoke_candidate",
+                gate_name="gate10",
+                mact_avg_tokens=11262.41,
+            )
+
+        self.assertEqual(summary["decision"], "no-go")
+        self.assertIn("failure_rate_above_threshold", summary["decision_reasons"])
+
     def test_no_go_when_correct_below_reference(self):
         """Catches expanding a model whose Gate-50 accuracy is below the Qwen3-32B reference."""
         with tempfile.TemporaryDirectory() as tmp_name:

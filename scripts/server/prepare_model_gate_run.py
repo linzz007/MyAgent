@@ -160,6 +160,21 @@ def render_service_script(config: GateRunConfig, run_dir: Path, action: str) -> 
     )
 
 
+def render_required_decision_check(summary_name: str, expected_decision: str, label: str) -> list[str]:
+    return [
+        f'if [[ ! -f "$RUN_DIR/{summary_name}" ]]; then',
+        f'  echo "missing {label} summary: $RUN_DIR/{summary_name}" >&2',
+        "  exit 1",
+        "fi",
+        f'{label.upper().replace("-", "_")}_DECISION=$(python -c \'import json,sys; print(json.load(open(sys.argv[1])).get("decision", ""))\' "$RUN_DIR/{summary_name}")',
+        f'if [[ "${{{label.upper().replace("-", "_")}_DECISION}}" != "{expected_decision}" ]]; then',
+        f'  echo "{label} decision must be {expected_decision}; got ${{{label.upper().replace("-", "_")}_DECISION}}" >&2',
+        "  exit 1",
+        "fi",
+        "",
+    ]
+
+
 def render_gate_script(config: GateRunConfig, run_dir: Path, gate_name: str, limit: int) -> str:
     if config.backend == "api":
         source_line = 'source "$RUN_DIR/api.env"'
@@ -181,6 +196,11 @@ def render_gate_script(config: GateRunConfig, run_dir: Path, gate_name: str, lim
         "source /home/ubuntu/miniconda3/etc/profile.d/conda.sh",
         "conda activate lzz-agent",
         source_line,
+    ]
+    if gate_name == "gate50":
+        lines.extend(render_required_decision_check("gate10_summary.json", "gate50", "Gate-10"))
+    lines.extend(
+        [
         "python scripts/server/run_sharded_tqa.py \\",
         "  --repo-root . \\",
         "  --tasks wtq,tabfact,crt \\",
@@ -195,8 +215,9 @@ def render_gate_script(config: GateRunConfig, run_dir: Path, gate_name: str, lim
         f"  --max-replan {config.max_replan} \\",
         f"  --mact-avg-tokens {config.mact_avg_tokens} \\",
         "  --resume",
-    ]
-    if gate_name in {"gate50", "gate150"}:
+        ]
+    )
+    if gate_name in {"gate10", "gate50", "gate150"}:
         lines.extend(
             [
                 "",
@@ -230,6 +251,8 @@ def render_readme(config: GateRunConfig, run_dir: Path) -> str:
             f"bash {run_dir}/run_gate150.sh",
             f"bash {run_dir}/stop_services.sh",
             "```",
+            "",
+            "After Gate-10, inspect `gate10_summary.json` and `gate10_summary.md`. Run `run_gate50.sh` only when Gate-10 decision is `gate50`; the generated Gate-50 runner enforces this.",
             "",
             "After Gate-50, inspect `gate50_summary.json` and `gate50_summary.md` before deciding whether to expand to Gate-150. Run `run_gate150.sh` only for candidates whose Gate-50 decision is `gate150`.",
             "",
