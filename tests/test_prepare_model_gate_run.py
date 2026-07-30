@@ -93,6 +93,86 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertIn("gate50_summary.json", readme)
             self.assertIn("git add -f", readme)
 
+    def test_cli_prepares_external_api_gate_run_without_writing_secret(self):
+        """Catches external API candidates that require manual, non-recoverable script edits."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            run_dir = mact_root / "outputs" / "server_runs" / "openrouter_qwen3_gate50_20260730_210000"
+            myagent_root.mkdir()
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "scripts" / "server" / "prepare_model_gate_run.py"),
+                    "--backend",
+                    "api",
+                    "--myagent-root",
+                    str(myagent_root),
+                    "--mact-root",
+                    str(mact_root),
+                    "--model-tag",
+                    "openrouter_qwen3",
+                    "--served-model-name",
+                    "qwen/qwen3-32b",
+                    "--run-dir",
+                    str(run_dir),
+                    "--api-provider",
+                    "OpenRouter",
+                    "--api-base-url",
+                    "https://openrouter.ai/api/v1",
+                    "--api-key-env",
+                    "OPENROUTER_API_KEY",
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            manifest = json.loads((run_dir / "gate_run_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["backend"], "api")
+            self.assertEqual(manifest["api_provider"], "OpenRouter")
+            self.assertEqual(manifest["endpoints"], ["https://openrouter.ai/api/v1"])
+            self.assertEqual(manifest["api_key_env"], "OPENROUTER_API_KEY")
+            self.assertFalse((run_dir / "vllm.env").exists())
+            self.assertTrue((run_dir / "api.env").exists())
+            self.assertTrue((run_dir / "api_profile.md").exists())
+
+            api_env = (run_dir / "api.env").read_text(encoding="utf-8")
+            self.assertIn("export API_BASE_URL=https://openrouter.ai/api/v1", api_env)
+            self.assertIn("export API_KEY_ENV=OPENROUTER_API_KEY", api_env)
+            self.assertNotIn("present", api_env)
+
+            gate10 = run_dir / "run_gate10.sh"
+            gate50 = run_dir / "run_gate50.sh"
+            gate10_text = gate10.read_text(encoding="utf-8")
+            gate50_text = gate50.read_text(encoding="utf-8")
+            self.assertIn('source "$RUN_DIR/api.env"', gate10_text)
+            self.assertIn('--endpoints "$API_BASE_URL"', gate10_text)
+            self.assertIn('--api-key-env "$API_KEY_ENV"', gate10_text)
+            self.assertIn("summarize_model_gate_results.py", gate50_text)
+
+            for script_name in (
+                "start_services.sh",
+                "healthcheck_services.sh",
+                "run_gate10.sh",
+                "run_gate50.sh",
+                "stop_services.sh",
+            ):
+                script_path = run_dir / script_name
+                self.assertTrue(script_path.stat().st_mode & stat.S_IXUSR)
+                subprocess.run(["bash", "-n", str(script_path)], check=True)
+
+            all_text = "\n".join(
+                path.read_text(encoding="utf-8")
+                for path in run_dir.iterdir()
+                if path.is_file() and path.suffix != ".json"
+            )
+            self.assertNotIn("sk-", all_text)
+            self.assertIn("OPENROUTER_API_KEY", all_text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 20:32:35 CST
+最后更新：2026-07-30 20:38:35 CST
 
 ## 0. 下一次启动先看这里
 
@@ -792,7 +792,7 @@ myAgent blind200 stress result：
 | numpy array 输出序列化 | done | `_to_serializable` 和 `_json_default` 优先使用 `.tolist()`，避免多元素 numpy array `.item()` 崩溃 |
 | 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json` 和 `latest_expert_evidence_summary.md`，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
 | 外部 API key readiness 检测 | done | `audit_qwen3_experiment_state.py` 已从只识别 OpenAI/DeepSeek/DashScope/Anthropic 扩展到 SiliconFlow、Moonshot、Zhipu、Gemini/Google、OpenRouter、Together、Fireworks、Ark、Volc、Azure OpenAI，并新增单测保护 |
-| 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地模型生成 MACT run 目录、`vllm.env`、启动/健康检查/停止脚本、Gate-10/Gate-50 runner 和 `gate_run_manifest.json`；默认 GPU `4,5;6,7`、端口 `8000/8001` |
+| 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地 vLLM 模型或外部 OpenAI-compatible API 候选生成 MACT run 目录、Gate-10/Gate-50 runner 和 `gate_run_manifest.json`；本地默认 GPU `4,5;6,7`、端口 `8000/8001`，外部 API backend 只写 `api.env`/`api_profile.md` 且不写 secret |
 | Gate-50 自动决策脚本 | done | `scripts/server/summarize_model_gate_results.py` 汇总 WTQ/TabFact/CRT eval，按 reference `124/150`、failure <= `2%`、token ratio <= `0.75` 输出 `no-go` 或 `gate150` |
 | 本地临时文件 ignore | done | `configs/server/*.env.bak.*` 和早期 context 试跑脚本 `restart_qwen3_context_try.sh` 不进入远端恢复路径；正式入口以 PRD 第 14 节和 `prepare_model_gate_run.py` 为准 |
 | 完整 MyAgent 输出归档 | done | 2026-07-30 已将 MyAgent `outputs/server_runs` 完整压缩到 MACT `myagent_server_runs_archive_20260730_2020`，并生成 `SHA256SUMS`、`inventory.tsv`、`run_directories.txt`、`source_size.txt` 和 README |
@@ -1085,6 +1085,54 @@ git push origin codex/selective-risk-collaboration
 
 ### 14.2 外部 API 候选模型
 
-如果是 DeepSeek / OpenAI / DashScope 等外部模型，不启动 vLLM；只在 `RUN_DIR` 中保存一个不含 secret 的 `api_profile.md`，记录 provider、base URL、model name、temperature、max tokens 和样本口径。API key 只放环境变量，不写入 Git。
+如果是 DeepSeek / OpenAI / DashScope / OpenRouter / Together / Fireworks 等外部模型，不启动 vLLM。先把 API key 放在环境变量里，不写入任何文件：
 
-执行时把 `--endpoints` 指到外部 OpenAI-compatible base URL，并把 `--api-key-env` 改成对应环境变量。其它 Gate-10/Gate-50/Gate-150/paired-200 条件不变。
+```bash
+API_KEY_ENV=OPENROUTER_API_KEY
+export OPENROUTER_API_KEY='<real-key-only-in-shell>'
+```
+
+再用同一个准备脚本生成外部 API run 目录：
+
+```bash
+MODEL_TAG=<provider_model_tag>
+SERVED_MODEL_NAME=<provider_model_name>
+API_PROVIDER=<provider_name>
+API_BASE_URL=<openai_compatible_base_url_ending_in_v1>
+API_KEY_ENV=<PROVIDER_API_KEY>
+
+cd /home/ubuntu/lzz/MyAgent
+source /home/ubuntu/miniconda3/etc/profile.d/conda.sh
+conda activate lzz-agent
+
+python scripts/server/prepare_model_gate_run.py \
+  --backend api \
+  --myagent-root /home/ubuntu/lzz/MyAgent \
+  --mact-root /home/ubuntu/lzz/MACT \
+  --model-tag "$MODEL_TAG" \
+  --served-model-name "$SERVED_MODEL_NAME" \
+  --api-provider "$API_PROVIDER" \
+  --api-base-url "$API_BASE_URL" \
+  --api-key-env "$API_KEY_ENV"
+```
+
+生成内容：
+
+```text
+api.env          # 只保存 provider/base URL/model/key 变量名，不保存 key 值
+api_profile.md  # 不含 secret 的外部 API profile
+run_gate10.sh
+run_gate50.sh
+gate_run_manifest.json
+```
+
+执行：
+
+```bash
+RUN_DIR=/home/ubuntu/lzz/MACT/outputs/server_runs/<model_tag>_gate50_<timestamp>
+bash "$RUN_DIR/healthcheck_services.sh"
+bash "$RUN_DIR/run_gate10.sh"
+bash "$RUN_DIR/run_gate50.sh"
+```
+
+外部 API Gate-10/Gate-50/Gate-150/paired-200 的扩大条件与本地模型一致。每次阶段结束仍把 raw、eval、summary、profile、ledger 写入 MACT run 目录并 `git add -f "$RUN_DIR"` 后推送。
