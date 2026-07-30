@@ -11,6 +11,8 @@ from typing import Any, Mapping
 
 TASKS = ("wtq", "tabfact", "crt")
 DEFAULT_REFERENCE_CORRECT = 124
+DEFAULT_REFERENCE_CORRECT_BY_GATE = {"gate50": 124, "gate150": 333}
+PASS_DECISION_BY_GATE = {"gate50": "gate150", "gate150": "paired200"}
 DEFAULT_MACT_AVG_TOKENS = 11262.41
 DEFAULT_MAX_FAILURE_RATE = 0.02
 DEFAULT_MAX_TOKEN_RATIO = 0.75
@@ -67,6 +69,8 @@ def choose_decision(
     reference_correct: int,
     max_failure_rate: float,
     max_token_ratio: float,
+    pass_decision: str,
+    pass_reason: str,
 ) -> tuple[str, list[str]]:
     reasons: list[str] = []
     if missing_tasks:
@@ -78,18 +82,34 @@ def choose_decision(
         reasons.append("failure_rate_above_threshold")
     if token_ratio > max_token_ratio:
         reasons.append("token_ratio_above_threshold")
-    return ("no-go", reasons) if reasons else ("gate150", ["gate50_criteria_passed"])
+    return ("no-go", reasons) if reasons else (pass_decision, [pass_reason])
+
+
+def default_reference_for(gate_name: str) -> int:
+    return DEFAULT_REFERENCE_CORRECT_BY_GATE.get(gate_name, DEFAULT_REFERENCE_CORRECT)
+
+
+def pass_decision_for(gate_name: str) -> str:
+    return PASS_DECISION_BY_GATE.get(gate_name, "manual_review")
+
+
+def gate_label(gate_name: str) -> str:
+    if gate_name.startswith("gate") and gate_name[4:].isdigit():
+        return f"Gate-{gate_name[4:]}"
+    return gate_name
 
 
 def summarize_gate_results(
     *,
     gate_root: Path,
     model_tag: str,
-    reference_correct: int = DEFAULT_REFERENCE_CORRECT,
+    gate_name: str = "gate50",
+    reference_correct: int | None = None,
     mact_avg_tokens: float = DEFAULT_MACT_AVG_TOKENS,
     max_failure_rate: float = DEFAULT_MAX_FAILURE_RATE,
     max_token_ratio: float = DEFAULT_MAX_TOKEN_RATIO,
 ) -> dict[str, Any]:
+    resolved_reference_correct = default_reference_for(gate_name) if reference_correct is None else reference_correct
     eval_dir = gate_root / "eval"
     per_dataset: dict[str, dict[str, Any]] = {}
     missing_tasks: list[str] = []
@@ -112,13 +132,16 @@ def summarize_gate_results(
         rows=rows,
         bad_rows=bad_rows,
         token_ratio=token_ratio,
-        reference_correct=reference_correct,
+        reference_correct=resolved_reference_correct,
         max_failure_rate=max_failure_rate,
         max_token_ratio=max_token_ratio,
+        pass_decision=pass_decision_for(gate_name),
+        pass_reason=f"{gate_name}_criteria_passed",
     )
 
     return {
         "model_tag": model_tag,
+        "gate_name": gate_name,
         "gate_root": str(gate_root),
         "per_dataset": per_dataset,
         "missing_tasks": missing_tasks,
@@ -133,7 +156,7 @@ def summarize_gate_results(
             "failure_rate": bad_rows / rows if rows else 1.0,
         },
         "criteria": {
-            "reference_correct": reference_correct,
+            "reference_correct": resolved_reference_correct,
             "max_failure_rate": max_failure_rate,
             "max_token_ratio": max_token_ratio,
         },
@@ -149,7 +172,7 @@ def format_percent(value: float, digits: int = 1) -> str:
 def render_markdown(summary: Mapping[str, Any]) -> str:
     overall = summary["overall"]
     lines = [
-        f"# Gate-50 Summary: {summary['model_tag']}",
+        f"# {gate_label(str(summary.get('gate_name') or 'gate50'))} Summary: {summary['model_tag']}",
         "",
         "| metric | value |",
         "|---|---:|",
@@ -186,7 +209,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--gate-root", type=Path, required=True)
     parser.add_argument("--model-tag", required=True)
-    parser.add_argument("--reference-correct", type=int, default=DEFAULT_REFERENCE_CORRECT)
+    parser.add_argument("--gate-name", choices=("gate50", "gate150"), default="gate50")
+    parser.add_argument("--reference-correct", type=int, default=None)
     parser.add_argument("--mact-avg-tokens", type=float, default=DEFAULT_MACT_AVG_TOKENS)
     parser.add_argument("--max-failure-rate", type=float, default=DEFAULT_MAX_FAILURE_RATE)
     parser.add_argument("--max-token-ratio", type=float, default=DEFAULT_MAX_TOKEN_RATIO)
@@ -197,6 +221,7 @@ def main() -> None:
     summary = summarize_gate_results(
         gate_root=args.gate_root.resolve(),
         model_tag=args.model_tag,
+        gate_name=args.gate_name,
         reference_correct=args.reference_correct,
         mact_avg_tokens=args.mact_avg_tokens,
         max_failure_rate=args.max_failure_rate,

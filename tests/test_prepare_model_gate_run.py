@@ -80,6 +80,10 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertIn("summarize_model_gate_results.py", gate50_text)
             self.assertIn("--output \"$RUN_DIR/gate50_summary.json\"", gate50_text)
             self.assertIn("--markdown-output \"$RUN_DIR/gate50_summary.md\"", gate50_text)
+            self.assertIn("summarize_model_gate_results.py", gate150_text)
+            self.assertIn("--gate-name gate150", gate150_text)
+            self.assertIn("--output \"$RUN_DIR/gate150_summary.json\"", gate150_text)
+            self.assertIn("--markdown-output \"$RUN_DIR/gate150_summary.md\"", gate150_text)
 
             for script_name in (
                 "start_services.sh",
@@ -96,6 +100,7 @@ class PrepareModelGateRunTests(unittest.TestCase):
             readme = (run_dir / "README.md").read_text(encoding="utf-8")
             self.assertIn("Do not commit API keys", readme)
             self.assertIn("gate50_summary.json", readme)
+            self.assertIn("gate150_summary.json", readme)
             self.assertIn("run_gate150.sh", readme)
             self.assertIn("git add -f", readme)
 
@@ -160,7 +165,11 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertIn('--api-key-env "$API_KEY_ENV"', gate10_text)
             self.assertIn("summarize_model_gate_results.py", gate50_text)
             self.assertTrue((run_dir / "run_gate150.sh").exists())
-            self.assertIn('--output-root "$RUN_DIR/myagent_gate150"', (run_dir / "run_gate150.sh").read_text(encoding="utf-8"))
+            gate150_text = (run_dir / "run_gate150.sh").read_text(encoding="utf-8")
+            self.assertIn('--output-root "$RUN_DIR/myagent_gate150"', gate150_text)
+            self.assertIn("summarize_model_gate_results.py", gate150_text)
+            self.assertIn("--gate-name gate150", gate150_text)
+            self.assertIn("--output \"$RUN_DIR/gate150_summary.json\"", gate150_text)
 
             for script_name in (
                 "start_services.sh",

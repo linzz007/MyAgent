@@ -196,16 +196,17 @@ def render_gate_script(config: GateRunConfig, run_dir: Path, gate_name: str, lim
         f"  --mact-avg-tokens {config.mact_avg_tokens} \\",
         "  --resume",
     ]
-    if gate_name == "gate50":
+    if gate_name in {"gate50", "gate150"}:
         lines.extend(
             [
                 "",
                 "python scripts/server/summarize_model_gate_results.py \\",
-                '  --gate-root "$RUN_DIR/myagent_gate50" \\',
+                f'  --gate-root "$RUN_DIR/myagent_{gate_name}" \\',
                 f"  --model-tag {shell_quote(config.model_tag)} \\",
+                f"  --gate-name {gate_name} \\",
                 f"  --mact-avg-tokens {config.mact_avg_tokens} \\",
-                '  --output "$RUN_DIR/gate50_summary.json" \\',
-                '  --markdown-output "$RUN_DIR/gate50_summary.md"',
+                f'  --output "$RUN_DIR/{gate_name}_summary.json" \\',
+                f'  --markdown-output "$RUN_DIR/{gate_name}_summary.md"',
             ]
         )
     lines.append("")
@@ -231,6 +232,8 @@ def render_readme(config: GateRunConfig, run_dir: Path) -> str:
             "```",
             "",
             "After Gate-50, inspect `gate50_summary.json` and `gate50_summary.md` before deciding whether to expand to Gate-150. Run `run_gate150.sh` only for candidates whose Gate-50 decision is `gate150`.",
+            "",
+            "After Gate-150, inspect `gate150_summary.json` and `gate150_summary.md` before creating paired-200. Create paired-200 only for candidates whose Gate-150 decision is `paired200`.",
             "",
             "Do not commit API keys. `vllm.env` contains only a local placeholder key by default.",
             "",

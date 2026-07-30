@@ -74,6 +74,31 @@ class SummarizeModelGateResultsTests(unittest.TestCase):
         self.assertIn("124/150", markdown)
         self.assertIn("gate150", markdown)
 
+    def test_paired200_when_gate150_reference_failures_and_tokens_pass(self):
+        """Catches Gate-150 results that still require hand-written paired-200 decisions."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            gate_root = Path(tmp_name) / "myagent_gate150"
+            write_eval(gate_root / "eval" / "wtq_model_eval.json", samples=150, accuracy=0.70, tokens=6248.95)
+            write_eval(gate_root / "eval" / "tabfact_model_eval.json", samples=150, accuracy=0.88, tokens=2657.49)
+            write_eval(gate_root / "eval" / "crt_model_eval.json", samples=150, accuracy=0.6533333333, tokens=12484.09)
+
+            summary = summarize_gate_results(
+                gate_root=gate_root,
+                model_tag="candidate_model",
+                gate_name="gate150",
+                mact_avg_tokens=11262.41,
+            )
+            markdown = render_markdown(summary)
+
+        self.assertEqual(summary["criteria"]["reference_correct"], 333)
+        self.assertEqual(summary["overall"]["correct"], 335)
+        self.assertEqual(summary["overall"]["rows"], 450)
+        self.assertEqual(summary["decision"], "paired200")
+        self.assertIn("gate150_criteria_passed", summary["decision_reasons"])
+        self.assertIn("Gate-150 Summary", markdown)
+        self.assertIn("335/450", markdown)
+        self.assertIn("paired200", markdown)
+
     def test_incomplete_when_any_dataset_eval_is_missing(self):
         """Catches silent decisions from partial WTQ/TabFact/CRT outputs."""
         with tempfile.TemporaryDirectory() as tmp_name:
