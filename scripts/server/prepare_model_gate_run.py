@@ -37,6 +37,7 @@ class GateRunConfig:
     api_provider: str = ""
     api_base_url: str = ""
     api_key_env: str = ""
+    readiness_audit_path: Path | None = None
     gpu_groups: str = DEFAULT_GPU_GROUPS
     base_port: int = DEFAULT_BASE_PORT
     vllm_api_key: str = DEFAULT_API_KEY
@@ -55,6 +56,31 @@ class GateRunConfig:
 def safe_slug(value: str) -> str:
     slug = re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("_")
     return slug or "model"
+
+
+def default_served_model_name(model_name: str) -> str:
+    return f"{safe_slug(model_name).lower().replace('_', '-')}-local"
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def model_from_readiness_audit(path: Path, model_name: str = "") -> tuple[str, Path]:
+    readiness = read_json(path).get("model_readiness", {})
+    model_paths = readiness.get("untested_local_model_paths", {})
+    if not isinstance(model_paths, dict) or not model_paths:
+        raise ValueError(f"no untested local model paths in readiness audit: {path}")
+    if not model_name:
+        if len(model_paths) != 1:
+            candidates = ", ".join(sorted(model_paths))
+            raise ValueError(f"multiple untested local models; pass --model-name ({candidates})")
+        model_name = next(iter(model_paths))
+    paths = model_paths.get(model_name)
+    if not isinstance(paths, list) or not paths:
+        candidates = ", ".join(sorted(model_paths))
+        raise ValueError(f"model_name not found in readiness audit: {model_name}; candidates: {candidates}")
+    return model_name, Path(paths[0])
 
 
 def known_tested_local_model_key(config: GateRunConfig) -> str | None:
@@ -321,6 +347,7 @@ def build_manifest(config: GateRunConfig, run_dir: Path) -> dict[str, Any]:
         "model_id": str(config.model_id) if config.model_id is not None else None,
         "model_tag": config.model_tag,
         "served_model_name": config.served_model_name,
+        "readiness_audit_path": str(config.readiness_audit_path) if config.readiness_audit_path is not None else None,
         "api_provider": config.api_provider or None,
         "api_base_url": config.api_base_url.rstrip("/") if config.api_base_url else None,
         "api_key_env": config.api_key_env or None,
@@ -373,8 +400,10 @@ def main() -> None:
     parser.add_argument("--mact-root", type=Path, default=Path("/home/ubuntu/lzz/MACT"))
     parser.add_argument("--backend", choices=("local-vllm", "api"), default="local-vllm")
     parser.add_argument("--model-id", type=Path, default=None)
-    parser.add_argument("--model-tag", required=True)
-    parser.add_argument("--served-model-name", required=True)
+    parser.add_argument("--model-name", default="")
+    parser.add_argument("--model-tag", default="")
+    parser.add_argument("--served-model-name", default="")
+    parser.add_argument("--readiness-audit", type=Path, default=None)
     parser.add_argument("--run-dir", type=Path, default=None)
     parser.add_argument("--api-provider", default="")
     parser.add_argument("--api-base-url", default="")
@@ -388,17 +417,32 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    model_id = args.model_id.resolve() if args.model_id else None
+    model_name = args.model_name
+    readiness_audit = args.readiness_audit.resolve() if args.readiness_audit else None
+    if args.backend == "local-vllm" and model_id is None and readiness_audit is not None:
+        model_name, model_id = model_from_readiness_audit(readiness_audit, model_name)
+        model_id = model_id.resolve()
+    if not model_name and model_id is not None:
+        model_name = model_id.name
+
+    model_tag = safe_slug(args.model_tag or model_name)
+    served_model_name = args.served_model_name or (default_served_model_name(model_name) if model_name else "")
+    if not model_tag or not served_model_name:
+        parser.error("--model-tag and --served-model-name are required unless --model-id or --readiness-audit provides a model name")
+
     config = GateRunConfig(
         myagent_root=args.myagent_root.resolve(),
         mact_root=args.mact_root.resolve(),
-        model_tag=safe_slug(args.model_tag),
-        served_model_name=args.served_model_name,
-        model_id=args.model_id.resolve() if args.model_id else None,
+        model_tag=model_tag,
+        served_model_name=served_model_name,
+        model_id=model_id,
         run_dir=args.run_dir.resolve() if args.run_dir else None,
         backend=args.backend,
         api_provider=args.api_provider,
         api_base_url=args.api_base_url,
         api_key_env=args.api_key_env,
+        readiness_audit_path=readiness_audit,
         gpu_groups=args.gpu_groups,
         base_port=args.base_port,
         allow_known_tested_model=args.allow_known_tested_model,

@@ -258,6 +258,58 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertNotIn("sk-", all_text)
             self.assertIn("OPENROUTER_API_KEY", all_text)
 
+    def test_cli_prepares_local_gate_run_from_readiness_audit(self):
+        """Catches manually copying model paths from readiness audit into the Gate prep command."""
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = Path(tmp_name)
+            myagent_root = tmp / "MyAgent"
+            mact_root = tmp / "MACT"
+            model_dir = tmp / "mounted" / "vendor" / "DeepSeek-R1-Distill-Qwen-32B"
+            run_dir = mact_root / "outputs" / "server_runs" / "deepseek_auto_gate50"
+            readiness_audit = tmp / "latest_experiment_readiness_audit.json"
+            myagent_root.mkdir()
+            model_dir.mkdir(parents=True)
+            (model_dir / "config.json").write_text("{}", encoding="utf-8")
+            readiness_audit.write_text(
+                json.dumps(
+                    {
+                        "model_readiness": {
+                            "untested_local_model_paths": {
+                                "DeepSeek-R1-Distill-Qwen-32B": [str(model_dir)],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "scripts" / "server" / "prepare_model_gate_run.py"),
+                    "--myagent-root",
+                    str(myagent_root),
+                    "--mact-root",
+                    str(mact_root),
+                    "--readiness-audit",
+                    str(readiness_audit),
+                    "--model-name",
+                    "DeepSeek-R1-Distill-Qwen-32B",
+                    "--run-dir",
+                    str(run_dir),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            manifest = json.loads((run_dir / "gate_run_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["model_id"], str(model_dir))
+            self.assertEqual(manifest["model_tag"], "DeepSeek-R1-Distill-Qwen-32B")
+            self.assertEqual(manifest["served_model_name"], "deepseek-r1-distill-qwen-32b-local")
+            self.assertEqual(manifest["readiness_audit_path"], str(readiness_audit.resolve()))
+
 
 if __name__ == "__main__":
     unittest.main()
