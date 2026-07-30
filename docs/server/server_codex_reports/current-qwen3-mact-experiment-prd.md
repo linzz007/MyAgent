@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 19:17:42 CST
+最后更新：2026-07-30 19:23:18 CST
 
 ## 0. 下一次启动先看这里
 
@@ -12,12 +12,13 @@
 |---|---|
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
-| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；GPU 4-7 显存已释放 |
-| 当前本机模型候选 | `/home/ubuntu/models` 只有 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go |
+| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 19:23 复核 GPU 0-7 均空闲 |
+| 当前本机模型候选 | 扫描 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go |
+| 当前外部 API 候选 | 2026-07-30 19:23 环境变量未发现 OpenAI / DeepSeek / DashScope / Anthropic 可用 key |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 原 full200：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708`；替换为 2026-07-30 当前 CRT 复跑后：myAgent `456/600` vs MACT `450/600`，token ratio `0.5708` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
-| 下一步建议 | 结果已校验并关停进程，下一步只需从 GitHub 恢复后查看本文档和 MACT run 目录；WTQ extreme/only 修复代表性前 100 条无净提升，暂不把 WTQ 单点优化作为下一阶段主方向 |
+| 下一步建议 | 结果已校验并关停进程；当前不要重启旧 Qwen3-32B/no-go 模型做重复实验。只有新增/挂载候选模型或提供外部 API key 后，才按第 14 节启动双服务 Gate-10/Gate-50 |
 
 下一次恢复命令入口：
 
@@ -157,6 +158,7 @@ WTQ extreme/only 修复代表性 WTQ100 回归 run:
 | 当前 MyAgent CRT full200 复跑 | completed measured | 新 myAgent `140/200`，旧 myAgent `137/200`，MACT `113/200`；new/MACT token ratio `0.8461`，new/old token ratio `1.0001`；failed/missing 为 0 |
 | numpy array runtime 边界修复 | completed | debug50 的 `nu-4299` 暴露 `verification_gap` 和 JSON 序列化对 numpy array 的崩溃；已加单测并修复 |
 | 当前本机模型候选盘点 | completed | 仅发现 4 个本地模型目录；3 个非主模型已 no-go；未发现可直接使用的 DeepSeek/OpenAI/DashScope API key |
+| 2026-07-30 19:23 继续执行审计 | completed | 两仓库已同步到远端；GPU 0-7 空闲；无 vLLM/runner 进程；常见模型目录和缓存未发现新候选；环境变量未发现可用外部 API key |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
 ## 6. 当前 core100 实时状态
@@ -783,7 +785,7 @@ full200 对 MACT 是全面显著胜出。
 | P1 | WTQ 行列覆盖与候选修复排序 | done: 优先级为 extreme/only 全局行策略，其次行匹配扫描全行；大范围列保留不是第一优先 |
 | P1 | WTQ 最小修复实验 | done measured debug50: old myAgent `0/50` -> new `14/50`；但 MACT `40/50`，这是 adversarial subset，不能作为总体结论 |
 | P1 | WTQ 代表性回归切片 | done measured: 新 myAgent `69/100`，旧 myAgent `69/100`，MACT `79/100`；恢复 3 条、回退 3 条，无净提升 |
-| P1 | 新模型筛选 | waiting: 当前本地 3 个非主模型已 no-go；除非新增/挂载模型或提供外部 API key，否则不继续启动模型 |
+| P1 | 新模型筛选 | waiting: 2026-07-30 19:23 已复扫模型目录/缓存和外部 API env，仍无新增候选；除非新增/挂载模型或提供外部 API key，否则不继续启动模型 |
 | P2 | 正式实验方案定稿 | ready next: 本文第 13 节已给出 gate-based 方案；下一步只在新增模型/API 后执行，不做全模型全量枚举 |
 
 ## 11. 当前决策建议
