@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 20:13:09 CST
+最后更新：2026-07-30 20:24:40 CST
 
 ## 0. 下一次启动先看这里
 
@@ -12,8 +12,8 @@
 |---|---|
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
-| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 20:13 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
-| 下次本地模型服务资源 | 用户 2026-07-30 确认当前服务器卡还够，可使用 GPU `4,5` 和 GPU `6,7` 各启动一个模型服务；默认端口 `8000/8001` |
+| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 20:24 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
+| 下次本地模型服务资源 | 用户 2026-07-30 20:20 再次确认当前服务器卡还够，可使用 GPU `4,5` 和 GPU `6,7` 各启动一个模型服务；默认端口 `8000/8001` |
 | 当前本机模型候选 | 2026-07-30 19:53 复扫 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go |
 | 当前外部 API 候选 | 2026-07-30 19:53 环境变量未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini 可用 key |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
@@ -22,6 +22,7 @@
 | 最新专家证据摘要 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_expert_evidence_summary.md` |
 | 最新恢复就绪审计 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_recovery_readiness_audit.md` |
 | canonical myAgent full200 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_canonical_myagent_full200_raw_artifacts_20260730_2008/` |
+| 完整 MyAgent server_runs 恢复包 | `/home/ubuntu/lzz/MACT/outputs/server_runs/myagent_server_runs_archive_20260730_2020/`；含 43 个 run 目录、433 个文件、源目录约 241M，压缩包约 27M |
 | 多模型 Gate-50 汇总 | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_summaries_20260730_1948/` |
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
@@ -191,6 +192,7 @@ WTQ extreme/only 修复代表性 WTQ100 回归 run:
 | 本地未同步文件归类 | completed | `restart_qwen3_context_try.sh` 是早期 context-length 试启动脚本，当前由 `prepare_model_gate_run.py` 和 run-specific `vllm.env` 覆盖；`.env.bak.*` 是备份文件，二者已被 ignore，避免误提交或恢复时误用 |
 | 多模型 Gate-50 raw artifacts 迁移到 MACT | completed | 三个历史 myAgent-only Gate-50 run 的 `raw/merged/eval/compare/shards/logs` 已复制到 MACT `multimodel_gate50_raw_artifacts_20260730_2002`；共 59 个源文件、约 20 MB，便于服务器清空后恢复审计 |
 | canonical myAgent full200 raw artifacts 迁移到 MACT | completed | canonical full200 的 myAgent 源不是单一目录：WTQ 使用 `qwen3_32b_current_blind200_wtq200_shortcutfix2_20260721`，TabFact/CRT 使用 `qwen3_32b_current_blind200_20260721`；三项 raw/merged/eval/shards/logs 已复制到 MACT `qwen3_32b_canonical_myagent_full200_raw_artifacts_20260730_2008` |
+| 完整 MyAgent server_runs 归档到 MACT | completed | `/home/ubuntu/lzz/MyAgent/outputs/server_runs` 已压缩到 MACT `myagent_server_runs_archive_20260730_2020`；覆盖 43 个 run 目录、433 个文件、源目录 241M、压缩包约 27M，归档前敏感信息扫描无命中 |
 | 恢复就绪审计 | completed | `latest_recovery_readiness_audit.md` 已保存到 MACT full200 run；确认关键 PRD、summary、paired、diagnostics、Gate summaries/raw artifacts 均可从 Git 恢复，full200 本地 extra 仅为 tmp/pid |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
@@ -701,6 +703,14 @@ canonical myAgent full200 的可恢复 MACT 镜像目录：
 
 该目录保存 canonical full200 所需的 myAgent raw/merged/eval/shards/logs。WTQ 源自 shortcutfix2 目录，TabFact/CRT 源自 current blind200 目录。下面的 MyAgent 原始路径仅用于说明历史来源，服务器清空后的恢复以 MACT 镜像目录为准。
 
+完整 MyAgent 本地探索性输出恢复包：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/myagent_server_runs_archive_20260730_2020/
+```
+
+该目录保存 `/home/ubuntu/lzz/MyAgent/outputs/server_runs` 的压缩归档和清单，覆盖 43 个 run 目录、433 个文件、源目录 241M、压缩包约 27M。它用于服务器清空后恢复 smoke、Gate-50、TabFact 消融、WTQ 调参和历史本地 raw 输出；专家/专利主证据仍以 canonical MACT 镜像目录和 full200 paired summary 为准。
+
 ```text
 /home/ubuntu/lzz/MyAgent/outputs/server_runs/qwen3_32b_current_blind200_wtq200_shortcutfix2_20260721/merged/wtq_qwen3-32b-local.jsonl
 /home/ubuntu/lzz/MyAgent/outputs/server_runs/qwen3_32b_current_blind200_20260721/merged/tabfact_qwen3-32b-local.jsonl
@@ -784,6 +794,7 @@ myAgent blind200 stress result：
 | 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地模型生成 MACT run 目录、`vllm.env`、启动/健康检查/停止脚本、Gate-10/Gate-50 runner 和 `gate_run_manifest.json`；默认 GPU `4,5;6,7`、端口 `8000/8001` |
 | Gate-50 自动决策脚本 | done | `scripts/server/summarize_model_gate_results.py` 汇总 WTQ/TabFact/CRT eval，按 reference `124/150`、failure <= `2%`、token ratio <= `0.75` 输出 `no-go` 或 `gate150` |
 | 本地临时文件 ignore | done | `configs/server/*.env.bak.*` 和早期 context 试跑脚本 `restart_qwen3_context_try.sh` 不进入远端恢复路径；正式入口以 PRD 第 14 节和 `prepare_model_gate_run.py` 为准 |
+| 完整 MyAgent 输出归档 | done | 2026-07-30 已将 MyAgent `outputs/server_runs` 完整压缩到 MACT `myagent_server_runs_archive_20260730_2020`，并生成 `SHA256SUMS`、`inventory.tsv`、`run_directories.txt`、`source_size.txt` 和 README |
 
 ## 9. 当前可以写的结论
 
@@ -919,6 +930,7 @@ MACT/outputs/server_runs/qwen3_32b_blind200_mact_core100_20260722/LIVE_LEDGER.md
 MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/LIVE_LEDGER.md
 MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_recovery_readiness_audit.md
 MACT/outputs/server_runs/qwen3_32b_canonical_myagent_full200_raw_artifacts_20260730_2008/README.md
+MACT/outputs/server_runs/myagent_server_runs_archive_20260730_2020/README.md
 ```
 
 4. full200 已完成。恢复服务器后先复核行数和 summary，不要自动启动任何 runner：
@@ -927,6 +939,14 @@ MACT/outputs/server_runs/qwen3_32b_canonical_myagent_full200_raw_artifacts_20260
 wc -l /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/*_mact_full200.jsonl
 wc -l /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_canonical_myagent_full200_raw_artifacts_20260730_2008/*/merged/*.jsonl
 cat /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/overall_mact_full200_summary.json
+cd /home/ubuntu/lzz/MACT/outputs/server_runs/myagent_server_runs_archive_20260730_2020
+sha256sum -c SHA256SUMS
+```
+
+如需恢复 MyAgent 本地探索性 `outputs/server_runs`：
+
+```bash
+tar -xzf /home/ubuntu/lzz/MACT/outputs/server_runs/myagent_server_runs_archive_20260730_2020/myagent_outputs_server_runs_20260730_2020.tar.gz -C /home/ubuntu/lzz/MyAgent
 ```
 
 如需复现或 repair，必须新建实验口径或明确标注 repaired 口径。旧的 resume 脚本保留用于审计，不应在当前 canonical 上继续运行：
