@@ -278,6 +278,10 @@ class AuditQwen3ExperimentStateTests(unittest.TestCase):
             audit["model_readiness"]["untested_local_models"],
             ["DeepSeek-R1-Distill-Qwen-32B"],
         )
+        self.assertEqual(
+            audit["model_readiness"]["untested_local_model_paths"],
+            {"DeepSeek-R1-Distill-Qwen-32B": [str(nested_model)]},
+        )
 
     def test_build_audit_treats_known_model_alias_directory_as_tested(self):
         """Catches known model aliases being rediscovered as fresh candidates after remounting models."""

@@ -180,8 +180,15 @@ def hf_cache_model_name(path: Path) -> str:
     return path.name.split("--")[-1]
 
 
-def discover_local_models(model_roots: Sequence[Path]) -> list[str]:
-    discovered: set[str] = set()
+def hf_cache_model_paths(path: Path) -> list[Path]:
+    snapshots = path / "snapshots"
+    if not snapshots.is_dir():
+        return []
+    return sorted(snapshot for snapshot in snapshots.iterdir() if is_model_dir(snapshot))
+
+
+def discover_local_model_paths(model_roots: Sequence[Path]) -> dict[str, list[str]]:
+    discovered: dict[str, set[str]] = {}
     for root in model_roots:
         if not root.exists():
             continue
@@ -191,10 +198,11 @@ def discover_local_models(model_roots: Sequence[Path]) -> list[str]:
             if current.name.startswith("."):
                 continue
             if is_hf_cache_model_dir(current):
-                discovered.add(hf_cache_model_name(current))
+                name = hf_cache_model_name(current)
+                discovered.setdefault(name, set()).update(str(path) for path in hf_cache_model_paths(current))
                 continue
             if is_model_dir(current):
-                discovered.add(current.name)
+                discovered.setdefault(current.name, set()).add(str(current))
                 continue
             if depth >= MAX_MODEL_DISCOVERY_DEPTH:
                 continue
@@ -203,7 +211,11 @@ def discover_local_models(model_roots: Sequence[Path]) -> list[str]:
             except OSError:
                 continue
             stack.extend((child, depth + 1) for child in reversed(children))
-    return sorted(discovered)
+    return {name: sorted(paths) for name, paths in sorted(discovered.items())}
+
+
+def discover_local_models(model_roots: Sequence[Path]) -> list[str]:
+    return sorted(discover_local_model_paths(model_roots))
 
 
 def present_api_keys(env: Mapping[str, str]) -> list[str]:
@@ -211,14 +223,18 @@ def present_api_keys(env: Mapping[str, str]) -> list[str]:
 
 
 def summarize_model_readiness(model_roots: Sequence[Path], env: Mapping[str, str]) -> dict[str, Any]:
-    local_models = discover_local_models(model_roots)
+    local_model_paths = discover_local_model_paths(model_roots)
+    local_models = sorted(local_model_paths)
     untested = sorted(model for model in local_models if known_tested_model_key(model) is None)
+    untested_paths = {model: local_model_paths[model] for model in untested}
     api_keys = present_api_keys(env)
     can_start = bool(untested or api_keys)
     return {
         "local_models": local_models,
+        "local_model_paths": local_model_paths,
         "known_tested_local_models": sorted(KNOWN_TESTED_LOCAL_MODELS),
         "untested_local_models": untested,
+        "untested_local_model_paths": untested_paths,
         "api_keys_present": api_keys,
         "can_start_new_experiment": can_start,
         "next_action": "run_gate10_then_gate50" if can_start else "wait_for_new_model_or_api_key",
