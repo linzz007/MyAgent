@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 19:58:10 CST
+最后更新：2026-07-30 20:02:09 CST
 
 ## 0. 下一次启动先看这里
 
@@ -21,6 +21,7 @@
 | 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
 | 最新专家证据摘要 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_expert_evidence_summary.md` |
 | 多模型 Gate-50 汇总 | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_summaries_20260730_1948/` |
+| 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
 | 下一步建议 | 结果已校验并关停进程；当前不要重启旧 Qwen3-32B/no-go 模型做重复实验。只有新增/挂载候选模型或提供外部 API key 后，才按第 14 节启动双服务 Gate-10/Gate-50 |
@@ -186,6 +187,7 @@ WTQ extreme/only 修复代表性 WTQ100 回归 run:
 | 多模型 Gate-50 汇总入 MACT | completed | Qwen3-14B-AWQ、Qwen2.5-14B-AWQ、Qwen2.5-3B 的统一 no-go summary 已保存到 MACT `multimodel_gate50_summaries_20260730_1948` |
 | 2026-07-30 19:53 继续执行审计 | completed | 复核 GPU/进程/模型/API key；GPU 空闲但无新增候选，审计 JSON 已刷新到 MACT full200 run，未启动重复 Gate |
 | 本地未同步文件归类 | completed | `restart_qwen3_context_try.sh` 是早期 context-length 试启动脚本，当前由 `prepare_model_gate_run.py` 和 run-specific `vllm.env` 覆盖；`.env.bak.*` 是备份文件，二者已被 ignore，避免误提交或恢复时误用 |
+| 多模型 Gate-50 raw artifacts 迁移到 MACT | completed | 三个历史 myAgent-only Gate-50 run 的 `raw/merged/eval/compare/shards/logs` 已复制到 MACT `multimodel_gate50_raw_artifacts_20260730_2002`；共 59 个源文件、约 20 MB，便于服务器清空后恢复审计 |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
 ## 6. 当前 core100 实时状态
@@ -722,6 +724,14 @@ myAgent blind200 stress result：
 ```
 
 该目录包含三个模型的 `*_gate50_summary.json/md` 和 `README.md`。这些文件由 `scripts/server/summarize_model_gate_results.py` 从历史 MyAgent eval 派生，没有重跑任何样本。
+
+统一 MACT raw artifact 镜像目录：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/
+```
+
+该目录复制了三个历史 Gate-50 run 的 `raw/merged/eval/compare/shards/logs` 可用文件，用于服务器清空后的证据恢复和复查。`qwen25_3b_current_frozen_gate50_20260720` 原始 MyAgent 目录没有历史 `compare/` 文件；其 no-go 决策以 summary 目录为准。
 
 | model | output dir | WTQ | TabFact | CRT | overall | avg tokens | decision |
 |---|---|---:|---:|---:|---:|---:|---|
