@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 21:35:49 CST
+最后更新：2026-07-30 21:40:15 CST
 
 ## 0. 下一次启动先看这里
 
@@ -12,10 +12,10 @@
 |---|---|
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
-| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 21:30 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
+| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 21:40 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
 | 下次本地模型服务资源 | 用户 2026-07-30 21:25 再次确认当前服务器卡还够，可使用 GPU `4,5` 和 GPU `6,7` 各启动一个模型服务；默认端口 `8000/8001` |
-| 当前本机模型候选 | 2026-07-30 21:30 复扫 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；历史表里的 `Qwen2.5-14B-AWQ` 是该 Instruct-AWQ 本地目录的实验简称 |
-| 当前外部 API 候选 | 2026-07-30 21:30 环境变量未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量 |
+| 当前本机模型候选 | 2026-07-30 21:40 复扫 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计脚本现在会递归发现嵌套/挂载/HF cache 模型目录，并用 registry alias 避免误报已测模型 |
+| 当前外部 API 候选 | 2026-07-30 21:40 环境变量未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量 |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 原 full200：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708`；替换为 2026-07-30 当前 CRT 复跑后：myAgent `456/600` vs MACT `450/600`，token ratio `0.5708` |
 | 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
@@ -198,6 +198,7 @@ WTQ extreme/only 修复代表性 WTQ100 回归 run:
 | 恢复就绪审计 | completed | `latest_recovery_readiness_audit.md` 已保存到 MACT full200 run；确认关键 PRD、summary、paired、diagnostics、Gate summaries/raw artifacts 均可从 Git 恢复，full200 本地 extra 仅为 tmp/pid |
 | Gate summary 失败/缺答案计数修复 | completed | `summarize_model_gate_results.py` 将门禁异常行从 `max(failed, missing)` 改为 `min(rows, failed + missing)`；新增单测覆盖 failed 与 missing 同时出现并超过 2% failure budget 的 no-go 场景 |
 | 已测本地模型重跑保护 | completed | `experiment_model_registry.py` 集中维护 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-AWQ / Instruct-AWQ、Qwen2.5-3B-Instruct 等已测本地模型及 alias；`audit_qwen3_experiment_state.py` 和 `prepare_model_gate_run.py` 共用该 registry，避免 alias 目录被误判为新候选；人工复现实验必须加 `--allow-known-tested-model`，并在 manifest 标记 override |
+| 嵌套模型目录发现修复 | completed | `audit_qwen3_experiment_state.py` 的本地模型发现从一层目录扩展为有限深度递归，并特殊处理 HuggingFace cache 的 `models--org--repo` 目录；新增单测覆盖挂载盘嵌套未测模型不被漏掉 |
 | 专家/专利正式实验方案 | ready for drafting | full200 总体略超 MACT 且 token 显著更低，但 dataset-level 只有 CRT 超过；正式实验仍建议 gate 后只扩最终候选 |
 
 ## 6. 当前 core100 实时状态
@@ -794,7 +795,7 @@ myAgent blind200 stress result：
 | WTQ extreme/only 全局行触发 | done measured debug50 | `TableCompressor._needs_global_rows` 加入 `only/top/first/last/earliest/latest`；debug50 新 myAgent `14/50`，18 条新触发全行中 `10/18` 正确，strict recoverable 中 `7/10` 正确 |
 | numpy array execution result 判断 | done | `verification_gap` 改为显式判断非空执行结果，避免 numpy array truth-value 崩溃 |
 | numpy array 输出序列化 | done | `_to_serializable` 和 `_json_default` 优先使用 `.tolist()`，避免多元素 numpy array `.item()` 崩溃 |
-| 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json` 和 `latest_expert_evidence_summary.md`；已测模型判断使用共享 registry 的 alias 规则，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
+| 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json` 和 `latest_expert_evidence_summary.md`；模型发现支持有限深度递归和 HuggingFace cache 目录，已测模型判断使用共享 registry 的 alias 规则，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
 | 外部 API key readiness 检测 | done | `audit_qwen3_experiment_state.py` 已从只识别 OpenAI/DeepSeek/DashScope/Anthropic 扩展到 SiliconFlow、Moonshot、Zhipu、Gemini/Google、OpenRouter、Together、Fireworks、Ark、Volc、Azure OpenAI，并新增单测保护 |
 | 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地 vLLM 模型或外部 OpenAI-compatible API 候选生成 MACT run 目录、Gate-10/Gate-50/Gate-150 runner 和 `gate_run_manifest.json`；本地默认 GPU `4,5;6,7`、端口 `8000/8001`，外部 API backend 只写 `api.env`/`api_profile.md` 且不写 secret；已测本地模型默认按共享 registry 拒绝，显式 override 会写入 manifest；Gate-50 runner 会拒绝缺失或未通过 Gate-10 summary 的 run，Gate-150 runner 会拒绝缺失或未通过 Gate-50 summary 的 run |
 | Paired-200 run 准备脚本 | done | `scripts/server/prepare_paired200_run.py` 可从 Gate run manifest 生成最终候选的 MACT paired-200 run 目录，包含 myAgent blind200 runner、WTQ/TabFact/CRT MACT one-by-one runner、eval/compare 脚本、README 和 `paired200_run_manifest.json`；脚本会拒绝缺失 `gate150_summary.json` 或 `decision != paired200` 的 Gate run；外部 API 场景只记录 key 变量名，不写 secret |
@@ -865,7 +866,7 @@ full200 对 MACT 是全面显著胜出。
 | P1 | WTQ 行列覆盖与候选修复排序 | done: 优先级为 extreme/only 全局行策略，其次行匹配扫描全行；大范围列保留不是第一优先 |
 | P1 | WTQ 最小修复实验 | done measured debug50: old myAgent `0/50` -> new `14/50`；但 MACT `40/50`，这是 adversarial subset，不能作为总体结论 |
 | P1 | WTQ 代表性回归切片 | done measured: 新 myAgent `69/100`，旧 myAgent `69/100`，MACT `79/100`；恢复 3 条、回退 3 条，无净提升 |
-| P1 | 新模型筛选 | waiting: 2026-07-30 19:53 已复扫模型目录/缓存和外部 API env，仍无新增候选；GPU `4,5` 和 `6,7` 可用于下个候选的双服务 Gate，但除非新增/挂载模型或提供外部 API key，否则不继续启动模型 |
+| P1 | 新模型筛选 | waiting: 2026-07-30 21:40 已递归复扫模型目录/缓存/挂载盘和外部 API env，仍无新增候选；GPU `4,5` 和 `6,7` 可用于下个候选的双服务 Gate，但除非新增/挂载模型或提供外部 API key，否则不继续启动模型 |
 | P1 | Gate-150 到 paired-200 准备链路 | done: `run_gate150.sh` 会生成 `gate150_summary.json/md`；只有 overall 和至少 2 个 dataset-level reference 均通过、decision 为 `paired200` 时，`prepare_paired200_run.py` 才会从 Gate run 目录生成 same-ID paired-200 正式候选目录、runner、eval/compare 和 manifest；no-go 或缺 summary 会直接报错 |
 | P2 | 正式实验方案定稿 | ready next: 本文第 13 节已给出 gate-based 方案；下一步只在新增模型/API 后执行，不做全模型全量枚举 |
 

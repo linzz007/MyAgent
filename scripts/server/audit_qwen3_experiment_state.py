@@ -16,6 +16,7 @@ from experiment_model_registry import KNOWN_TESTED_LOCAL_MODELS, known_tested_mo
 FULL200_RUN = "qwen3_32b_blind200_mact_full200_20260723"
 CRT_CURRENT_RUN = "qwen3_32b_crt_full200_current_20260730_1822"
 WTQ_REP_RUN = "qwen3_32b_wtq_extreme_fix_representative100_20260730_1805"
+MAX_MODEL_DISCOVERY_DEPTH = 4
 API_KEY_NAMES = (
     "OPENAI_API_KEY",
     "DEEPSEEK_API_KEY",
@@ -166,17 +167,42 @@ def is_model_dir(path: Path) -> bool:
     )
 
 
+def is_hf_cache_model_dir(path: Path) -> bool:
+    if not path.is_dir() or not path.name.startswith("models--"):
+        return False
+    snapshots = path / "snapshots"
+    if not snapshots.is_dir():
+        return False
+    return any(is_model_dir(snapshot) for snapshot in snapshots.iterdir())
+
+
+def hf_cache_model_name(path: Path) -> str:
+    return path.name.split("--")[-1]
+
+
 def discover_local_models(model_roots: Sequence[Path]) -> list[str]:
     discovered: set[str] = set()
     for root in model_roots:
         if not root.exists():
             continue
-        if is_model_dir(root):
-            discovered.add(root.name)
-            continue
-        for child in root.iterdir():
-            if is_model_dir(child):
-                discovered.add(child.name)
+        stack = [(root, 0)]
+        while stack:
+            current, depth = stack.pop()
+            if current.name.startswith("."):
+                continue
+            if is_hf_cache_model_dir(current):
+                discovered.add(hf_cache_model_name(current))
+                continue
+            if is_model_dir(current):
+                discovered.add(current.name)
+                continue
+            if depth >= MAX_MODEL_DISCOVERY_DEPTH:
+                continue
+            try:
+                children = sorted(child for child in current.iterdir() if child.is_dir())
+            except OSError:
+                continue
+            stack.extend((child, depth + 1) for child in reversed(children))
     return sorted(discovered)
 
 
