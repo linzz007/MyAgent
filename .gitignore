@@ -10,6 +10,8 @@ env/
 .env
 *.env
 !configs/server/*.env.example
+configs/server/*.env.bak.*
+restart_qwen3_context_try.sh
 
 logs/
 pids/
