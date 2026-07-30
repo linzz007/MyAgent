@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 19:38:42 CST
+最后更新：2026-07-30 19:43:24 CST
 
 ## 0. 下一次启动先看这里
 
@@ -70,9 +70,10 @@ MyAgent 仓库只负责代码、脚本和本文档；除非临时调试，不再
 ```text
 /home/ubuntu/lzz/MyAgent/scripts/server/audit_qwen3_experiment_state.py
 /home/ubuntu/lzz/MyAgent/scripts/server/prepare_model_gate_run.py
+/home/ubuntu/lzz/MyAgent/scripts/server/summarize_model_gate_results.py
 ```
 
-作用：`audit_qwen3_experiment_state.py` 从 MACT 已保存结果生成机器可读 JSON 和中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”。`prepare_model_gate_run.py` 在新增本地模型后自动生成 MACT run 目录、双服务 vLLM env、Gate-10/Gate-50 runner 和 manifest，但不启动服务。
+作用：`audit_qwen3_experiment_state.py` 从 MACT 已保存结果生成机器可读 JSON 和中文专家证据摘要，快速回答“证据是否完整、总体/token 阶段条件是否达成、是否有新候选值得启动 Gate-10/Gate-50”。`prepare_model_gate_run.py` 在新增本地模型后自动生成 MACT run 目录、双服务 vLLM env、Gate-10/Gate-50 runner 和 manifest，但不启动服务。`summarize_model_gate_results.py` 读取 Gate-50 三个 eval JSON，输出 `gate50_summary.json/md` 和 no-go/Gate-150 决策。
 
 ## 1. 最大目标
 
@@ -745,6 +746,7 @@ myAgent blind200 stress result：
 | numpy array 输出序列化 | done | `_to_serializable` 和 `_json_default` 优先使用 `.tolist()`，避免多元素 numpy array `.item()` 崩溃 |
 | 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json` 和 `latest_expert_evidence_summary.md`，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
 | 新模型 Gate run 准备脚本 | done | `scripts/server/prepare_model_gate_run.py` 可为新增本地模型生成 MACT run 目录、`vllm.env`、启动/健康检查/停止脚本、Gate-10/Gate-50 runner 和 `gate_run_manifest.json`；默认 GPU `4,5;6,7`、端口 `8000/8001` |
+| Gate-50 自动决策脚本 | done | `scripts/server/summarize_model_gate_results.py` 汇总 WTQ/TabFact/CRT eval，按 reference `124/150`、failure <= `2%`、token ratio <= `0.75` 输出 `no-go` 或 `gate150` |
 
 ## 9. 当前可以写的结论
 
@@ -991,6 +993,8 @@ Gate-50 完成后必须检查：
 ```bash
 wc -l "$RUN_DIR"/myagent_gate50/merged/*.jsonl
 cat "$RUN_DIR"/myagent_gate50/eval/*_eval.json
+cat "$RUN_DIR"/gate50_summary.json
+cat "$RUN_DIR"/gate50_summary.md
 rg -n "Connection refused|APIConnectionError|context length|BadRequest|Traceback" "$RUN_DIR"/myagent_gate50/logs || true
 ```
 
@@ -1001,6 +1005,8 @@ Gate-50 决策：
 | no-go | overall 明显低于 Qwen3-32B Gate-50 reference `124/150`，或 failed/missing > `2%`，或 token 明显失控 |
 | Gate-150 | overall 接近或超过 `124/150`，三数据集均完整，失败率 <= `2%` |
 | paired-200 | Gate-150 后仍有竞争力，且值得为专家/专利主表补 MACT same-ID 对照 |
+
+`run_gate50.sh` 会自动调用 `summarize_model_gate_results.py` 生成 `gate50_summary.json` 和 `gate50_summary.md`。下一步是否进入 Gate-150 以该 summary 的 `decision` 为准，人工只复核异常日志和数据行数。
 
 每次阶段结束都同步：
 

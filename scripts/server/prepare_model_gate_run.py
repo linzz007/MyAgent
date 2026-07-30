@@ -118,33 +118,44 @@ def render_service_script(config: GateRunConfig, run_dir: Path, action: str) -> 
 def render_gate_script(config: GateRunConfig, run_dir: Path, gate_name: str, limit: int) -> str:
     endpoints = ",".join(endpoints_for(config.gpu_groups, config.base_port))
     output_root = f"$RUN_DIR/myagent_{gate_name}"
-    return "\n".join(
-        [
-            "#!/usr/bin/env bash",
-            "set -euo pipefail",
-            f"MYAGENT_ROOT={shell_quote(config.myagent_root)}",
-            f"RUN_DIR={shell_quote(run_dir)}",
-            'cd "$MYAGENT_ROOT"',
-            "source /home/ubuntu/miniconda3/etc/profile.d/conda.sh",
-            "conda activate lzz-agent",
-            'source "$RUN_DIR/vllm.env"',
-            "python scripts/server/run_sharded_tqa.py \\",
-            "  --repo-root . \\",
-            "  --tasks wtq,tabfact,crt \\",
-            f"  --wtq-dataset {shell_quote(config.wtq_dataset)} \\",
-            f"  --tabfact-dataset {shell_quote(config.tabfact_dataset)} \\",
-            f"  --crt-dataset {shell_quote(config.crt_dataset)} \\",
-            f"  --endpoints {shell_quote(endpoints)} \\",
-            '  --model "$SERVED_MODEL_NAME" \\',
-            "  --api-key-env LOCAL_VLLM_API_KEY \\",
-            f"  --output-root \"{output_root}\" \\",
-            f"  --limit-per-task {limit} \\",
-            f"  --max-replan {config.max_replan} \\",
-            f"  --mact-avg-tokens {config.mact_avg_tokens} \\",
-            "  --resume",
-            "",
-        ]
-    )
+    lines = [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        f"MYAGENT_ROOT={shell_quote(config.myagent_root)}",
+        f"RUN_DIR={shell_quote(run_dir)}",
+        'cd "$MYAGENT_ROOT"',
+        "source /home/ubuntu/miniconda3/etc/profile.d/conda.sh",
+        "conda activate lzz-agent",
+        'source "$RUN_DIR/vllm.env"',
+        "python scripts/server/run_sharded_tqa.py \\",
+        "  --repo-root . \\",
+        "  --tasks wtq,tabfact,crt \\",
+        f"  --wtq-dataset {shell_quote(config.wtq_dataset)} \\",
+        f"  --tabfact-dataset {shell_quote(config.tabfact_dataset)} \\",
+        f"  --crt-dataset {shell_quote(config.crt_dataset)} \\",
+        f"  --endpoints {shell_quote(endpoints)} \\",
+        '  --model "$SERVED_MODEL_NAME" \\',
+        "  --api-key-env LOCAL_VLLM_API_KEY \\",
+        f"  --output-root \"{output_root}\" \\",
+        f"  --limit-per-task {limit} \\",
+        f"  --max-replan {config.max_replan} \\",
+        f"  --mact-avg-tokens {config.mact_avg_tokens} \\",
+        "  --resume",
+    ]
+    if gate_name == "gate50":
+        lines.extend(
+            [
+                "",
+                "python scripts/server/summarize_model_gate_results.py \\",
+                '  --gate-root "$RUN_DIR/myagent_gate50" \\',
+                f"  --model-tag {shell_quote(config.model_tag)} \\",
+                f"  --mact-avg-tokens {config.mact_avg_tokens} \\",
+                '  --output "$RUN_DIR/gate50_summary.json" \\',
+                '  --markdown-output "$RUN_DIR/gate50_summary.md"',
+            ]
+        )
+    lines.append("")
+    return "\n".join(lines)
 
 
 def render_readme(config: GateRunConfig, run_dir: Path) -> str:
@@ -163,6 +174,8 @@ def render_readme(config: GateRunConfig, run_dir: Path) -> str:
             f"bash {run_dir}/run_gate50.sh",
             f"bash {run_dir}/stop_services.sh",
             "```",
+            "",
+            "After Gate-50, inspect `gate50_summary.json` and `gate50_summary.md` before deciding whether to expand to Gate-150.",
             "",
             "Do not commit API keys. `vllm.env` contains only a local placeholder key by default.",
             "",

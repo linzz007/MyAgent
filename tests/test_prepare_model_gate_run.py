@@ -73,6 +73,9 @@ class PrepareModelGateRunTests(unittest.TestCase):
             self.assertIn("--output-root \"$RUN_DIR/myagent_gate10\"", gate10_text)
             self.assertIn("--output-root \"$RUN_DIR/myagent_gate50\"", gate50_text)
             self.assertIn("http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1", gate50_text)
+            self.assertIn("summarize_model_gate_results.py", gate50_text)
+            self.assertIn("--output \"$RUN_DIR/gate50_summary.json\"", gate50_text)
+            self.assertIn("--markdown-output \"$RUN_DIR/gate50_summary.md\"", gate50_text)
 
             for script_name in (
                 "start_services.sh",
@@ -87,6 +90,7 @@ class PrepareModelGateRunTests(unittest.TestCase):
 
             readme = (run_dir / "README.md").read_text(encoding="utf-8")
             self.assertIn("Do not commit API keys", readme)
+            self.assertIn("gate50_summary.json", readme)
             self.assertIn("git add -f", readme)
 
 
