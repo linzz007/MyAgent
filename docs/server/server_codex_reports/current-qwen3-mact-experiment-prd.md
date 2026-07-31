@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-01 00:33 CST
+最后更新：2026-08-01 00:39 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,7 +11,7 @@
 | item | status |
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
-| 当前正在执行 | 进入“专利与正式实验准备”阶段：先冻结当前 Qwen3-32B v1 原型证据，再补机制消融、新 seed 泛化、多模型 gate 和正式实验包；所有结论与痕迹继续回写本文档 |
+| 当前正在执行 | P0/P1/P2/P3 已完成：已冻结 Qwen3-32B v1 原型证据、写入专利骨架、定义消融矩阵，并完成离线机制归因；下一步等待模型服务可用后跑 coarse Gate-50 消融 |
 | 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold，以及 v6b 的实体属性审计、同一行多条件审计、列值计数审计、双实体出现次数、首尾时间差、实体数值差 |
 | 当前本轮 targeted evidence | WTQ v6b full200 `155/200` vs MACT `148/200`，token ratio `0.6187`；TabFact v6b full200 `194/200` vs MACT `189/200`，token ratio `0.2014`；CRT current full200 `140/200` vs MACT `113/200`，token ratio `0.8461`；三项失败/缺答案均为 `0/0` |
 | 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact policy-v6 实跑为 `185/200` vs MACT `189/200` 未过线，v6b 新 audit shortcuts 基于该 raw 离线投影 `194/200`、净 gain 9、harm 0，fresh full200 已确认 `194/200` |
@@ -33,7 +33,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
-| 下一步建议 | 先产出专利机制证据包和消融设计清单；低成本复用已有 raw/eval 做离线机制归因；需要模型服务的实验按 Gate-10 -> Gate-50 -> Gate-150 -> paired-200 扩样，不再直接全量长跑 |
+| 下一步建议 | 下一个需要模型服务的动作是 P2 coarse Gate-50 消融：`legacy`、`no_strong_verification`、`no_deterministic_shortcuts`；跑完后再决定是否补细粒度开关和新 seed 验证 |
 
 下一次恢复命令入口：
 
@@ -137,7 +137,7 @@ bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --comm
 | P0 | 冻结 Qwen3-32B v1 原型证据 | completed 2026-08-01 | 汇总当前 WTQ/TabFact/CRT full200 指标、关键优化点、代码入口、结果路径，形成专利证据索引 | MACT `qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/qwen3_policy_v6b_patent_evidence_index.md` + 本 PRD |
 | P1 | 专利机制草稿骨架 | completed 2026-08-01 | 中文专利 PRD：技术问题、核心方案、模块拆分、可保护点、实验支撑、风险边界 | 本 PRD `1.3 专利草稿骨架` |
 | P2 | 机制消融设计 | completed 2026-08-01 | 消融矩阵：legacy/current/no-risk-collab/no-verifier/no-deterministic-audit/no-evidence-retention，明确每项开关、样本量和判断标准 | 本 PRD `1.5 机制消融矩阵`；执行产物后续写入 MACT ablation run 目录 |
-| P3 | 低成本离线归因 | pending | 基于已有 raw/eval 统计每类机制贡献：提升条数、回退条数、token 变化、适用问题类型 | MACT `qwen3_32b_policy_v6b_mechanism_attribution_<date>/` |
+| P3 | 低成本离线归因 | completed 2026-08-01 | 基于已有 raw/eval 统计每类机制贡献：提升条数、回退条数、token 变化、适用问题类型 | MACT `qwen3_32b_policy_v6b_mechanism_attribution_20260801_0033/` |
 | P4 | 新 seed 泛化验证 | pending | 每数据集新增 seed slice，先 Gate-50 或 Gate-100；过线才扩到 200/300 | MACT `qwen3_32b_newseed_gate*/` |
 | P5 | 多模型 gate | pending | 新模型/API 候选按 Gate-10 -> Gate-50 -> Gate-150 -> paired-200 漏斗筛选 | MACT `<model_tag>_gate*/` |
 | P6 | 正式实验包 | pending | 可给专家/专利代理人的实验包：方法说明、表格、消融、泛化、多模型结论、复现实验命令 | MACT summary + MyAgent PRD |
@@ -226,7 +226,7 @@ P0/P1 完成后，下一步进入 P2/P3：
 3. 如果需要新增代码开关，先加测试，确保可以稳定切换 `no_verifier_override`、`no_deterministic_audit`、`no_evidence_retention` 等模式。
 4. 只有 P2/P3 结果能解释当前提升来源后，再启动 P4 新 seed 小样本验证。
 
-当前 P2 设计已完成，见下一节。下一步执行 P3：基于已有 artifacts 做离线机制归因，不启动模型。
+当前 P2 设计已完成，见下一节。P3 离线机制归因也已完成，见 `1.6 P3 离线机制归因结论`。
 
 ## 1.5 机制消融矩阵
 
@@ -295,6 +295,32 @@ python scripts/server/run_sharded_tqa.py \
 2. 每个开关写入输出行的 metadata，方便后续 summary 归因。
 3. 每个开关至少有一个单测证明启用/禁用行为不同。
 4. 任何消融 run 都要记录 eval、merged 行数、token、耗时、失败数、缺答案数。
+
+## 1.6 P3 离线机制归因结论
+
+P3 不启动模型，只读取已有 current/old/MACT merged artifacts，按同 ID 对齐后统计 transition rows 上的机制 metadata。它是关联归因，不替代真正的 causal ablation，但能指导下一步 GPU 时间花在哪里。
+
+产物：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_mechanism_attribution_20260801_0033/mechanism_attribution_summary.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_mechanism_attribution_20260801_0033/mechanism_attribution_summary.md
+```
+
+核心结果：
+
+| dataset | current | old MyAgent | MACT | gain vs old | harm vs old | interpretation |
+|---|---:|---:|---:|---:|---:|---|
+| WTQ | 155/200 | 131/200 | 148/200 | 25 | 1 | gain 主要集中在 high-risk + strong verification + evidence retention，支持“风险协作 / 劝返 + 证据保留”主张 |
+| TabFact | 194/200 | 185/200 | 189/200 | 9 | 0 | gain 主要集中在 deterministic audit 和 global-row evidence retention；gain rows 当前 token 显著低于旧 MyAgent |
+| CRT | 140/200 | 137/200 | 113/200 | 6 | 3 | CRT 是支持性证据，证明 current 不破坏强项；不是本轮专利新颖性的主要来源 |
+
+下一步判断：
+
+1. 粗消融优先跑 `no_strong_verification`，验证 WTQ/CRT strong verification 的因果贡献。
+2. 粗消融优先跑 `no_deterministic_shortcuts`，验证 TabFact deterministic audit 的因果贡献。
+3. `legacy` 作为总对照，用来证明 current policy 相比旧路径的整体提升。
+4. 细粒度开关暂不急着写；只有 coarse Gate-50 无法解释贡献时，再补 `no_wtq_verifier_override`、`no_evidence_retention`、`no_tabfact_audit_v6b`。
 
 ## 2. 唯一文档规则
 
