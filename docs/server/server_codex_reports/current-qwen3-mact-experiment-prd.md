@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-01 03:06 CST
+最后更新：2026-08-01 03:55 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,13 +11,13 @@
 | item | status |
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
-| 当前正在执行 | P0/P1/P2/P3 已完成；P2 coarse Gate-50 结论已并入专利证据索引；P4 新 seed Gate-50 run 目录和输入已创建并同步，下一步是启动 GPU `6,7` 上的 Qwen3-32B 服务并运行 P4a MyAgent current |
+| 当前正在执行 | P0/P1/P2/P3 已完成；P4a 新 seed Gate-50 current 已跑完并同步，结果为 `stop_or_inspect`：WTQ 过线，TabFact/CRT 未过预设准确率门槛；当前已停止 runner 和 Qwen3 服务，下一步先做 TabFact/CRT 错误诊断和机制修复设计，不直接扩 Gate-100/150 |
 | 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold，以及 v6b 的实体属性审计、同一行多条件审计、列值计数审计、双实体出现次数、首尾时间差、实体数值差 |
 | 当前本轮 targeted evidence | WTQ v6b full200 `155/200` vs MACT `148/200`，token ratio `0.6187`；TabFact v6b full200 `194/200` vs MACT `189/200`，token ratio `0.2014`；CRT current full200 `140/200` vs MACT `113/200`，token ratio `0.8461`；三项失败/缺答案均为 `0/0` |
 | 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact policy-v6 实跑为 `185/200` vs MACT `189/200` 未过线，v6b 新 audit shortcuts 基于该 raw 离线投影 `194/200`、净 gain 9、harm 0，fresh full200 已确认 `194/200` |
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
-| 当前进程状态 | 2026-08-01 02:54：无 `run_sharded_tqa` / `tqa.py` / `vllm serve` 进程；GPU `4,5,6,7` 显存约 `3 MiB`，Qwen3-32B 服务已关闭 |
+| 当前进程状态 | 2026-08-01 03:56：无 `run_sharded_tqa` / `run_mact_one_by_one` / `tqa.py` / `vllm serve` 进程；GPU `4,5,6,7` 显存约 `3 MiB`，Qwen3-32B 服务已关闭 |
 | 下次本地模型服务资源 | 用户 2026-07-31 最新口径：暂时只使用 GPU `6,7` 跑 Qwen3-32B；若后续可用其他卡，用户会另行提供 |
 | 当前本机模型候选 | 2026-07-30 22:52 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计 JSON 现在包含 `local_model_paths` 和 `untested_local_model_paths`，新候选出现时可直接取路径传给 `--model-id` |
 | 当前外部 API 候选 | 2026-07-30 22:52 环境变量和现有实际 env 文件未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量，默认检查 `MyAgent/configs/server/*.env` 中的真实 env 文件并跳过 `.example`/`.bak`，也支持额外 `--env-file`，只读取 key 名不输出 secret 值；`experiment_api_registry.py` 统一维护 OpenRouter 默认 `api_base_url` / `api_key_env`，readiness JSON 会在 key 出现时输出 `api_provider_profiles`，`prepare_model_gate_run.py --backend api --readiness-audit ... --model-name <provider_model>` 可直接消费该 profile；API Gate healthcheck 会在 Gate-10 前检查 key、`/models` endpoint 和目标 model 是否列出 |
@@ -33,7 +33,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
-| 下一步建议 | 不建议把三个 coarse 变体都扩 full200。当前执行 P4 新 seed Gate-50；若 P4a current 过线，再补同 ID P4b MACT paired Gate-50；若不过线，先记录失败类型，不扩 Gate-100/150 |
+| 下一步建议 | 不建议把三个 coarse 变体都扩 full200。P4a 新 seed 未通过预设准确率门槛，因此不直接跑 P4b/MACT paired 或 Gate-100/150；下一步先基于 `p4a_error_inspection.md` 处理 TabFact true-claim false-negative、CRT ratio/percentage/yes-no/aggregate 错误，再用新的小 gate 验证 |
 
 下一次恢复命令入口：
 
@@ -138,7 +138,7 @@ bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --comm
 | P1 | 专利机制草稿骨架 | completed 2026-08-01 | 中文专利 PRD：技术问题、核心方案、模块拆分、可保护点、实验支撑、风险边界 | 本 PRD `1.3 专利草稿骨架` |
 | P2 | 机制消融设计 | completed 2026-08-01 | 消融矩阵：legacy/current/no-risk-collab/no-verifier/no-deterministic-audit/no-evidence-retention，明确每项开关、样本量和判断标准 | 本 PRD `1.5 机制消融矩阵`；执行产物后续写入 MACT ablation run 目录 |
 | P3 | 低成本离线归因 | completed 2026-08-01 | 基于已有 raw/eval 统计每类机制贡献：提升条数、回退条数、token 变化、适用问题类型 | MACT `qwen3_32b_policy_v6b_mechanism_attribution_20260801_0033/` |
-| P4 | 新 seed 泛化验证 | in progress 2026-08-01 | 每数据集新增 seed slice，先 Gate-50；记录 eval、merged 行数、token、耗时、失败数、缺答案数；过线才扩到 100/150 或补 paired MACT | MACT `qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/` + 本 PRD `1.8 P4 新 seed Gate-50 执行计划与台账` |
+| P4 | 新 seed 泛化验证 | P4a completed: inspect required 2026-08-01 | 每数据集新增 seed slice，先 Gate-50；P4a current 没有过准确率门槛，先诊断不扩样 | MACT `qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/` + 本 PRD `1.8 P4 新 seed Gate-50 执行计划与台账` |
 | P5 | 多模型 gate | pending | 新模型/API 候选按 Gate-10 -> Gate-50 -> Gate-150 -> paired-200 漏斗筛选 | MACT `<model_tag>_gate*/` |
 | P6 | 正式实验包 | pending | 可给专家/专利代理人的实验包：方法说明、表格、消融、泛化、多模型结论、复现实验命令 | MACT summary + MyAgent PRD |
 
@@ -383,11 +383,37 @@ P4 拆成两个阶段，避免过早把“新 seed 当前模型体检”混同�
 |---|---|---|---|
 | 1. 把 P2 coarse 消融结论补入专利证据索引 | completed 2026-08-01 | MACT `qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/qwen3_policy_v6b_patent_evidence_index.md`；提交 `58f857b` | 已补 coarse diagnostic Gate-50 表、机制解释和“非新 seed 泛化”的边界说明 |
 | 2. 准备新 seed Gate-50 run 目录和输入 | completed 2026-08-01 | MACT `qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/`；提交 `06e03d3`，清理 pycache 提交 `dcbcc48` | WTQ/TabFact/CRT 各 50 行；按 ID 排除当前 full200 和 P2 diagnostic 输入，selected 与 excluded overlap 为 `0` |
-| 3. 启动 Qwen3-32B 服务 | pending | vLLM `/v1/models` healthcheck + 端口记录 | 待执行 |
-| 4. 运行 P4a MyAgent current Gate-50 | pending | `myagent_current/merged/*.jsonl`、`eval/*.json`、logs | 待执行 |
-| 5. 汇总 P4a 并判断是否进入 P4b | pending | `p4a_current_gate50_summary.json/md` | 待执行 |
-| 6. 如果 P4a 过线，运行同 ID MACT Gate-50 | pending | `mact/*.jsonl`、paired eval/compare summary | 待 P4a 决策 |
-| 7. 回填 PRD、提交推送、关闭进程 | pending | MyAgent / MACT commit hashes；`pgrep` 和 `nvidia-smi` 验证 | 待执行 |
+| 3. 启动 Qwen3-32B 服务 | completed 2026-08-01 | `healthcheck_vllm_models.json`；vLLM session `43996`，endpoint `http://127.0.0.1:8000/v1` | `/v1/models` 返回 `qwen3-32b-local` |
+| 4. 运行 P4a MyAgent current Gate-50 | completed 2026-08-01 | `myagent_current/merged/*.jsonl`、`eval/*.json`、logs；MACT 提交 `4d4480d` | WTQ/TabFact/CRT 均完成 `50/50/50`，failed/missing `0/0` |
+| 5. 汇总 P4a 并判断是否进入 P4b | completed 2026-08-01 | `p4a_current_gate50_summary.json/md`、`p4a_error_inspection.json/md`；MACT 提交 `f73f1b9` | `decision=stop_or_inspect`；WTQ pass，TabFact/CRT inspect |
+| 6. 如果 P4a 过线，运行同 ID MACT Gate-50 | skipped by gate 2026-08-01 | `mact/*.jsonl` 未生成 | P4a 未过预设准确率门槛，不直接跑 P4b paired |
+| 7. 回填 PRD、提交推送、关闭进程 | completed 2026-08-01 | MACT P4a 完整结果提交 `4d4480d`，错误检查提交 `f73f1b9`；最终进程验证：无 runner/vLLM，GPU `4,5,6,7` 约 `3 MiB` | 已关闭 Qwen3-32B 服务；下一轮从 `p4a_error_inspection.md` 开始诊断 |
+
+### 1.8.4 P4a current Gate-50 结果
+
+结果文件：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/p4a_current_gate50_summary.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/p4a_current_gate50_summary.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/p4a_error_inspection.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/p4a_error_inspection.md
+```
+
+| dataset | rows input/merged/eval | correct | accuracy | token ratio vs MACT full200 | avg tokens | avg elapsed s | failed | missing | P4a gate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| WTQ | 50/50/50 | 37/50 | 0.7400 | 0.6436 | 6763.0 | 17.28 | 0 | 0 | pass |
+| TabFact | 50/50/50 | 42/50 | 0.8400 | 0.2387 | 2585.0 | 11.51 | 0 | 0 | inspect |
+| CRT | 50/50/50 | 21/50 | 0.4200 | 0.8002 | 10250.4 | 24.18 | 0 | 0 | inspect |
+| Overall | 150/150/150 | 100/150 | 0.6667 | 0.5739 | 6532.8 | 17.66 | 0 | 0 | stop_or_inspect |
+
+P4a 结论：
+
+1. token 目标仍成立：三数据集加权 token ratio 为 `0.5739`，三项分项 token ratio 都低于 MACT full200 均值参考。
+2. 稳定性目标未过线：TabFact `42/50` 低于预设 `45/50`，CRT `21/50` 低于预设 `30/50`；因此不能把这组新 seed 写成“泛化已过线”，也不能直接进入 Gate-100/150。
+3. 运行可靠性没问题：三项 input/merged/eval 都是 `50/50/50`，failed/missing 均为 `0/0`，失败来自预测正确性而不是系统崩溃。
+4. `p4a_error_inspection.md` 显示 TabFact 错误集中在 gold=true 被判 false 的 false-negative，其中 2 条来自实体属性 deterministic shortcut；CRT 错误集中在 ratio、percentage、yes/no、aggregate 计算和格式归一化。
+5. 按 P4 预设门槛，本轮不直接启动 P4b MACT paired Gate-50。下一步应先做 TabFact/CRT 小范围机制修复和 targeted gate；修复通过后再重新跑新 seed 或同 ID paired MACT。
 
 ## 2. 唯一文档规则
 
