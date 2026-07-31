@@ -919,6 +919,41 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
                 self.assertEqual(result.compression_info["compressed_rows"], 20)
                 self.assertIn("global_rows", result.compression_info["strategy"])
 
+    def test_wtq_earlier_later_option_comparison_keeps_all_rows(self):
+        df = pd.DataFrame(
+            {
+                "Place": (
+                    ["Coral Springs, Florida"]
+                    + [f"Other Place {idx}" for idx in range(18)]
+                    + ["Sydney, Australia"]
+                ),
+                "Date": (
+                    ["2008"]
+                    + [f"2009-01-{idx + 1:02d}" for idx in range(18)]
+                    + ["2010"]
+                ),
+            }
+        )
+        state = TQASessionState(
+            question="which was earlier, syndney, australia or coral springs, florida?",
+            df=df,
+            table_schema=_build_table_schema(df),
+        )
+        state.original_df = df
+        state.route_type = "COMPLEX"
+        state.difficulty_level = "easy"
+        state.structural_features = {
+            "selected_rows": ["Coral Springs, Florida"],
+            "selected_cols": ["Place", "Date"],
+            "cell_score": 0.1,
+        }
+
+        result = TableCompressor(max_easy_rows=12).compress(state)
+
+        self.assertEqual(result.compression_info["compressed_rows"], 20)
+        self.assertIn("global_rows", result.compression_info["strategy"])
+        self.assertIn("Sydney, Australia", result.df["Place"].tolist())
+
     def test_relative_row_compression_keeps_neighbor_and_label_column(self):
         df = pd.DataFrame(
             {
@@ -3671,6 +3706,40 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertFalse(
+            TableQAPipeline._should_accept_wtq_verifier_override(
+                state,
+                selected,
+                consensus,
+            )
+        )
+
+    def test_wtq_negated_year_conflict_accepts_high_confidence_verifier(self):
+        df = pd.DataFrame(
+            {
+                "Year": ["2012", "2013", "2014"],
+                "Recipient": ["Herself", "U&I", "U&I"],
+                "Result": ["Nominated", "Nominated", "Won"],
+            }
+        )
+        state = TQASessionState(
+            question='what year was the recipient not herself nor "heaven"?',
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+        selected = SimpleNamespace(
+            name="code",
+            normalized_answer=2012.0,
+            is_valid=True,
+        )
+        consensus = SimpleNamespace(
+            name="thinking_direct",
+            normalized_answer=2014.0,
+            is_valid=True,
+            confidence=0.95,
+        )
+
+        self.assertTrue(
             TableQAPipeline._should_accept_wtq_verifier_override(
                 state,
                 selected,

@@ -1748,7 +1748,8 @@ class TableCompressor:
         return bool(
             re.search(
                 r"\b(how many|how often|total number|average|mean|sum|proportion|percentage|"
-                r"at least|at most|most|least|highest|lowest|top|first|last|earliest|latest|"
+                r"at least|at most|most|least|highest|lowest|top|first|last|earlier|later|"
+                r"earliest|latest|"
                 r"only|all|any|none)\b",
                 question,
                 flags=re.I,
@@ -7288,6 +7289,31 @@ class TableQAPipeline:
                     return True
         return False
 
+    @staticmethod
+    def _wtq_numeric_value_in_original_table(state: TQASessionState, value: Any) -> bool:
+        target = _as_number_like(value)
+        if target is None:
+            return False
+        df = state.original_df
+        for _, row in df.iterrows():
+            for col in df.columns:
+                cell = row[col]
+                cell_number = _as_number_like(cell)
+                if cell_number is not None and abs(cell_number - target) <= 1e-9:
+                    return True
+                for token in re.findall(r"[-+]?\d+(?:,\d{3})*(?:\.\d+)?", str(cell or "")):
+                    token_number = _as_number_like(token)
+                    if token_number is not None and abs(token_number - target) <= 1e-9:
+                        return True
+        return False
+
+    @staticmethod
+    def _looks_like_year_number(value: Optional[float]) -> bool:
+        if value is None:
+            return False
+        rounded = round(value)
+        return abs(value - rounded) <= 1e-9 and 1700 <= int(rounded) <= 2100
+
     @classmethod
     def _should_accept_wtq_verifier_override(
         cls,
@@ -7351,6 +7377,14 @@ class TableQAPipeline:
             return True
         selected_number = _as_number_like(selected_value)
         consensus_number = _as_number_like(consensus_value)
+        if (
+            cls._looks_like_year_number(selected_number)
+            and cls._looks_like_year_number(consensus_number)
+            and re.search(r"\b(?:(?:what|which)\s+year|years?)\b", question, flags=re.I)
+            and re.search(r"\b(?:not|nor|neither|except|excluding)\b", question, flags=re.I)
+            and cls._wtq_numeric_value_in_original_table(state, consensus_value)
+        ):
+            return True
         if (
             selected_number is not None
             and abs(selected_number) <= 1e-9
