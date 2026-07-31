@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-01 02:54 CST
+最后更新：2026-08-01 02:59 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,7 +11,7 @@
 | item | status |
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
-| 当前正在执行 | P0/P1/P2/P3 已完成；P2 coarse Gate-50 三个变体已全部完成并同步，下一步是把消融结论并入专利证据包，然后设计 P4 新 seed 小样本验证 |
+| 当前正在执行 | P0/P1/P2/P3 已完成；P2 coarse Gate-50 三个变体已全部完成并同步；当前进入 P4 新 seed Gate-50 泛化验证，先补 PRD 执行口径，再把 coarse 消融结论并入专利证据包，然后准备新 seed 输入并启动 Qwen3-32B current 小样本验证 |
 | 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold，以及 v6b 的实体属性审计、同一行多条件审计、列值计数审计、双实体出现次数、首尾时间差、实体数值差 |
 | 当前本轮 targeted evidence | WTQ v6b full200 `155/200` vs MACT `148/200`，token ratio `0.6187`；TabFact v6b full200 `194/200` vs MACT `189/200`，token ratio `0.2014`；CRT current full200 `140/200` vs MACT `113/200`，token ratio `0.8461`；三项失败/缺答案均为 `0/0` |
 | 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact policy-v6 实跑为 `185/200` vs MACT `189/200` 未过线，v6b 新 audit shortcuts 基于该 raw 离线投影 `194/200`、净 gain 9、harm 0，fresh full200 已确认 `194/200` |
@@ -33,7 +33,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
-| 下一步建议 | 不建议把三个 coarse 变体都扩 full200。下一步先把 coarse 结果写进专利证据包；若需要更强 causal 叙事，再只补细粒度开关 `no_wtq_verifier_override` / `no_tabfact_audit_v6b`，否则进入 P4 新 seed 小样本验证 |
+| 下一步建议 | 不建议把三个 coarse 变体都扩 full200。当前先把 coarse 结果写进专利证据包，然后执行 P4 新 seed Gate-50；若新 seed 过线，再考虑扩 Gate-100/150 或补 paired MACT，同步形成正式实验包 |
 
 下一次恢复命令入口：
 
@@ -138,7 +138,7 @@ bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --comm
 | P1 | 专利机制草稿骨架 | completed 2026-08-01 | 中文专利 PRD：技术问题、核心方案、模块拆分、可保护点、实验支撑、风险边界 | 本 PRD `1.3 专利草稿骨架` |
 | P2 | 机制消融设计 | completed 2026-08-01 | 消融矩阵：legacy/current/no-risk-collab/no-verifier/no-deterministic-audit/no-evidence-retention，明确每项开关、样本量和判断标准 | 本 PRD `1.5 机制消融矩阵`；执行产物后续写入 MACT ablation run 目录 |
 | P3 | 低成本离线归因 | completed 2026-08-01 | 基于已有 raw/eval 统计每类机制贡献：提升条数、回退条数、token 变化、适用问题类型 | MACT `qwen3_32b_policy_v6b_mechanism_attribution_20260801_0033/` |
-| P4 | 新 seed 泛化验证 | pending | 每数据集新增 seed slice，先 Gate-50 或 Gate-100；过线才扩到 200/300 | MACT `qwen3_32b_newseed_gate*/` |
+| P4 | 新 seed 泛化验证 | in progress 2026-08-01 | 每数据集新增 seed slice，先 Gate-50；记录 eval、merged 行数、token、耗时、失败数、缺答案数；过线才扩到 100/150 或补 paired MACT | MACT `qwen3_32b_policy_v6b_newseed_gate50_*/` + 本 PRD `1.8 P4 新 seed Gate-50 执行计划与台账` |
 | P5 | 多模型 gate | pending | 新模型/API 候选按 Gate-10 -> Gate-50 -> Gate-150 -> paired-200 漏斗筛选 | MACT `<model_tag>_gate*/` |
 | P6 | 正式实验包 | pending | 可给专家/专利代理人的实验包：方法说明、表格、消融、泛化、多模型结论、复现实验命令 | MACT summary + MyAgent PRD |
 
@@ -351,6 +351,43 @@ P2 coarse 结论：
 2. `no_deterministic_shortcuts` 对 TabFact 影响最大：TabFact 从 current reference `48/50` 降至 `39/50`，token ratio vs current 为 `1.4487`；这直接支撑“确定性审计既提准确率又省 token”的专利论点。
 3. `no_deterministic_shortcuts` 在 CRT 上也从 current reference `37/50` 降至 `30/50`，说明 deterministic audit 应写成跨数据集模块，而不是只写 TabFact 特例。
 4. 三个 coarse 变体均为 failed/missing `0/0`，所以差异主要来自机制开关，不是运行失败。
+
+## 1.8 P4 新 seed Gate-50 执行计划与台账
+
+P4 目标：用未参与 full200 调参和 P2 diagnostic 消融的新样本，验证当前 Qwen3-32B + MyAgent policy-v6b/current 是否具备泛化稳定性。P4 不直接扩 full200，也不把单次随机小样本写成最终结论；它只决定是否值得继续扩到 Gate-100/150 或同 ID MACT paired 比较。
+
+### 1.8.1 当前执行口径
+
+| item | decision |
+|---|---|
+| 数据集 | WTQ / TabFact / CRT 各新增 50 条 |
+| 抽样方式 | 从 full dataset 中排除当前 full200 输入样本和 P2 diagnostic Gate-50 输入样本，再用固定随机种子 `20260801` 抽样 |
+| 首轮模型 | 只跑 Qwen3-32B + MyAgent current/default policy，不开消融变体 |
+| 模型资源 | 按用户要求优先使用 GPU `6,7` 启动一个 Qwen3-32B vLLM 服务 |
+| 结果位置 | MACT `outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_*/` |
+| 必须记录 | input 行数、merged 行数、eval 行数、correct、accuracy、token、elapsed、failed、missing answer、命令入口、日志位置 |
+| 同步规则 | 每完成输入准备、每完成一个数据集、每生成 summary，都 `git add -f` 并按阶段提交推送 MACT；PRD 状态同步提交 MyAgent |
+
+### 1.8.2 阶段门槛
+
+P4 拆成两个阶段，避免过早把“新 seed 当前模型体检”混同为“已超过 MACT”：
+
+| stage | purpose | pass condition | next action |
+|---|---|---|---|
+| P4a current Gate-50 | 低成本检查当前 MyAgent 在新 seed 上是否稳定、是否失败、token 是否仍低 | 三数据集 input/merged/eval 均为 `50/50/50`；failed/missing 为 `0/0`；token 仍低于 MACT full200 分项均值；准确率不出现明显塌陷：WTQ >= `35/50`、TabFact >= `45/50`、CRT >= `30/50` | 进入 P4b 或扩 Gate-100/150 |
+| P4b paired MACT Gate-50 | 在同一批新 seed 样本上比较 MyAgent 与 MACT | MyAgent overall > MACT overall，且至少 2/3 数据集单项 >= MACT；token overall 明显低于 MACT；失败/缺答案不高于 MACT | 若通过，写入正式实验候选证据；若不通过，记录失败类型，不扩样 |
+
+### 1.8.3 本轮步骤台账
+
+| step | status | output / trace | conclusion |
+|---|---|---|---|
+| 1. 把 P2 coarse 消融结论补入专利证据索引 | pending | MACT `qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/qwen3_policy_v6b_patent_evidence_index.md` | 待执行 |
+| 2. 准备新 seed Gate-50 run 目录和输入 | pending | MACT `qwen3_32b_policy_v6b_newseed_gate50_*/input/*.jsonl` + `manifest.json` | 待执行 |
+| 3. 启动 Qwen3-32B 服务 | pending | vLLM `/v1/models` healthcheck + 端口记录 | 待执行 |
+| 4. 运行 P4a MyAgent current Gate-50 | pending | `myagent_current/merged/*.jsonl`、`eval/*.json`、logs | 待执行 |
+| 5. 汇总 P4a 并判断是否进入 P4b | pending | `p4a_current_gate50_summary.json/md` | 待执行 |
+| 6. 如果 P4a 过线，运行同 ID MACT Gate-50 | pending | `mact/*.jsonl`、paired eval/compare summary | 待 P4a 决策 |
+| 7. 回填 PRD、提交推送、关闭进程 | pending | MyAgent / MACT commit hashes；`pgrep` 和 `nvidia-smi` 验证 | 待执行 |
 
 ## 2. 唯一文档规则
 
