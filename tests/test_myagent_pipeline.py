@@ -762,6 +762,20 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertEqual(result.final_value, "$12 billion")
         self.assertEqual(result.contract_validation, {"valid": True, "reason": ""})
 
+    def test_calculator_rejects_ellipsis_placeholder_answer(self):
+        state = TQASessionState(
+            question="What is the answer?",
+            df=pd.DataFrame({"A": [1]}),
+            table_schema={},
+        )
+        state.code_str = "final_answer_value = ..."
+
+        result = Calculator().execute(state)
+
+        self.assertFalse(result.exec_success)
+        self.assertIsNone(result.final_value)
+        self.assertIn("ellipsis", result.exec_error.lower())
+
     def test_aggregate_compression_keeps_every_row_and_exposes_last_row(self):
         df = pd.DataFrame(
             {
@@ -815,6 +829,36 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         result = TableCompressor().compress(state)
 
         self.assertIn("Location", result.compression_info["used_cols"])
+
+    def test_difference_compression_keeps_adjacent_repeated_metric_column(self):
+        df = pd.DataFrame(
+            {
+                "County": ["Plumas", "Trinity"],
+                "Brown": ["66.44%", "64.58%"],
+                "Votes": ["3,397", "2,201"],
+                "Nixon": ["31.76%", "33.69%"],
+                "Votes_2": ["1,624", "1,148"],
+                "Wyckoff": ["1.80%", "1.73%"],
+                "Votes_3": ["92", "59"],
+            }
+        )
+        state = TQASessionState(
+            question="In Plumas, what was the difference between Brown and Nixon's votes?",
+            df=df,
+            table_schema=_build_table_schema(df),
+        )
+        state.original_df = df
+        state.route_type = "COMPLEX"
+        state.difficulty_level = "medium"
+        state.structural_features = {
+            "selected_rows": ["Plumas"],
+            "selected_cols": ["County", "Brown", "Votes", "Nixon"],
+            "cell_score": 0.05,
+        }
+
+        result = TableCompressor().compress(state)
+
+        self.assertIn("Votes_2", result.compression_info["used_cols"])
 
     def test_how_often_before_date_keeps_all_rows(self):
         df = pd.DataFrame(
@@ -902,6 +946,39 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertEqual(result.compression_info["used_rows"], ["0", "1", "2"])
         self.assertIn("Country", result.compression_info["used_cols"])
         self.assertIn("Notes", result.compression_info["used_cols"])
+
+    def test_row_compression_matches_question_tokens_beyond_first_three_cells(self):
+        """Catches WTQ evidence loss when entity clues live in a late description column."""
+        df = pd.DataFrame(
+            {
+                "Year": [1971, 1972, 1974],
+                "Film": ["The Raging Moon", "Eagle in a Cage", "Mahler"],
+                "Role": ["Jill", "Betsy Balcombe", "Alma Mahler"],
+                "Notes": [
+                    "Drama nomination",
+                    "Historical film",
+                    "Georgina Hale received her BAFTA award for this performance",
+                ],
+            }
+        )
+        state = TQASessionState(
+            question="For which film did Georgina Hale receive her BAFTA award?",
+            df=df,
+            table_schema=_build_table_schema(df),
+        )
+        state.original_df = df
+        state.route_type = "COMPLEX"
+        state.difficulty_level = "easy"
+        state.structural_features = {
+            "selected_rows": [],
+            "selected_cols": ["Film"],
+            "cell_score": 0.1,
+        }
+
+        result = TableCompressor(max_easy_rows=2).compress(state)
+
+        self.assertIn("2", result.compression_info["used_rows"])
+        self.assertIn("Mahler", result.df["Film"].tolist())
 
     def test_complex_compression_keeps_full_data_but_short_planner_preview(self):
         df = pd.DataFrame(
@@ -1762,6 +1839,24 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, 68)
+
+    def test_wtq_total_metric_shortcut_prefers_existing_total_row(self):
+        df = pd.DataFrame(
+            {
+                "Season": ["2008/09", "2009/10", ""],
+                "Club": ["Excelsior Mouscron", "Excelsior Mouscron", ""],
+                "Competition": ["Jupiler League", "Jupiler League", "Totaal"],
+                "Games": ["31", "14", "278"],
+                "Goals": ["1", "1", "4"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_existing_total_metric_answer(
+            "what is the total number of goals?",
+            df,
+        )
+
+        self.assertEqual(value, 4)
 
     def test_wtq_how_long_roster_count_keeps_numeric_count(self):
         df = pd.DataFrame({"Player": list("ABC"), "Date": ["1 January 2010"] * 3})
@@ -2862,6 +2957,143 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             "true",
         )
 
+    def test_tabfact_country_pair_shortcut_checks_each_entity(self):
+        df = pd.DataFrame(
+            {
+                "player": ["justin leonard", "jesper parnevik", "angel cabrera"],
+                "country": ["united states", "sweden", "argentina"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_country_pair_answer(
+                "jesper parnevik be from sweden , while justin leonard be from argentina",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_zero_gold_count_shortcut_counts_zero_medal_rows(self):
+        df = pd.DataFrame(
+            {
+                "nation": ["brazil", "argentina", "peru", "aruba"],
+                "gold": ["6", "0", "0", "0"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_zero_gold_count_answer(
+                "there be 3 nation that didn't have any gold medal",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_every_game_before_date_shortcut_excludes_boundary_date(self):
+        df = pd.DataFrame(
+            {
+                "date": ["sept 2", "sept 23", "sept 30"],
+                "result": ["win", "win", "loss"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_every_before_date_result_answer(
+                "every game before september 30 be a victory for the dolphin",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_venue_competition_date_shortcut_requires_same_row(self):
+        df = pd.DataFrame(
+            {
+                "date": ["march 7 , 2007", "june 2 , 2007"],
+                "venue": ["shymkent , kazakhstan", "baku , azerbaijan"],
+                "competition": ["friendly", "uefa euro 2008 qualifying"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_venue_competition_date_answer(
+                "the friendly competition at the venue shymkent , kazakhstan , be on june 2 , 2007",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_grand_final_score_loss_shortcut_checks_losing_side(self):
+        df = pd.DataFrame(
+            {
+                "score": ["42 - 14"],
+                "premiers": ["south sydney rabbitohs"],
+                "runners up": ["manly - warringah sea eagles"],
+                "details": ["1951 nswrfl grand final"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_score_but_lose_answer(
+                "south sydney rabbitohs score 42 point but lose the game during the 1951 nswrfl grand final",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_second_smallest_metric_shortcut_checks_ranked_value(self):
+        df = pd.DataFrame(
+            {
+                "month & year": ["february 2007", "november 2007", "march 2013"],
+                "title": ["us special", "botswana special", "africa special"],
+                "budget": ["1000", "1500", "1500"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_second_smallest_metric_answer(
+                "the second smallest budget be 1000 for the us special show february 2007",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_retirement_threshold_shortcut_counts_non_finish_statuses(self):
+        df = pd.DataFrame(
+            {
+                "driver": [f"driver {idx}" for idx in range(20)],
+                "time / retired": [
+                    "1:35:13.284",
+                    "+ 23.911",
+                    "+ 1 lap",
+                    "ignition",
+                    "overheating",
+                    "fuel system",
+                    "gearbox",
+                    "engine",
+                    "fuel system",
+                    "turbo",
+                    "turbo",
+                    "engine",
+                    "turbo",
+                    "overheating",
+                    "collision",
+                    "collision",
+                    "collision",
+                    "collision",
+                    "collision",
+                    "collision",
+                ],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_retirement_threshold_answer(
+                "there be less than 17 player who untimely retire during the 1984 european grand prix",
+                df,
+            ),
+            "false",
+        )
+
     def test_crt_consecutive_year_medalist_shortcut_checks_all_medal_columns(self):
         df = pd.DataFrame(
             {
@@ -3362,6 +3594,89 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertEqual(result.final_value, 8)
         self.assertTrue(result.strong_verification_applied)
         self.assertEqual(result.agreement_decision.reason, "valid_candidates_disagree")
+
+    def test_wtq_answer_shape_mismatch_accepts_high_confidence_verifier(self):
+        df = pd.DataFrame(
+            {
+                "Position": [3, 7, 12],
+                "Driver": ["Alex Cole", "Mike Imrie", "Nina Page"],
+                "Car": ["Ford", "Saab", "Lotus"],
+            }
+        )
+        fake = FakePipelineLLM(
+            semantic_score=0.9,
+            rows=["Saab"],
+            cols=["Position", "Driver", "Car"],
+            planner_outputs=[
+                "[PLAN]\n"
+                "Step1: Find the only Saab row.\n"
+                "Step2: Return the row position.\n"
+                "[CODE]\n"
+                "saab_row = df[df['Car'] == 'Saab']\n"
+                "final_answer_value = saab_row['Position'].values[0]\n"
+            ],
+            thinking_output=(
+                '{"answer":"Mike Imrie","confidence":0.95,'
+                '"reasoning_summary":"the Saab row is driven by Mike Imrie"}'
+            ),
+        )
+        tracker = LLMCallTracker(fake)
+        pipeline = TableQAPipeline(
+            router=RouterAgent(tracker),
+            planner=PlannerAgent(tracker),
+            calculator=Calculator(),
+            critic=CriticAgent(tracker),
+            final_answer_agent=FinalAnswerAgent(tracker),
+            enable_selective_collaboration=True,
+        )
+        state = TQASessionState(
+            question="who drove the only saab car?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.final_value, "Mike Imrie")
+        self.assertTrue(result.strong_verification_applied)
+        self.assertEqual(
+            result.agreement_decision.reason,
+            "wtq_answer_shape_verifier_override",
+        )
+
+    def test_wtq_option_verifier_override_rejects_non_option_expansion(self):
+        df = pd.DataFrame(
+            {
+                "Place": ["Sydney, Australia", "Coral Springs, Florida, USA"],
+                "Date": ["2010", "2008"],
+            }
+        )
+        state = TQASessionState(
+            question="which was earlier, syndney, australia or coral springs, florida?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+        selected = SimpleNamespace(
+            name="code",
+            normalized_answer="coral springs, florida",
+            is_valid=True,
+        )
+        consensus = SimpleNamespace(
+            name="thinking_direct",
+            normalized_answer="Coral Springs, Florida, USA",
+            is_valid=True,
+            confidence=1.0,
+        )
+
+        self.assertFalse(
+            TableQAPipeline._should_accept_wtq_verifier_override(
+                state,
+                selected,
+                consensus,
+            )
+        )
 
     def test_tabfact_high_risk_label_does_not_auto_run_strong_verifier(self):
         df = pd.DataFrame({"team": ["A", "B"], "wins": [3, 2]})

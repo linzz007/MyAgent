@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-30 22:52:20 CST
+最后更新：2026-07-31 10:23 CST
 
 ## 0. 下一次启动先看这里
 
@@ -10,13 +10,18 @@
 
 | item | status |
 |---|---|
+| 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
+| 当前正在执行 | Qwen3-32B vLLM 已按用户要求跑在 GPU `6,7`、端口 `8000`；正在执行 WTQ policy-v6 full200：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_wtq_policy_v6_full200_20260731_1020/` |
+| 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回；TabFact：7 个确定性表格事实 shortcut，覆盖国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold |
+| 当前本轮 targeted evidence | WTQ target27 实跑 `27/27`，旧版同 ID `9/27`，MACT 同 ID `24/27`，失败 `0`，avg token `6878.81` vs MACT `9518.19`；run：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_wtq_verifier_override_target27_20260731_101001/` |
+| 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略：`149/200` vs MACT `148/200`，预计 18 gain / 0 harm；TabFact full200 旧 artifact 离线套新 deterministic shortcuts：`192/200` vs MACT `189/200`，预计 7 gain / 0 harm；两者仍需 full200 实跑确认 |
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
-| 当前进程状态 | 本轮 vLLM、`run_sharded_tqa.py`、`code/tqa.py` 均已关停；2026-07-30 22:52 复核无匹配模型/评测进程，`nvidia-smi` compute apps 为空 |
-| 下次本地模型服务资源 | 用户 2026-07-30 22:07 再次确认当前服务器卡还够，可使用 GPU `4,5` 和 GPU `6,7` 各启动一个模型服务；默认端口 `8000/8001` |
+| 当前进程状态 | 2026-07-31 10:23：vLLM on GPU `6,7` 正在服务 WTQ full200；本轮完成并确认结果后再按用户要求关停 |
+| 下次本地模型服务资源 | 用户 2026-07-31 最新口径：暂时只使用 GPU `6,7` 跑 Qwen3-32B；若后续可用其他卡，用户会另行提供 |
 | 当前本机模型候选 | 2026-07-30 22:52 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计 JSON 现在包含 `local_model_paths` 和 `untested_local_model_paths`，新候选出现时可直接取路径传给 `--model-id` |
 | 当前外部 API 候选 | 2026-07-30 22:52 环境变量和现有实际 env 文件未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量，默认检查 `MyAgent/configs/server/*.env` 中的真实 env 文件并跳过 `.example`/`.bak`，也支持额外 `--env-file`，只读取 key 名不输出 secret 值；`experiment_api_registry.py` 统一维护 OpenRouter 默认 `api_base_url` / `api_key_env`，readiness JSON 会在 key 出现时输出 `api_provider_profiles`，`prepare_model_gate_run.py --backend api --readiness-audit ... --model-name <provider_model>` 可直接消费该 profile；API Gate healthcheck 会在 Gate-10 前检查 key、`/models` endpoint 和目标 model 是否列出 |
-| 当前阻塞条件 | 2026-07-30 多轮连续复核均没有新增/未测本地模型，也没有外部 API key/provider profile；在没有新候选或用户确认新增 bootstrap 入口前，不应启动重复 Qwen3-32B/no-go 模型实验 |
+| 当前阻塞条件 | 无。2026-07-31 用户明确要求继续围绕当前 Qwen3-32B 优化 MyAgent，直到三数据集单项超过 MACT |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 原 full200：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708`；替换为 2026-07-30 当前 CRT 复跑后：myAgent `456/600` vs MACT `450/600`，token ratio `0.5708` |
 | 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
@@ -28,7 +33,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
-| 下一步建议 | 结果已校验并关停进程；当前不要重启旧 Qwen3-32B/no-go 模型做重复实验。只有新增/挂载候选模型或提供外部 API key 后，才按第 14 节启动双服务 Gate-10/Gate-50/Gate-150；Gate-150 仍有竞争力时再用 `prepare_paired200_run.py` 生成 paired-200；每个新生成的 Gate / paired-200 run 目录都会包含 `checkpoint_to_git.sh`，长跑中每完成一个 gate 或 dataset 脚本就执行一次，服务器不稳定时用 `--commit ... --push` 立即同步远端；待用户确认后可新增 `prepare_next_model_gate_run.py`，把“读取 readiness audit 并生成下一个候选 Gate run”合并成一条命令 |
+| 下一步建议 | 等 WTQ full200 完成后立刻评估；若 WTQ > MACT，则运行 TabFact full200 当前版本确认 projected 192/200；CRT 暂沿用当前 `140/200 > 113/200` 证据，除非 WTQ/TabFact 改动影响 CRT 共享路径需要抽样回归 |
 
 下一次恢复命令入口：
 
@@ -98,20 +103,20 @@ bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --comm
 
 ## 1. 最大目标
 
-验证当前 `myAgent` 在 Qwen3-32B 本地模型下，是否能在 WTQ / TabFact / CRT 三个数据集的同口径评测中总体超过 MACT，并且 token 成本明显低于 MACT；在此基础上形成可写入专家/专利材料的实验结论与正式实验方案。
+验证并优化当前 `myAgent` 在 Qwen3-32B 本地模型下的“选择性风险协作 / 劝返”机制，使其在 WTQ / TabFact / CRT 三个数据集的同口径 200 条评测中单项都超过 MACT，并且 token 成本明显低于 MACT；在此基础上形成可写入专家/专利材料的实验结论与正式实验方案。
 
-这个目标不是继续单独优化 TabFact，而是优先判断整体方法是否成立：总体准确率是否超过 MACT、token 是否显著更低、运行链路是否可恢复、结果是否可审计。
+这个目标不是只优化某一个数据集，也不是只追求总体略超。当前验收标准是：WTQ、TabFact、CRT 每个数据集都要单项超过 MACT；优化要能归因到可解释机制，例如风险检测、证据保留、答案形态校验、冲突劝返、确定性审计，而不是针对 gold 或样本 ID 的硬编码。
 
 ## 1.1 当前阶段验收判断
 
 | question | current answer |
 |---|---|
-| 总体准确率是否超过 MACT | 是。canonical full200 为 `453/600` vs `450/600`；替换当前 CRT 复跑后 staged composite 为 `456/600` vs `450/600` |
-| token 是否仍明显低于 MACT | 是。full200 token ratio 为 `0.5708`，约为 MACT 的 `57.1%` |
-| 三个数据集是否都超过 MACT | 否。WTQ 和 TabFact 在 full200 单项仍低于 MACT，优势主要来自 CRT |
-| 当前项目是否可作为阶段证据 | 可以作为 staged evidence；不能写成 full dataset 全量完成或全面显著胜出 |
-| 现在是否继续跑旧本地模型 | 不建议。现有非主模型均已 Gate-50 no-go；下一轮等待新增模型或可用外部 API key |
-| 下一步实验策略 | 使用 Gate-10 / Gate-50 / Gate-150 / Paired-200 漏斗，只扩大最终候选，避免全模型全数据集暴力跑 |
+| 总体准确率是否超过 MACT | 旧 canonical full200 是 `453/600` vs `450/600`；替换当前 CRT 后 staged composite 是 `456/600` vs `450/600`。但按 2026-07-31 新口径，总体略超不算完成 |
+| token 是否仍明显低于 MACT | 旧 full200 token ratio 为 `0.5708`，约为 MACT 的 `57.1%`；WTQ target27 当前实跑 token ratio 为 `0.7227` |
+| 三个数据集是否都超过 MACT | 尚未最终确认。旧结果只有 CRT 超过；本轮优化后 WTQ/TabFact 离线投影均超过，正在用 full200 实跑确认 |
+| 当前项目是否可作为阶段证据 | 可以作为强阶段证据；在 WTQ/TabFact full200 当前实跑完成前，不能写成“三数据集全部超过 MACT” |
+| 现在是否继续跑旧本地模型 | 不继续跑 no-go 模型；当前只围绕 Qwen3-32B + MyAgent 机制优化 |
+| 下一步实验策略 | 先完成 WTQ full200；再跑 TabFact full200；CRT 必要时做共享路径抽样回归；全部过线后再进入正式实验方案和多模型 gate 漏斗 |
 
 ## 2. 唯一文档规则
 

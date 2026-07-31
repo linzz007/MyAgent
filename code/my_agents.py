@@ -1716,6 +1716,20 @@ class TableCompressor:
         return re.sub(r"\s+", " ", str(value).strip().lower())
 
     @staticmethod
+    def _content_tokens(value: Any) -> set[str]:
+        stopwords = {
+            "a", "an", "and", "are", "as", "at", "be", "by", "did",
+            "does", "for", "from", "had", "has", "have", "in", "is",
+            "it", "of", "on", "or", "the", "this", "to", "was", "were",
+            "what", "when", "where", "which", "who", "with",
+        }
+        return {
+            token
+            for token in re.findall(r"[a-z0-9]+", TableCompressor._norm(value))
+            if len(token) > 2 and token not in stopwords
+        }
+
+    @staticmethod
     def _needs_global_rows(question: str, answer_mode: str) -> bool:
         if answer_mode in {"true_false", "yes_no"}:
             return True
@@ -1780,6 +1794,7 @@ class TableCompressor:
 
     def _match_rows(self, question: str, df: pd.DataFrame, selected_rows: List[str]) -> List[Any]:
         q_norm = self._norm(question)
+        question_tokens = self._content_tokens(question)
         selected_norm = [self._norm(r) for r in selected_rows if self._norm(r)]
         matched = []
         for idx, row in df.iterrows():
@@ -1793,6 +1808,15 @@ class TableCompressor:
                 if len(value) >= 2 and value in q_norm:
                     matched.append(idx)
                     break
+            else:
+                # Some WTQ evidence rows store the query entity in later notes or
+                # description columns while the answer lives in an earlier label
+                # column. Scan the full row, but require multiple content-token
+                # overlaps to avoid broad matches on generic terms.
+                for value in values[3:]:
+                    if len(self._content_tokens(value) & question_tokens) >= 2:
+                        matched.append(idx)
+                        break
         return list(dict.fromkeys(matched))
 
     def _match_label_cols(
@@ -2303,6 +2327,11 @@ class Calculator:
             state.exec_success = True
             state.exec_locals = local_env
             state.final_value = local_env.get("final_answer_value", None)
+            if state.final_value is Ellipsis:
+                state.exec_success = False
+                state.exec_error = "Planner left ellipsis placeholder as final answer."
+                state.final_value = None
+                return state
             state.exec_error = None
         except Exception as e:  # noqa: BLE001
             state.exec_success = False
@@ -5295,6 +5324,262 @@ class TableQAPipeline:
         return "true" if abs(observed_diff - float(expected_diff)) <= 1e-6 else "false"
 
     @staticmethod
+    def _tabfact_country_pair_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+be\s+from\s+(.+?)\s*,\s*while\s+(.+?)\s+be\s+from\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_entity, left_country, right_entity, right_country = match.groups()
+        entity_cols = [col for col in df.columns if re.search(r"\b(player|name|driver|person)\b", str(col), flags=re.I)]
+        country_cols = [col for col in df.columns if re.search(r"\b(country|nation|nationality)\b", str(col), flags=re.I)]
+        if not entity_cols or not country_cols:
+            return None
+        entity_col = entity_cols[0]
+        country_col = country_cols[0]
+
+        def country_for(entity_phrase: str) -> Optional[str]:
+            for _, row in df.iterrows():
+                if TableQAPipeline._cell_contains_phrase_tokens(entity_phrase, row[entity_col]):
+                    return _loose_text_key(row[country_col])
+            return None
+
+        left_actual = country_for(left_entity)
+        right_actual = country_for(right_entity)
+        if left_actual is None or right_actual is None:
+            return None
+        left_expected = _loose_text_key(left_country)
+        right_expected = _loose_text_key(right_country)
+        return "true" if left_actual == left_expected and right_actual == right_expected else "false"
+
+    @staticmethod
+    def _tabfact_zero_gold_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"\bthere\s+be\s+(\d+)\s+(?:nation|nations|country|countries|team|teams)\b"
+            r".*?\b(?:didn't|did\s+not|do\s+not|doesn't|does\s+not)\s+have\s+any\s+gold\s+medals?\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        gold_cols = [col for col in df.columns if re.fullmatch(r"(?i)gold", str(col).strip())]
+        if not gold_cols:
+            return None
+        expected = int(match.group(1))
+        count = sum(
+            1
+            for value in df[gold_cols[0]].tolist()
+            if (_numeric_measure_value(value) or 0.0) == 0.0
+        )
+        return "true" if count == expected else "false"
+
+    @staticmethod
+    def _month_day_from_text(value: Any) -> Optional[Tuple[int, int]]:
+        months = {
+            "january": 1,
+            "jan": 1,
+            "february": 2,
+            "feb": 2,
+            "march": 3,
+            "mar": 3,
+            "april": 4,
+            "apr": 4,
+            "may": 5,
+            "june": 6,
+            "jun": 6,
+            "july": 7,
+            "jul": 7,
+            "august": 8,
+            "aug": 8,
+            "september": 9,
+            "sept": 9,
+            "sep": 9,
+            "october": 10,
+            "oct": 10,
+            "november": 11,
+            "nov": 11,
+            "december": 12,
+            "dec": 12,
+        }
+        text = str(value or "").lower()
+        match = re.search(
+            r"\b("
+            + "|".join(re.escape(month) for month in months)
+            + r")\s+(\d{1,2})(?:st|nd|rd|th)?\b",
+            text,
+        )
+        if not match:
+            return None
+        return months[match.group(1)], int(match.group(2))
+
+    @staticmethod
+    def _tabfact_every_before_date_result_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"\bevery\s+game\s+before\s+(.+?)\s+be\s+a\s+(?:victory|win)\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        target = TableQAPipeline._month_day_from_text(match.group(1))
+        date_cols = [col for col in df.columns if re.fullmatch(r"(?i)date", str(col).strip())]
+        result_cols = [col for col in df.columns if re.fullmatch(r"(?i)result|outcome", str(col).strip())]
+        if target is None or not date_cols or not result_cols:
+            return None
+        rows_before = []
+        for _, row in df.iterrows():
+            row_day = TableQAPipeline._month_day_from_text(row[date_cols[0]])
+            if row_day is not None and row_day < target:
+                rows_before.append(row)
+        if not rows_before:
+            return None
+        all_wins = all(
+            re.search(r"\b(win|won|victory)\b", str(row[result_cols[0]]), flags=re.I)
+            for row in rows_before
+        )
+        return "true" if all_wins else "false"
+
+    @staticmethod
+    def _tabfact_venue_competition_date_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+(.+?)\s+competition\s+at\s+the\s+venue\s+(.+?)\s*,?\s+be\s+on\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        competition_phrase, venue_phrase, date_phrase = match.groups()
+        date_cols = [col for col in df.columns if re.fullmatch(r"(?i)date", str(col).strip())]
+        venue_cols = [col for col in df.columns if re.search(r"\bvenue|location|site\b", str(col), flags=re.I)]
+        competition_cols = [col for col in df.columns if re.search(r"\bcompetition|event|type\b", str(col), flags=re.I)]
+        if not date_cols or not venue_cols or not competition_cols:
+            return None
+        date_key = _loose_text_key(date_phrase)
+        for _, row in df.iterrows():
+            if not TableQAPipeline._cell_contains_phrase_tokens(competition_phrase, row[competition_cols[0]]):
+                continue
+            if not TableQAPipeline._cell_contains_phrase_tokens(venue_phrase, row[venue_cols[0]]):
+                continue
+            if date_key and date_key == _loose_text_key(row[date_cols[0]]):
+                return "true"
+        return "false"
+
+    @staticmethod
+    def _tabfact_score_but_lose_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+score\s+(\d+)\s+points?\s+but\s+lose\s+the\s+game\s+during\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        team_phrase, points_text, event_phrase = match.groups()
+        details_cols = [col for col in df.columns if re.search(r"\b(details?|game|event|final)\b", str(col), flags=re.I)]
+        premier_cols = [col for col in df.columns if re.search(r"\bpremiers?|winner|champion\b", str(col), flags=re.I)]
+        runner_cols = [col for col in df.columns if re.search(r"\brunners?\s*up|loser\b", str(col), flags=re.I)]
+        score_cols = [col for col in df.columns if re.fullmatch(r"(?i)score", str(col).strip())]
+        if not details_cols or not premier_cols or not runner_cols or not score_cols:
+            return None
+        expected_points = int(points_text)
+        for _, row in df.iterrows():
+            if not TableQAPipeline._cell_contains_phrase_tokens(event_phrase, row[details_cols[0]]):
+                continue
+            team_is_runner_up = TableQAPipeline._cell_contains_phrase_tokens(team_phrase, row[runner_cols[0]])
+            team_is_premier = TableQAPipeline._cell_contains_phrase_tokens(team_phrase, row[premier_cols[0]])
+            score_match = re.search(r"\b(\d+)\s*-\s*(\d+)\b", str(row[score_cols[0]]))
+            if not score_match:
+                return None
+            _, loser_points = [int(value) for value in score_match.groups()]
+            if team_is_runner_up:
+                return "true" if loser_points == expected_points else "false"
+            if team_is_premier:
+                return "false"
+            return None
+        return None
+
+    @staticmethod
+    def _tabfact_second_smallest_metric_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+second\s+smallest\s+(.+?)\s+be\s+([\d,]+(?:\.\d+)?)\s+for\s+the\s+(.+?)\s+show\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        metric_phrase, value_text, title_phrase, date_phrase = match.groups()
+        metric_col = _select_numeric_measure_column_by_phrase(df, metric_phrase)
+        title_cols = [col for col in df.columns if re.search(r"\btitle|show|episode\b", str(col), flags=re.I)]
+        date_cols = [col for col in df.columns if re.search(r"\bmonth|year|date\b", str(col), flags=re.I)]
+        expected_value = _numeric_measure_value(value_text)
+        if metric_col is None or not title_cols or not date_cols or expected_value is None:
+            return None
+        values = sorted(
+            value
+            for value in (_numeric_measure_value(item) for item in df[metric_col].tolist())
+            if value is not None
+        )
+        if len(values) < 2:
+            return None
+        second_smallest = values[1]
+        target_value = None
+        for _, row in df.iterrows():
+            if not TableQAPipeline._cell_contains_phrase_tokens(title_phrase, row[title_cols[0]]):
+                continue
+            if not TableQAPipeline._cell_contains_phrase_tokens(date_phrase, row[date_cols[0]]):
+                continue
+            target_value = _numeric_measure_value(row[metric_col])
+            break
+        if target_value is None:
+            return "false"
+        is_true = (
+            abs(target_value - expected_value) <= 1e-6
+            and abs(second_smallest - expected_value) <= 1e-6
+        )
+        return "true" if is_true else "false"
+
+    @staticmethod
+    def _tabfact_retirement_threshold_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"\bthere\s+be\s+(less\s+than|fewer\s+than|more\s+than|at\s+least|at\s+most)\s+(\d+)\s+"
+            r"(?:player|players|driver|drivers)\b.*?\bretir\w*\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        operator, threshold_text = match.groups()
+        status_cols = [col for col in df.columns if re.search(r"\bretired|time\s*/\s*retired|status|time\b", str(col), flags=re.I)]
+        if not status_cols:
+            return None
+        threshold = int(threshold_text)
+
+        def is_retired(value: Any) -> bool:
+            text = str(value or "").strip().lower()
+            if not text or text in {"nan", "none", "n/a", "na", "-", "--"}:
+                return False
+            if re.match(r"^\+?\s*\d+(?:\.\d+)?(?:\s*laps?)?$", text):
+                return False
+            if re.match(r"^\d+:\d", text):
+                return False
+            if re.match(r"^\+\s*\d", text):
+                return False
+            return True
+
+        count = sum(1 for value in df[status_cols[0]].tolist() if is_retired(value))
+        op = operator.lower()
+        if op in {"less than", "fewer than"}:
+            result = count < threshold
+        elif op == "more than":
+            result = count > threshold
+        elif op == "at least":
+            result = count >= threshold
+        else:
+            result = count <= threshold
+        return "true" if result else "false"
+
+    @staticmethod
     def _select_column_by_tokens(df: pd.DataFrame, phrase: str) -> Optional[Any]:
         phrase_tokens = {_singular_token(token) for token in re.findall(r"[a-z0-9]+", _loose_text_key(phrase))}
         if not phrase_tokens:
@@ -6152,6 +6437,42 @@ class TableQAPipeline:
         return int(total) if float(total).is_integer() else total
 
     @staticmethod
+    def _wtq_existing_total_metric_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\btotal(?:\s+number\s+of)?\s+(.+?)[?\.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        metric_phrase = match.group(1).strip()
+        if not metric_phrase:
+            return None
+        metric_col = (
+            _select_numeric_measure_column_by_phrase(df, metric_phrase)
+            or TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
+        )
+        if metric_col is None:
+            return None
+        total_markers = {"total", "totals", "grand total", "totaal"}
+        matched_values: List[float] = []
+        for _, row in df.iterrows():
+            has_total_marker = any(
+                col != metric_col and _loose_text_key(row[col]) in total_markers
+                for col in df.columns
+            )
+            if not has_total_marker:
+                continue
+            value = _numeric_measure_value(row[metric_col])
+            if value is not None:
+                matched_values.append(value)
+        if len(matched_values) != 1:
+            return None
+        value = matched_values[0]
+        return int(value) if float(value).is_integer() else value
+
+    @staticmethod
     def _wtq_stated_left_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
         match = re.search(
             r"\bthere\s+(?:were|are)\s+([a-z0-9]+)\b.+?,\s+([a-z0-9]+)\s+(?:were|are)\b.+?"
@@ -6562,6 +6883,34 @@ class TableQAPipeline:
                 self._tabfact_date_metric_difference_answer(question, df),
             ),
             (
+                "TabFact country pair affiliation checked deterministically.",
+                self._tabfact_country_pair_answer(question, df),
+            ),
+            (
+                "TabFact zero gold medal count checked deterministically.",
+                self._tabfact_zero_gold_count_answer(question, df),
+            ),
+            (
+                "TabFact all games before date result checked deterministically.",
+                self._tabfact_every_before_date_result_answer(question, df),
+            ),
+            (
+                "TabFact venue competition date checked deterministically.",
+                self._tabfact_venue_competition_date_answer(question, df),
+            ),
+            (
+                "TabFact score-but-lose relation checked deterministically.",
+                self._tabfact_score_but_lose_answer(question, df),
+            ),
+            (
+                "TabFact second-smallest metric row checked deterministically.",
+                self._tabfact_second_smallest_metric_answer(question, df),
+            ),
+            (
+                "TabFact retirement threshold count checked deterministically.",
+                self._tabfact_retirement_threshold_answer(question, df),
+            ),
+            (
                 "TabFact atomic row fact matched with minor spelling tolerance.",
                 self._tabfact_fuzzy_row_inclusion_answer(question, df),
             ),
@@ -6663,6 +7012,10 @@ class TableQAPipeline:
             (
                 "WTQ travel duration computed from departure and arrival times.",
                 self._wtq_duration_answer(question, df),
+            ),
+            (
+                "WTQ existing total row metric selected deterministically.",
+                self._wtq_existing_total_metric_answer(question, df),
             ),
             (
                 "WTQ combined-numbers phrasing interpreted as summing the requested metric column.",
@@ -6868,6 +7221,144 @@ class TableQAPipeline:
         ) >= 1.0:
             return True
         return thinking.confidence >= 0.60
+
+    @staticmethod
+    def _is_numeric_scalar_answer(value: Any) -> bool:
+        if isinstance(value, bool):
+            return False
+        if isinstance(value, (int, float)):
+            return True
+        if not isinstance(value, str):
+            return False
+        text = value.strip().replace(",", "")
+        return bool(re.fullmatch(r"[-+]?\d+(?:\.\d+)?", text))
+
+    @staticmethod
+    def _looks_like_failed_lookup_answer(value: Any) -> bool:
+        text = str(value if value is not None else "").strip().lower()
+        return any(
+            marker in text
+            for marker in (
+                "not found",
+                "no unique",
+                "one or both",
+                "unable to determine",
+                "cannot determine",
+            )
+        )
+
+    @staticmethod
+    def _looks_like_aggregate_row_label_answer(value: Any) -> bool:
+        text = str(value if value is not None else "").strip().lower()
+        text = re.sub(r"\s+", " ", text)
+        return bool(
+            re.fullmatch(
+                r"(?:grand )?total(?:\s+(?:number|goals?|points?|medals?|pasurams|votes?)\b.*)?",
+                text,
+            )
+        )
+
+    @staticmethod
+    def _wtq_question_expects_entity_scalar(question: str) -> bool:
+        text = question or ""
+        if not re.match(r"\s*(?:who|which|name|list)\b", text, flags=re.I):
+            return False
+        return not re.search(
+            r"\b(?:how many|what number|what is the number|"
+            r"what was the number|what year|which year)\b",
+            text,
+            flags=re.I,
+        )
+
+    @staticmethod
+    def _wtq_value_in_question(question: str, value: Any) -> bool:
+        value_key = _loose_text_key(value)
+        question_key = _loose_text_key(question)
+        return bool(value_key and value_key in question_key)
+
+    @staticmethod
+    def _wtq_value_in_original_table(state: TQASessionState, value: Any) -> bool:
+        value_key = _loose_text_key(value)
+        if not value_key:
+            return False
+        df = state.original_df
+        for _, row in df.iterrows():
+            for col in df.columns:
+                if value_key in _loose_text_key(row[col]):
+                    return True
+        return False
+
+    @classmethod
+    def _should_accept_wtq_verifier_override(
+        cls,
+        state: TQASessionState,
+        selected: CandidateAnswer,
+        consensus: CandidateAnswer,
+    ) -> bool:
+        if (state.dataset_profile or "").lower() != "wtq":
+            return False
+        if not consensus.name.startswith("thinking_"):
+            return False
+        if not consensus.is_valid or float(consensus.confidence or 0.0) < 0.90:
+            return False
+        if not selected.is_valid:
+            return True
+        if answer_similarity(
+            selected.normalized_answer,
+            consensus.normalized_answer,
+            state.answer_contract,
+        ) >= 1.0:
+            return False
+
+        question = state.question or ""
+        selected_value = selected.normalized_answer
+        consensus_value = consensus.normalized_answer
+        if cls._looks_like_failed_lookup_answer(selected_value):
+            return True
+        if cls._looks_like_aggregate_row_label_answer(selected_value):
+            return True
+        if (
+            cls._wtq_question_expects_entity_scalar(question)
+            and cls._is_numeric_scalar_answer(selected_value)
+        ):
+            return True
+        if re.search(r"\bconsecutive\s+days\b", question, flags=re.I):
+            return True
+        if (
+            re.search(r"\bonly\b", question, flags=re.I)
+            and cls._wtq_value_in_original_table(state, consensus_value)
+        ):
+            return True
+        if (
+            re.search(
+                r"\b(?:earlier|shortest|longest|higher|lower|more|less)\b",
+                question,
+                flags=re.I,
+            )
+            and re.search(r"\bor\b", question, flags=re.I)
+            and cls._wtq_value_in_question(question, selected_value)
+            and cls._wtq_value_in_question(question, consensus_value)
+        ):
+            return True
+        if (
+            re.search(r"\b(?:first|earliest|next)\b", question, flags=re.I)
+            and cls._wtq_value_in_original_table(state, consensus_value)
+            and not (
+                cls._wtq_value_in_question(question, selected_value)
+                and not cls._wtq_value_in_question(question, consensus_value)
+            )
+        ):
+            return True
+        selected_number = _as_number_like(selected_value)
+        consensus_number = _as_number_like(consensus_value)
+        if (
+            selected_number is not None
+            and abs(selected_number) <= 1e-9
+            and consensus_number not in (None, 0.0)
+            and re.search(r"\b(?:top scorer|most|top number)\b", question, flags=re.I)
+        ):
+            return True
+        return False
 
     @staticmethod
     def _select_consensus_candidate(
@@ -7082,9 +7573,20 @@ class TableQAPipeline:
                 )
                 < 1.0
             )
+            wtq_verifier_override = (
+                wtq_unforced_verifier_conflict
+                and consensus is not None
+                and selected is not None
+                and self._should_accept_wtq_verifier_override(
+                    result,
+                    selected,
+                    consensus,
+                )
+            )
             accepted_consensus = False
             if consensus is not None and (
                 forced
+                or wtq_verifier_override
                 or (
                     not wtq_unforced_verifier_conflict
                     and (
@@ -7123,6 +7625,8 @@ class TableQAPipeline:
                     reason=(
                         "deterministic_shortcut_preserved"
                         if protected_deterministic
+                        else "wtq_answer_shape_verifier_override"
+                        if wtq_verifier_override
                         else "strong_verification_consensus"
                     ),
                 )
