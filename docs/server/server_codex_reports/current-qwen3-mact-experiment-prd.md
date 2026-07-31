@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-31 11:05 CST
+最后更新：2026-07-31 12:05 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,17 +11,17 @@
 | item | status |
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
-| 当前正在执行 | Qwen3-32B vLLM 已按用户要求跑在 GPU `6,7`、端口 `8000`；WTQ policy-v6 full200 partial 在 103 行处中断并定位两个回归，下一步新建 v6b fresh run 重新跑 WTQ full200 |
+| 当前正在执行 | Qwen3-32B vLLM 已按用户要求跑在 GPU `6,7`、端口 `8000`；WTQ policy-v6b full200 已完成并单项超过 MACT，下一步运行 TabFact policy-v6 full200 实跑 |
 | 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；TabFact：7 个确定性表格事实 shortcut，覆盖国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold |
-| 当前本轮 targeted evidence | WTQ target27 实跑 `27/27`，旧版同 ID `9/27`，MACT 同 ID `24/27`，失败 `0`，avg token `6878.81` vs MACT `9518.19`；run：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_wtq_verifier_override_target27_20260731_101001/` |
-| 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略：`149/200` vs MACT `148/200`，预计 18 gain / 0 harm；TabFact full200 旧 artifact 离线套新 deterministic shortcuts：`192/200` vs MACT `189/200`，预计 7 gain / 0 harm；两者仍需 full200 实跑确认 |
+| 当前本轮 targeted evidence | WTQ target27 实跑 `27/27`，旧版同 ID `9/27`，MACT 同 ID `24/27`；WTQ v6b full200 实跑 `155/200` vs MACT `148/200`，token ratio `0.6187`，失败/缺答案 `0/0`；run：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_wtq_policy_v6b_full200_20260731_1115/` |
+| 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact full200 旧 artifact 离线套新 deterministic shortcuts：`192/200` vs MACT `189/200`，预计 7 gain / 0 harm，仍需 full200 实跑确认 |
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
-| 当前进程状态 | 2026-07-31 11:05：无 `run_sharded_tqa` / `tqa.py` 评估进程残留；vLLM on GPU `6,7` 仍在端口 `8000` 服务，准备继续 WTQ v6b full200 |
+| 当前进程状态 | 2026-07-31 12:05：WTQ v6b runner 已自然退出；无 `run_sharded_tqa` / `tqa.py` 评估进程残留；vLLM on GPU `6,7` 仍在端口 `8000` 服务，准备继续 TabFact full200 |
 | 下次本地模型服务资源 | 用户 2026-07-31 最新口径：暂时只使用 GPU `6,7` 跑 Qwen3-32B；若后续可用其他卡，用户会另行提供 |
 | 当前本机模型候选 | 2026-07-30 22:52 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计 JSON 现在包含 `local_model_paths` 和 `untested_local_model_paths`，新候选出现时可直接取路径传给 `--model-id` |
 | 当前外部 API 候选 | 2026-07-30 22:52 环境变量和现有实际 env 文件未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量，默认检查 `MyAgent/configs/server/*.env` 中的真实 env 文件并跳过 `.example`/`.bak`，也支持额外 `--env-file`，只读取 key 名不输出 secret 值；`experiment_api_registry.py` 统一维护 OpenRouter 默认 `api_base_url` / `api_key_env`，readiness JSON 会在 key 出现时输出 `api_provider_profiles`，`prepare_model_gate_run.py --backend api --readiness-audit ... --model-name <provider_model>` 可直接消费该 profile；API Gate healthcheck 会在 Gate-10 前检查 key、`/models` endpoint 和目标 model 是否列出 |
-| 当前阻塞条件 | 无。2026-07-31 用户明确要求继续围绕当前 Qwen3-32B 优化 MyAgent，直到三数据集单项超过 MACT；当前尚未达标，WTQ/TabFact full200 当前实跑仍待完成 |
+| 当前阻塞条件 | 无。2026-07-31 用户明确要求继续围绕当前 Qwen3-32B 优化 MyAgent，直到三数据集单项超过 MACT；当前尚未最终达标，TabFact full200 当前实跑仍待完成 |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 原 full200：myAgent `453/600` vs MACT `450/600`，token ratio `0.5708`；替换为 2026-07-30 当前 CRT 复跑后：myAgent `456/600` vs MACT `450/600`，token ratio `0.5708` |
 | 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
@@ -33,7 +33,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
-| 下一步建议 | 用 fresh v6b run 重新跑 WTQ full200；若 WTQ > MACT，则运行 TabFact full200 当前版本确认 projected 192/200；CRT 暂沿用当前 `140/200 > 113/200` 证据，除非 WTQ/TabFact 改动影响 CRT 共享路径需要抽样回归 |
+| 下一步建议 | 运行 TabFact full200 当前版本确认 projected `192/200`；若 TabFact > MACT，则合并 WTQ `155/200`、TabFact、CRT `140/200` 生成当前总体结论；CRT 暂沿用当前 `140/200 > 113/200` 证据，除非 TabFact 改动影响 CRT 共享路径需要抽样回归 |
 
 下一次恢复命令入口：
 
@@ -112,11 +112,11 @@ bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --comm
 | question | current answer |
 |---|---|
 | 总体准确率是否超过 MACT | 旧 canonical full200 是 `453/600` vs `450/600`；替换当前 CRT 后 staged composite 是 `456/600` vs `450/600`。但按 2026-07-31 新口径，总体略超不算完成 |
-| token 是否仍明显低于 MACT | 旧 full200 token ratio 为 `0.5708`，约为 MACT 的 `57.1%`；WTQ target27 当前实跑 token ratio 为 `0.7227` |
-| 三个数据集是否都超过 MACT | 尚未最终确认。旧结果只有 CRT 超过；本轮优化后 WTQ/TabFact 离线投影均超过，正在用 full200 实跑确认 |
-| 当前项目是否可作为阶段证据 | 可以作为强阶段证据；在 WTQ/TabFact full200 当前实跑完成前，不能写成“三数据集全部超过 MACT” |
+| token 是否仍明显低于 MACT | WTQ v6b full200 token ratio 为 `0.6187`；旧 full200 staged token ratio 为 `0.5708`；仍明显低于 MACT |
+| 三个数据集是否都超过 MACT | 尚未最终确认。WTQ 当前实跑 `155/200 > 148/200` 已超过 MACT，CRT 当前实跑 `140/200 > 113/200` 已超过 MACT；TabFact full200 当前实跑待完成 |
+| 当前项目是否可作为阶段证据 | 可以作为强阶段证据；在 TabFact full200 当前实跑完成前，不能写成“三数据集全部超过 MACT” |
 | 现在是否继续跑旧本地模型 | 不继续跑 no-go 模型；当前只围绕 Qwen3-32B + MyAgent 机制优化 |
-| 下一步实验策略 | 先完成 WTQ full200；再跑 TabFact full200；CRT 必要时做共享路径抽样回归；全部过线后再进入正式实验方案和多模型 gate 漏斗 |
+| 下一步实验策略 | 跑 TabFact full200；CRT 必要时做共享路径抽样回归；全部过线后再进入正式实验方案和多模型 gate 漏斗 |
 
 ## 2. 唯一文档规则
 
@@ -818,6 +818,7 @@ myAgent blind200 stress result：
 | WTQ earlier/later 候选比较全局行触发 | done locally verified | WTQ policy-v6 partial 暴露 `nu-4268`：问题同时比较 Sydney / Coral Springs，但压缩只保留 Coral 局部行；v6b 将 `earlier/later` 纳入 global-row 触发词，确保候选比较题保留所有候选行 |
 | WTQ 否定年份标量冲突劝返 | done locally verified | WTQ policy-v6 partial 暴露 `nu-484`：代码在 `not/nor` 条件下选到首个非目标年份，thinking verifier 给出表内高置信年份；v6b 只在“问年份 + 否定排除 + 双方均为表内年份”的冲突上允许审阅者劝返 |
 | WTQ policy-v6b 本地回归验证 | done | 新增 2 个回归测试后先观察失败，再实现修复；`python -m unittest discover -s tests` 跑 317 tests OK，`python -m py_compile code/my_agents.py code/tqa.py` 退出 0，`git diff --check` 退出 0 |
+| WTQ policy-v6b full200 实跑 | done measured | 当前 MyAgent `155/200`，旧 MyAgent `131/200`，MACT `148/200`；token ratio `0.6187`，失败/缺答案 `0/0`，merged `200/200`；结果：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_wtq_policy_v6b_full200_20260731_1115/wtq_policy_v6b_full200_comparison.md` |
 | numpy array execution result 判断 | done | `verification_gap` 改为显式判断非空执行结果，避免 numpy array truth-value 崩溃 |
 | numpy array 输出序列化 | done | `_to_serializable` 和 `_json_default` 优先使用 `.tolist()`，避免多元素 numpy array `.item()` 崩溃 |
 | 机器审计脚本 | done | `scripts/server/audit_qwen3_experiment_state.py` 可从 MACT 结果生成 `latest_experiment_readiness_audit.json` 和 `latest_expert_evidence_summary.md`；模型发现支持有限深度递归和 HuggingFace cache 目录，并输出可直接用于 `prepare_model_gate_run.py --model-id` 的模型路径；已测模型判断使用共享 registry 的 alias 规则，防止下次恢复时人工误读 canonical/staged 口径或重复启动 no-go 模型 |
