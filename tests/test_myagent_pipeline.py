@@ -3129,6 +3129,151 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             "false",
         )
 
+    def test_tabfact_entity_attribute_shortcut_checks_subject_row(self):
+        df = pd.DataFrame(
+            {
+                "company": ["epcor", "high speed alliance"],
+                "type": ["subsidiary", "joint venture"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_entity_attribute_answer(
+                "the company of epcor have a joint control entity type",
+                df,
+            ),
+            "false",
+        )
+        self.assertIsNone(
+            TableQAPipeline._tabfact_entity_attribute_answer(
+                "italy have 0 gold medal and more than 1 silver",
+                pd.DataFrame({"nation": ["italy"], "gold": [0], "silver": [2]}),
+            )
+        )
+
+    def test_tabfact_same_row_cell_mention_shortcut_requires_joint_row(self):
+        enzymes = pd.DataFrame(
+            {
+                "enzyme": ["ala synthase", "uroporphyrinogen iii decarboxylase"],
+                "location": ["mitochondrion", "cytosol"],
+                "porphyria": ["none", "porphyria cutanea tarda"],
+            }
+        )
+        games = pd.DataFrame(
+            {
+                "date": ["may 11", "may 13"],
+                "home": ["vancouver", "los angeles"],
+                "score": ["4 - 3", "3 - 5"],
+                "decision": ["mclean", "mclean"],
+                "series": ["2 - 3", "2 - 4"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_same_row_cell_mention_answer(
+                "enzyme ala synthase have a location mitochondrion and porphyria of porphyria cutanea tarda",
+                enzymes,
+            ),
+            "false",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_same_row_cell_mention_answer(
+                "when the decision be mclean with the series at 2 - 3 and the home team be vancouver be the score be 3 - 5 with a date of may 13",
+                games,
+            ),
+            "false",
+        )
+        self.assertIsNone(
+            TableQAPipeline._tabfact_same_row_cell_mention_answer(
+                "the diameter of the coin with an equivalence of 0.60 be 24.5 mm with a value of less than 100",
+                pd.DataFrame(
+                    {
+                        "diameter": ["24.5 mm"],
+                        "equivalence": ["0.60"],
+                        "value": ["100"],
+                    }
+                ),
+            )
+        )
+
+    def test_tabfact_column_value_count_shortcut_handles_result_and_year_columns(self):
+        elections = pd.DataFrame(
+            {
+                "district": [f"virginia {idx}" for idx in range(13)],
+                "result": ["re - elected"] * 11 + ["lost re - election", "retired"],
+            }
+        )
+        tennis = pd.DataFrame(
+            {
+                "tournament": ["australian open", "french open", "wimbledon"],
+                "2010": ["sf", "1r", "1r"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_column_value_count_assertion_answer(
+                "11 representative be re - elect in their district in united states house of representatives elections , 1794",
+                elections,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_column_value_count_assertion_answer(
+                "there be only 1 sf in 2010 for michael kohlmann",
+                tennis,
+            ),
+            "true",
+        )
+
+    def test_tabfact_two_entity_appearance_count_shortcut_counts_home_away_columns(self):
+        df = pd.DataFrame(
+            {
+                "home team": ["arsenal", "liverpool"],
+                "away team": ["chelsea", "portsmouth"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_two_entity_appearance_count_answer(
+                "both the arsenal and chelsea team be only feature on the list a single time",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_first_last_time_gap_shortcut_uses_relative_gap_times(self):
+        df = pd.DataFrame(
+            {
+                "team": ["switzerland", "france", "mexico", "china"],
+                "driver": ["neel jani", "loic duval", "michel jourdain jr", "cong fu cheng"],
+                "time": ["18'20.910", "+ 3.792", "+ 47.416", "mechanical"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_first_last_time_gap_answer(
+                "there be 47.416 second between the first and last race car driver in the 2007 - 08 a1 grand prix of nations , malaysia in malaysia",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_entity_metric_difference_shortcut_handles_decimal_comma_lengths(self):
+        df = pd.DataFrame(
+            {
+                "ship name": ["aqua maria", "aqua spirit"],
+                "length": ["101 , 3 m", "75 m"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_entity_metric_difference_value_answer(
+                "the aqua spirit be 26.3 meter smaller in length than the aqua maria",
+                df,
+            ),
+            "true",
+        )
+
     def test_crt_consecutive_year_medalist_shortcut_checks_all_medal_columns(self):
         df = pd.DataFrame(
             {

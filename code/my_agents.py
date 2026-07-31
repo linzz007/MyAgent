@@ -5325,6 +5325,242 @@ class TableQAPipeline:
         return "true" if abs(observed_diff - float(expected_diff)) <= 1e-6 else "false"
 
     @staticmethod
+    def _tabfact_entity_attribute_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(?:the\s+)?(.+?)\s+(?:have|has|had|be|is|are|was|were)\s+(?:an?\s+)?(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        subject_phrase, remainder = match.groups()
+        remainder_key = _loose_text_key(remainder)
+        if not remainder_key:
+            return None
+        attribute_col = None
+        expected_phrase = ""
+        for col in df.columns:
+            col_key = _loose_text_key(col)
+            if not col_key or not remainder_key.endswith(f" {col_key}"):
+                continue
+            expected_phrase = remainder_key[: -len(col_key)].strip()
+            if expected_phrase:
+                attribute_col = col
+                break
+        if attribute_col is None or not expected_phrase:
+            return None
+        if re.search(
+            r"\d|\b(?:more|less|fewer|greater|higher|lower|largest|highest|smallest|lowest|than|of)\b",
+            expected_phrase,
+            flags=re.I,
+        ):
+            return None
+
+        subject_key = _loose_text_key(subject_phrase)
+        for col in df.columns:
+            col_key = _loose_text_key(col)
+            if subject_key.startswith(f"{col_key} of "):
+                subject_key = subject_key[len(col_key) + 4 :].strip()
+                break
+            if subject_key.startswith(f"{col_key} "):
+                subject_key = subject_key[len(col_key) + 1 :].strip()
+                break
+        if not subject_key:
+            return None
+        search_cols = [col for col in df.columns if col != attribute_col]
+        rows = _find_rows_for_entity_across_row(df, subject_key, search_cols)
+        if not rows:
+            return None
+        return "true" if any(_value_matches_phrase(row[attribute_col], expected_phrase) for row in rows) else "false"
+
+    @staticmethod
+    def _tabfact_same_row_cell_mention_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        text = question or ""
+        if not re.search(r"\b(?:when|with|and|have|has|had)\b", text, flags=re.I):
+            return None
+        if re.search(r"\b(?:less|more|greater|higher|lower|fewer)\s+than\b", text, flags=re.I):
+            return None
+        question_key = _loose_text_key(text)
+        if not question_key:
+            return None
+
+        conditions: List[Tuple[Any, set[int]]] = []
+        for col in df.columns:
+            col_key = _loose_text_key(col)
+            if not col_key or col_key not in question_key:
+                continue
+            matched_rows: set[int] = set()
+            for row_position, value in enumerate(df[col].tolist()):
+                value_key = _loose_text_key(value)
+                if not value_key or value_key in {"none", "nan", "na", "n a", "-"}:
+                    continue
+                if len(value_key) < 3 and not re.search(r"\d", value_key):
+                    continue
+                if value_key in question_key:
+                    matched_rows.add(row_position)
+            if matched_rows:
+                conditions.append((col, matched_rows))
+
+        if len(conditions) < 3:
+            return None
+        for row_position in range(len(df)):
+            if all(row_position in rows for _, rows in conditions):
+                return "true"
+        return "false"
+
+    @staticmethod
+    def _tabfact_column_value_count_assertion_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        text = question or ""
+        one_of_match = re.search(
+            r"^(.+?)\s+be\s+1\s+of\s+(\d+)\s+.+?\s+go\s+to\s+(.+?)\s+college\b",
+            text,
+            flags=re.I,
+        )
+        if one_of_match:
+            entity_phrase, expected_text, school_phrase = one_of_match.groups()
+            college_cols = [col for col in df.columns if re.search(r"\bcollege\b", str(col), flags=re.I)]
+            entity_cols = [col for col in df.columns if re.search(r"\b(name|player|student)\b", str(col), flags=re.I)]
+            if not college_cols or not entity_cols:
+                return None
+            college_col = college_cols[0]
+            expected = int(expected_text)
+            rows_for_school = [
+                row
+                for _, row in df.iterrows()
+                if TableQAPipeline._cell_contains_phrase_tokens(school_phrase, row[college_col])
+            ]
+            entity_rows = _find_rows_for_entity_across_row(df, entity_phrase, entity_cols)
+            if not entity_rows:
+                return None
+            entity_in_school = any(
+                TableQAPipeline._cell_contains_phrase_tokens(school_phrase, row[college_col])
+                for row in entity_rows
+            )
+            return "true" if len(rows_for_school) == expected and entity_in_school else "false"
+
+        only_match = re.search(
+            r"\bthere\s+be\s+only\s+(\d+)\s+(.+?)\s+in\s+(.+?)(?:\s+for\b|[?.]?$)",
+            text,
+            flags=re.I,
+        )
+        if only_match:
+            expected_text, value_phrase, column_phrase = only_match.groups()
+            target_col = (
+                TableQAPipeline._select_column_by_semantic_tokens(df, column_phrase)
+                or TableQAPipeline._select_column_by_tokens(df, column_phrase)
+            )
+            if target_col is None:
+                return None
+            count = sum(1 for value in df[target_col].tolist() if _value_matches_phrase(value, value_phrase))
+            return "true" if count == int(expected_text) else "false"
+
+        count_match = re.search(
+            r"^(\d+)\s+.+?\s+be\s+(.+?)\s+in\s+their\s+(.+?)[?.]?$",
+            text,
+            flags=re.I,
+        )
+        if not count_match:
+            return None
+        expected_text, value_phrase, _ = count_match.groups()
+        best_count = 0
+        for col in df.columns:
+            value_key = _loose_text_key(value_phrase)
+            if value_key in {"re elect", "re elected", "reelect", "reelected"}:
+                count = sum(
+                    1
+                    for value in df[col].tolist()
+                    if _loose_text_key(value) in {"re elected", "reelected"}
+                )
+            else:
+                count = sum(1 for value in df[col].tolist() if _value_matches_phrase(value, value_phrase))
+            best_count = max(best_count, count)
+        if best_count == 0:
+            return None
+        return "true" if best_count == int(expected_text) else "false"
+
+    @staticmethod
+    def _tabfact_two_entity_appearance_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"\bboth\s+the\s+(.+?)\s+and\s+(.+?)\s+teams?\s+be\s+only\s+feature\s+on\s+the\s+list\s+a\s+single\s+time\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_entity, right_entity = match.groups()
+        team_cols = [col for col in df.columns if re.search(r"\b(?:home\s+team|away\s+team|team)\b", str(col), flags=re.I)]
+        if not team_cols:
+            return None
+
+        def appearance_count(entity: str) -> int:
+            return sum(
+                1
+                for _, row in df.iterrows()
+                for col in team_cols
+                if _cell_contains_entity_phrase(entity, row[col])
+            )
+
+        return "true" if appearance_count(left_entity) == 1 and appearance_count(right_entity) == 1 else "false"
+
+    @staticmethod
+    def _tabfact_first_last_time_gap_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"\bthere\s+be\s+([\d.]+)\s+seconds?\s+between\s+the\s+first\s+and\s+last\s+race\s+car\s+driver\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected = float(match.group(1))
+        time_cols = [col for col in df.columns if re.fullmatch(r"(?i)time", str(col).strip())]
+        if not time_cols:
+            return None
+        gaps = []
+        for value in df[time_cols[0]].tolist():
+            text = str(value or "").strip()
+            if re.match(r"^\+\s*[\d.]+$", text):
+                gaps.append(float(re.sub(r"^\+\s*", "", text)))
+            elif re.match(r"^\d+'\d", text):
+                gaps.append(0.0)
+        if len(gaps) < 2:
+            return None
+        observed = gaps[-1] - gaps[0]
+        return "true" if abs(observed - expected) <= 1e-3 else "false"
+
+    @staticmethod
+    def _tabfact_decimal_measure_value(value: Any) -> Optional[float]:
+        text = str(value or "")
+        text = re.sub(r"(?<=\d)\s*,\s*(?=\d)", ".", text)
+        return _numeric_measure_value(text)
+
+    @staticmethod
+    def _tabfact_entity_metric_difference_value_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+(.+?)\s+be\s+([\d.]+)\s+(?:meter|metre|m)\s+(smaller|shorter|larger|longer)\s+"
+            r"in\s+(.+?)\s+than\s+the\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_entity, diff_text, direction, metric_phrase, right_entity = match.groups()
+        metric_col = _select_numeric_measure_column_by_phrase(df, metric_phrase)
+        if metric_col is None:
+            return None
+        entity_cols = [col for col in df.columns if col != metric_col]
+        left_rows = _find_rows_for_entity_across_row(df, left_entity, entity_cols)
+        right_rows = _find_rows_for_entity_across_row(df, right_entity, entity_cols)
+        if len(left_rows) != 1 or len(right_rows) != 1:
+            return None
+        left_value = TableQAPipeline._tabfact_decimal_measure_value(left_rows[0][metric_col])
+        right_value = TableQAPipeline._tabfact_decimal_measure_value(right_rows[0][metric_col])
+        if left_value is None or right_value is None:
+            return None
+        expected = float(diff_text)
+        observed = right_value - left_value if direction.lower() in {"smaller", "shorter"} else left_value - right_value
+        return "true" if abs(observed - expected) <= 1e-3 else "false"
+
+    @staticmethod
     def _tabfact_country_pair_answer(question: str, df: pd.DataFrame) -> Optional[str]:
         match = re.search(
             r"^(.+?)\s+be\s+from\s+(.+?)\s*,\s*while\s+(.+?)\s+be\s+from\s+(.+?)[?.]?$",
@@ -6882,6 +7118,30 @@ class TableQAPipeline:
             (
                 "TabFact date metric difference checked deterministically.",
                 self._tabfact_date_metric_difference_answer(question, df),
+            ),
+            (
+                "TabFact entity attribute row checked deterministically.",
+                self._tabfact_entity_attribute_answer(question, df),
+            ),
+            (
+                "TabFact same-row cell mentions checked deterministically.",
+                self._tabfact_same_row_cell_mention_answer(question, df),
+            ),
+            (
+                "TabFact column value count assertion checked deterministically.",
+                self._tabfact_column_value_count_assertion_answer(question, df),
+            ),
+            (
+                "TabFact two-entity appearance count checked deterministically.",
+                self._tabfact_two_entity_appearance_count_answer(question, df),
+            ),
+            (
+                "TabFact first-last time gap checked deterministically.",
+                self._tabfact_first_last_time_gap_answer(question, df),
+            ),
+            (
+                "TabFact entity metric difference value checked deterministically.",
+                self._tabfact_entity_metric_difference_value_answer(question, df),
             ),
             (
                 "TabFact country pair affiliation checked deterministically.",
