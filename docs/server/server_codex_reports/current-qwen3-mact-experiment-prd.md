@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-07-31 13:30 CST
+最后更新：2026-08-01 00:33 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,7 +11,7 @@
 | item | status |
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
-| 当前正在执行 | 本轮 Qwen3-32B full200 三数据集验收已完成：WTQ、TabFact、CRT 单项准确率均超过 MACT；评估进程和模型服务已关闭，等待用户扩容后决定是否进入更多模型 gate |
+| 当前正在执行 | 进入“专利与正式实验准备”阶段：先冻结当前 Qwen3-32B v1 原型证据，再补机制消融、新 seed 泛化、多模型 gate 和正式实验包；所有结论与痕迹继续回写本文档 |
 | 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold，以及 v6b 的实体属性审计、同一行多条件审计、列值计数审计、双实体出现次数、首尾时间差、实体数值差 |
 | 当前本轮 targeted evidence | WTQ v6b full200 `155/200` vs MACT `148/200`，token ratio `0.6187`；TabFact v6b full200 `194/200` vs MACT `189/200`，token ratio `0.2014`；CRT current full200 `140/200` vs MACT `113/200`，token ratio `0.8461`；三项失败/缺答案均为 `0/0` |
 | 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact policy-v6 实跑为 `185/200` vs MACT `189/200` 未过线，v6b 新 audit shortcuts 基于该 raw 离线投影 `194/200`、净 gain 9、harm 0，fresh full200 已确认 `194/200` |
@@ -21,7 +21,7 @@
 | 下次本地模型服务资源 | 用户 2026-07-31 最新口径：暂时只使用 GPU `6,7` 跑 Qwen3-32B；若后续可用其他卡，用户会另行提供 |
 | 当前本机模型候选 | 2026-07-30 22:52 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计 JSON 现在包含 `local_model_paths` 和 `untested_local_model_paths`，新候选出现时可直接取路径传给 `--model-id` |
 | 当前外部 API 候选 | 2026-07-30 22:52 环境变量和现有实际 env 文件未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量，默认检查 `MyAgent/configs/server/*.env` 中的真实 env 文件并跳过 `.example`/`.bak`，也支持额外 `--env-file`，只读取 key 名不输出 secret 值；`experiment_api_registry.py` 统一维护 OpenRouter 默认 `api_base_url` / `api_key_env`，readiness JSON 会在 key 出现时输出 `api_provider_profiles`，`prepare_model_gate_run.py --backend api --readiness-audit ... --model-name <provider_model>` 可直接消费该 profile；API Gate healthcheck 会在 Gate-10 前检查 key、`/models` endpoint 和目标 model 是否列出 |
-| 当前阻塞条件 | 无。2026-07-31 用户要求的 Qwen3-32B 当前目标已经按 full200 三数据集单项准确率过线；下一阶段是否进入多模型 gate 等待扩容后继续 |
+| 当前阻塞条件 | 无。2026-07-31 用户要求的 Qwen3-32B 当前目标已经按 full200 三数据集单项准确率过线；2026-08-01 进入专利/正式实验准备，长跑按 gate 漏斗执行 |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 当前 Qwen3 policy-v6b/current 三数据集合计：MyAgent `489/600` vs MACT `450/600`，总体 token ratio `0.5717`，总体 elapsed ratio `0.1337`，失败/缺答案 `0/0`；总表：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/qwen3_policy_v6b_all200_acceptance_summary.json` |
 | 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
@@ -33,7 +33,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
-| 下一步建议 | 本轮 Qwen3-32B full200 验收完成后暂停长跑。扩容后进入多模型 gate：先 Gate-10 healthcheck，小样本过线再 Gate-50 / Gate-150，最后只对入围模型做 paired-200，避免一次正式实验跑五天 |
+| 下一步建议 | 先产出专利机制证据包和消融设计清单；低成本复用已有 raw/eval 做离线机制归因；需要模型服务的实验按 Gate-10 -> Gate-50 -> Gate-150 -> paired-200 扩样，不再直接全量长跑 |
 
 下一次恢复命令入口：
 
@@ -117,6 +117,184 @@ bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --comm
 | 当前项目是否可作为阶段证据 | 可以写成“Qwen3-32B 当前 full200 三数据集单项均超过 MACT，且总体 token 显著更低”的阶段证据；正式论文/专家材料仍建议扩容后按 gate 漏斗补多模型稳健性 |
 | 现在是否继续跑旧本地模型 | 不继续跑 no-go 模型；当前只围绕 Qwen3-32B + MyAgent 机制优化 |
 | 下一步实验策略 | 本轮暂停长跑并保存；扩容后从新增模型/API 候选开始 Gate-10 / Gate-50 / Gate-150，只有通过 gate 的模型进入 paired-200 |
+
+## 1.2 2026-08-01 起执行路线
+
+这一阶段的目标不是继续在当前 full200 上刷分，而是把“选择性风险协作 / 劝返”整理成可写入专利和专家材料的机制证据，并用有限成本补齐正式实验可信度。
+
+总原则：
+
+1. 当前 Qwen3-32B policy-v6b/current full200 结果冻结为 `v1_prototype_evidence`，作为阶段性达标证据。
+2. 所有新增实验结果写入 MACT `outputs/server_runs/`，每个 run 目录必须有 summary / comparison / README 或 ledger，并用 `git add -f` 同步到 GitHub。
+3. MyAgent 仓库只维护代码、脚本、唯一 PRD 和专利/实验文本草稿；不把主实验结果分散写回 MyAgent `outputs/`。
+4. 不再直接启动“全模型 full200”长跑。新模型或新抽样必须先 Gate-10，过线再 Gate-50 / Gate-150，最后只让入围候选跑 paired-200。
+5. 每完成一个子目标，在本文档的“下一阶段任务板”和对应 run 目录里同步结论、产物路径、提交号和剩余风险。
+
+### 1.2.1 下一阶段任务板
+
+| phase | subgoal | status | expected output | trace location |
+|---|---|---|---|---|
+| P0 | 冻结 Qwen3-32B v1 原型证据 | completed 2026-08-01 | 汇总当前 WTQ/TabFact/CRT full200 指标、关键优化点、代码入口、结果路径，形成专利证据索引 | MACT `qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/qwen3_policy_v6b_patent_evidence_index.md` + 本 PRD |
+| P1 | 专利机制草稿骨架 | completed 2026-08-01 | 中文专利 PRD：技术问题、核心方案、模块拆分、可保护点、实验支撑、风险边界 | 本 PRD `1.3 专利草稿骨架` |
+| P2 | 机制消融设计 | completed 2026-08-01 | 消融矩阵：legacy/current/no-risk-collab/no-verifier/no-deterministic-audit/no-evidence-retention，明确每项开关、样本量和判断标准 | 本 PRD `1.5 机制消融矩阵`；执行产物后续写入 MACT ablation run 目录 |
+| P3 | 低成本离线归因 | pending | 基于已有 raw/eval 统计每类机制贡献：提升条数、回退条数、token 变化、适用问题类型 | MACT `qwen3_32b_policy_v6b_mechanism_attribution_<date>/` |
+| P4 | 新 seed 泛化验证 | pending | 每数据集新增 seed slice，先 Gate-50 或 Gate-100；过线才扩到 200/300 | MACT `qwen3_32b_newseed_gate*/` |
+| P5 | 多模型 gate | pending | 新模型/API 候选按 Gate-10 -> Gate-50 -> Gate-150 -> paired-200 漏斗筛选 | MACT `<model_tag>_gate*/` |
+| P6 | 正式实验包 | pending | 可给专家/专利代理人的实验包：方法说明、表格、消融、泛化、多模型结论、复现实验命令 | MACT summary + MyAgent PRD |
+
+### 1.2.2 验收标准
+
+当前阶段的最低验收标准：
+
+| item | pass condition |
+|---|---|
+| 专利机制清晰度 | 能把代码优化归纳为“风险分层、证据保留、确定性审计、冲突劝返、预算控制”五类机制，而不是样本修补 |
+| 机制消融可信度 | 至少能证明 current 相对 legacy 的提升，并用 no-* 变体显示关键机制有可观贡献 |
+| 泛化风险控制 | 至少完成一组未参与调试的新 seed 小样本验证；若不过线，记录失败类型，不继续扩样 |
+| 多模型成本控制 | 任一新模型必须通过 gate 才能扩样；no-go 模型不跑 paired-200 |
+| 痕迹完整性 | 每个阶段有 JSON/MD 产物、命令或脚本入口、GitHub 提交号、失败/缺答案/token/耗时记录 |
+
+### 1.2.3 本阶段第一步
+
+第一步先做 P0/P1，不启动模型：
+
+1. 从现有 full200 comparison 和 PRD 中抽取指标，生成“Qwen3-32B v1 原型证据索引”。
+2. 把专利草稿骨架写入本文档，明确技术问题、核心模块、可保护点和实验支撑。
+3. 同步提交 MyAgent PRD；若新增 MACT evidence summary，也同步提交 MACT。
+
+当前 P0/P1 已完成。证据索引：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/qwen3_policy_v6b_patent_evidence_index.md
+```
+
+## 1.3 专利草稿骨架
+
+暂定专利方向：一种面向表格问答/表格事实验证任务的选择性风险协作与劝返方法、装置、设备及存储介质。
+
+### 1.3.1 技术问题
+
+现有多智能体或多轮推理系统通常把大量样本都送入高成本协作流程，导致 token 和耗时显著上升；而单智能体或强压缩流程虽然成本较低，但容易在以下场景失误：
+
+1. 表格被压缩后，比较、时间、极值类问题的关键行列证据被丢弃。
+2. 模型生成答案与审阅/验证结果冲突时，缺少受控的接管和劝返机制。
+3. 表格事实验证中，一些确定性结构问题被交给 LLM 自由判断，既浪费 token，又容易出现同行约束、计数约束、实体属性约束错误。
+4. 统一强协作无法区分低风险和高风险样本，难以同时获得高准确率和低成本。
+
+### 1.3.2 核心方案
+
+本项目当前可抽象为五个可保护模块：
+
+| module | purpose | current evidence |
+|---|---|---|
+| 风险分层路由模块 | 根据问题形态、压缩状态、执行失败、答案形态和验证冲突，把样本划分为低/中/高风险 | full200 总体 token ratio `0.5717`，失败/缺答案 `0/0` |
+| 证据保留与压缩控制模块 | 对比较、时间、极值、否定等高风险问题保留全局或关键候选行，避免过度压缩 | WTQ `155/200` vs MACT `148/200` |
+| 确定性语义审计模块 | 对可结构化验证的 TabFact 模式直接从表格审计，例如实体属性、同行多条件、列值计数、双实体出现次数、时间差、数值差 | TabFact `194/200` vs MACT `189/200`，token ratio `0.2014` |
+| 冲突检测与劝返模块 | 当生成答案、执行结果、审阅器或 verifier 之间发生冲突时，基于答案形态和原表证据决定是否接受审阅者接管 | WTQ negated-year / verifier override 类修复；full200 无失败/缺答案 |
+| 预算感知协作模块 | 只对高风险样本触发昂贵验证或重规划，低风险样本走轻量路径 | 总体 elapsed ratio `0.1337`；总体准确率 `489/600` vs MACT `450/600` |
+
+### 1.3.3 可保护点
+
+1. 不是简单“多智能体协作”，而是先判断样本风险，再选择是否协作、是否劝返、是否直接审计。
+2. 劝返不是无条件相信审阅器，而是受答案形态、问题语义、原始表格证据和冲突类型共同约束。
+3. 压缩不是固定比例裁剪，而是根据问题类型动态保留可能承载答案的全局行、候选行和晚列证据。
+4. 对低风险 TabFact 场景引入结构化审计器，把 LLM 判断降级为表格一致性校验，降低 token 和幻觉。
+5. 实验流程本身采用 gate 漏斗，避免把所有模型直接投入 full200/正式长跑，形成成本受控的模型筛选方法。
+
+### 1.3.4 当前实验支撑
+
+| scope | result | trace |
+|---|---|---|
+| Qwen3-32B full200 aggregate | MyAgent `489/600` vs MACT `450/600`，token ratio `0.5717` | MACT `qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/` |
+| WTQ full200 | MyAgent `155/200` vs MACT `148/200`，token ratio `0.6187` | MACT `qwen3_32b_wtq_policy_v6b_full200_20260731_1115/` |
+| TabFact full200 | MyAgent `194/200` vs MACT `189/200`，token ratio `0.2014` | MACT `qwen3_32b_tabfact_policy_v6b_full200_20260731_1255/` |
+| CRT full200 | MyAgent `140/200` vs MACT `113/200`，token ratio `0.8461` | MACT `qwen3_32b_crt_full200_current_20260730_1822/` |
+
+### 1.3.5 当前风险边界
+
+1. 当前结果足够支撑“Qwen3-32B 阶段原型有效”，但还不能替代正式多模型、多 seed 实验。
+2. full200 参与过诊断，后续必须补一组新 seed 验证，防止被质疑为样本调优。
+3. 消融实验必须证明各机制本身有贡献，不能只展示最终总分。
+4. CRT token ratio 仅为 `0.8461`，低于 MACT 但节省幅度不如 WTQ/TabFact；正式材料应使用总体 token 显著降低和分项 token 均低于 MACT的表述。
+
+## 1.4 下一步立即执行项
+
+P0/P1 完成后，下一步进入 P2/P3：
+
+1. 设计消融矩阵，优先选择不需要重跑 full200 的离线/小样本验证。
+2. 对已有 WTQ/TabFact transitions 做机制归因，统计每类机制带来的 gain、harm 和 token 影响。
+3. 如果需要新增代码开关，先加测试，确保可以稳定切换 `no_verifier_override`、`no_deterministic_audit`、`no_evidence_retention` 等模式。
+4. 只有 P2/P3 结果能解释当前提升来源后，再启动 P4 新 seed 小样本验证。
+
+当前 P2 设计已完成，见下一节。下一步执行 P3：基于已有 artifacts 做离线机制归因，不启动模型。
+
+## 1.5 机制消融矩阵
+
+消融目标：证明当前效果不是单纯依赖 Qwen3-32B 或个别样本修补，而是由“选择性风险协作 / 劝返”下的多个机制共同贡献。
+
+### 1.5.1 变体定义
+
+| variant | purpose | current switch status | expected comparison |
+|---|---|---|---|
+| `current_policy_v6b` | 当前冻结原型 | 已有结果 | 主结果：WTQ `155/200`，TabFact `194/200`，CRT `140/200` |
+| `legacy_myagent` | 去掉选择性协作主路径，复现旧 MyAgent 口径 | 已支持：`--collaboration-mode legacy` | 验证 current 相比 legacy 的净提升和 token 变化 |
+| `no_strong_verification` | 关闭高风险 LLM verifier / strong verification | 已支持：`--disable-strong-verification` | 衡量 verifier 和冲突劝返对准确率的贡献 |
+| `no_deterministic_shortcuts` | 关闭 WTQ/TabFact/CRT 确定性语义 shortcut | 已支持：`--disable-deterministic-shortcuts` | 衡量低风险直接审计对准确率和 token 的贡献 |
+| `legacy_plus_shortcuts_off` | 旧路径同时关闭 deterministic shortcuts，作为更干净的旧策略下界 | 已支持：`--collaboration-mode legacy --disable-deterministic-shortcuts` | 区分旧路由和 shortcut 的叠加影响 |
+| `no_wtq_verifier_override` | 只关闭 WTQ 答案形态/否定年份 verifier 接管 | 需要新增细粒度开关 | 衡量“劝返接管”本身，而不是 strong verification 整体 |
+| `no_evidence_retention` | 只关闭 WTQ global-row / later-column evidence retention | 需要新增细粒度开关 | 衡量证据保留机制对 WTQ 的贡献 |
+| `no_tabfact_audit_v6b` | 只关闭 TabFact v6b 新增实体属性、同行、计数、双实体、时间差、数值差审计 | 可先用 `--disable-deterministic-shortcuts` 粗消融；精细关闭需要新增开关 | 衡量 TabFact v6b audit shortcuts 的净贡献 |
+
+### 1.5.2 执行顺序
+
+| order | action | cost control | pass / stop rule |
+|---|---|---|---|
+| 1 | 离线归因 current vs old/current vs MACT transitions | 不启动模型；只读已有 comparison/raw | 若能解释大部分净提升，进入小样本消融 |
+| 2 | 已有开关 Gate-50 消融：legacy、no_strong_verification、no_deterministic_shortcuts | 每数据集优先 50 条，同 ID paired | 若某变体明显差于 current，记录贡献；若差异很小，暂不扩样 |
+| 3 | 新增细粒度开关并单测 | 只改代码，不跑长评测 | 开关必须默认不影响 current；相关单测通过 |
+| 4 | 细粒度 Gate-50 消融：no_wtq_verifier_override、no_evidence_retention、no_tabfact_audit_v6b | 只跑触发机制较多的样本 slice | 若贡献明确，再考虑 Gate-100 |
+| 5 | 入围消融扩到 full200 | 只扩关键变体，不全矩阵扩样 | 只有能支持专利论点的变体扩样 |
+
+### 1.5.3 推荐样本量
+
+| stage | WTQ | TabFact | CRT | reason |
+|---|---:|---:|---:|---|
+| offline attribution | 200 | 200 | 200 | 已有 artifacts，零模型成本 |
+| coarse ablation Gate-50 | 50 | 50 | 50 | 快速判断 legacy / no-strong / no-shortcut 是否有明显差异 |
+| targeted ablation Gate-50 | 50 targeted | 50 targeted | optional 50 | 只挑触发相关机制的样本，节省模型时间 |
+| expansion | 200 only if useful | 200 only if useful | 200 only if useful | 只扩对专利主张有价值的变体 |
+
+### 1.5.4 当前已有命令入口
+
+粗消融可以直接通过现有 runner 参数执行。示例：
+
+```bash
+python scripts/server/run_sharded_tqa.py \
+  --repo-root . \
+  --tasks wtq,tabfact,crt \
+  --endpoints http://127.0.0.1:8000/v1 \
+  --model qwen3-32b-local \
+  --api-key-env LOCAL_VLLM_API_KEY \
+  --output-root /home/ubuntu/lzz/MACT/outputs/server_runs/<ablation_run>/myagent_gate50 \
+  --collaboration-mode legacy \
+  --resume
+```
+
+可用开关：
+
+```text
+--collaboration-mode legacy
+--disable-strong-verification
+--disable-deterministic-shortcuts
+--enable-multiview-validation
+```
+
+细粒度消融需要先补代码开关；补开关时必须满足：
+
+1. 默认值保持当前结果路径不变。
+2. 每个开关写入输出行的 metadata，方便后续 summary 归因。
+3. 每个开关至少有一个单测证明启用/禁用行为不同。
+4. 任何消融 run 都要记录 eval、merged 行数、token、耗时、失败数、缺答案数。
 
 ## 2. 唯一文档规则
 
