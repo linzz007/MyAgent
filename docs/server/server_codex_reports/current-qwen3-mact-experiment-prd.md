@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-01 00:39 CST
+最后更新：2026-08-01 01:22 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,7 +11,7 @@
 | item | status |
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
-| 当前正在执行 | P0/P1/P2/P3 已完成：已冻结 Qwen3-32B v1 原型证据、写入专利骨架、定义消融矩阵，并完成离线机制归因；下一步等待模型服务可用后跑 coarse Gate-50 消融 |
+| 当前正在执行 | P0/P1/P2/P3 已完成；P2 coarse Gate-50 消融已完成 `legacy` 变体，下一步继续 `no_strong_verification` 和 `no_deterministic_shortcuts` |
 | 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold，以及 v6b 的实体属性审计、同一行多条件审计、列值计数审计、双实体出现次数、首尾时间差、实体数值差 |
 | 当前本轮 targeted evidence | WTQ v6b full200 `155/200` vs MACT `148/200`，token ratio `0.6187`；TabFact v6b full200 `194/200` vs MACT `189/200`，token ratio `0.2014`；CRT current full200 `140/200` vs MACT `113/200`，token ratio `0.8461`；三项失败/缺答案均为 `0/0` |
 | 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact policy-v6 实跑为 `185/200` vs MACT `189/200` 未过线，v6b 新 audit shortcuts 基于该 raw 离线投影 `194/200`、净 gain 9、harm 0，fresh full200 已确认 `194/200` |
@@ -33,7 +33,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
-| 下一步建议 | 下一个需要模型服务的动作是 P2 coarse Gate-50 消融：`legacy`、`no_strong_verification`、`no_deterministic_shortcuts`；跑完后再决定是否补细粒度开关和新 seed 验证 |
+| 下一步建议 | 继续 P2 coarse Gate-50：先跑 `no_strong_verification` 验证 strong verifier / 劝返贡献，再跑 `no_deterministic_shortcuts` 验证确定性审计贡献 |
 
 下一次恢复命令入口：
 
@@ -321,6 +321,22 @@ P3 不启动模型，只读取已有 current/old/MACT merged artifacts，按同 
 2. 粗消融优先跑 `no_deterministic_shortcuts`，验证 TabFact deterministic audit 的因果贡献。
 3. `legacy` 作为总对照，用来证明 current policy 相比旧路径的整体提升。
 4. 细粒度开关暂不急着写；只有 coarse Gate-50 无法解释贡献时，再补 `no_wtq_verifier_override`、`no_evidence_retention`、`no_tabfact_audit_v6b`。
+
+## 1.7 P2 coarse Gate-50 执行进度
+
+run 目录：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_coarse_ablation_gate50_20260801_0040/
+```
+
+这个 Gate-50 是 diagnostic slice：优先选 current/old/MACT 分歧样本，再补齐 50 条。因此它用于机制诊断，不作为新 seed 泛化准确率。
+
+| variant | status | WTQ | TabFact | CRT | conclusion | trace |
+|---|---|---:|---:|---:|---|---|
+| `legacy` | completed 2026-08-01 | 25/50 vs current ref 32/50 | 47/50 vs current ref 48/50 | 37/50 vs current ref 37/50 | current 相对 legacy 的诊断增益主要集中在 WTQ，TabFact 小幅，CRT 持平；支持“风险协作 / 证据保留 / 劝返”主要改善 WTQ 类复杂表格问答 | `legacy_gate50_summary.json/md` |
+| `no_strong_verification` | running next | - | - | - | 目标：验证 high-risk verifier / 劝返对 WTQ/CRT 的因果贡献 | pending |
+| `no_deterministic_shortcuts` | pending | - | - | - | 目标：验证 TabFact deterministic audit 对准确率和 token 的贡献 | pending |
 
 ## 2. 唯一文档规则
 
