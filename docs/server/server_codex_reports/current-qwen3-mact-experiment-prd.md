@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-01 01:58 CST
+最后更新：2026-08-01 02:54 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,13 +11,13 @@
 | item | status |
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
-| 当前正在执行 | P0/P1/P2/P3 已完成；P2 coarse Gate-50 消融已完成 `legacy` 和 `no_strong_verification`，下一步继续 `no_deterministic_shortcuts` |
+| 当前正在执行 | P0/P1/P2/P3 已完成；P2 coarse Gate-50 三个变体已全部完成并同步，下一步是把消融结论并入专利证据包，然后设计 P4 新 seed 小样本验证 |
 | 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold，以及 v6b 的实体属性审计、同一行多条件审计、列值计数审计、双实体出现次数、首尾时间差、实体数值差 |
 | 当前本轮 targeted evidence | WTQ v6b full200 `155/200` vs MACT `148/200`，token ratio `0.6187`；TabFact v6b full200 `194/200` vs MACT `189/200`，token ratio `0.2014`；CRT current full200 `140/200` vs MACT `113/200`，token ratio `0.8461`；三项失败/缺答案均为 `0/0` |
 | 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact policy-v6 实跑为 `185/200` vs MACT `189/200` 未过线，v6b 新 audit shortcuts 基于该 raw 离线投影 `194/200`、净 gain 9、harm 0，fresh full200 已确认 `194/200` |
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
-| 当前进程状态 | 2026-07-31 13:30：无 `run_sharded_tqa` / `tqa.py` / `vllm serve` 进程；GPU `6,7` 显存约 `3 MiB`，Qwen3-32B 服务已关闭 |
+| 当前进程状态 | 2026-08-01 02:54：无 `run_sharded_tqa` / `tqa.py` / `vllm serve` 进程；GPU `4,5,6,7` 显存约 `3 MiB`，Qwen3-32B 服务已关闭 |
 | 下次本地模型服务资源 | 用户 2026-07-31 最新口径：暂时只使用 GPU `6,7` 跑 Qwen3-32B；若后续可用其他卡，用户会另行提供 |
 | 当前本机模型候选 | 2026-07-30 22:52 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计 JSON 现在包含 `local_model_paths` 和 `untested_local_model_paths`，新候选出现时可直接取路径传给 `--model-id` |
 | 当前外部 API 候选 | 2026-07-30 22:52 环境变量和现有实际 env 文件未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量，默认检查 `MyAgent/configs/server/*.env` 中的真实 env 文件并跳过 `.example`/`.bak`，也支持额外 `--env-file`，只读取 key 名不输出 secret 值；`experiment_api_registry.py` 统一维护 OpenRouter 默认 `api_base_url` / `api_key_env`，readiness JSON 会在 key 出现时输出 `api_provider_profiles`，`prepare_model_gate_run.py --backend api --readiness-audit ... --model-name <provider_model>` 可直接消费该 profile；API Gate healthcheck 会在 Gate-10 前检查 key、`/models` endpoint 和目标 model 是否列出 |
@@ -33,7 +33,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
-| 下一步建议 | 继续 P2 coarse Gate-50：跑 `no_deterministic_shortcuts` 验证确定性审计贡献；三个 coarse 变体完成后合并写总消融结论 |
+| 下一步建议 | 不建议把三个 coarse 变体都扩 full200。下一步先把 coarse 结果写进专利证据包；若需要更强 causal 叙事，再只补细粒度开关 `no_wtq_verifier_override` / `no_tabfact_audit_v6b`，否则进入 P4 新 seed 小样本验证 |
 
 下一次恢复命令入口：
 
@@ -336,7 +336,21 @@ run 目录：
 |---|---|---:|---:|---:|---|---|
 | `legacy` | completed 2026-08-01 | 25/50 vs current ref 32/50 | 47/50 vs current ref 48/50 | 37/50 vs current ref 37/50 | current 相对 legacy 的诊断增益主要集中在 WTQ，TabFact 小幅，CRT 持平；支持“风险协作 / 证据保留 / 劝返”主要改善 WTQ 类复杂表格问答 | `legacy_gate50_summary.json/md` |
 | `no_strong_verification` | completed 2026-08-01 | 25/50 vs current ref 32/50 | 47/50 vs current ref 48/50 | 37/50 vs current ref 37/50 | 与 `legacy` 在该 diagnostic slice 上结果相同；说明 current 相对 no-strong 的主要诊断增益集中在 WTQ，支持 strong verification / 劝返路径的贡献 | `no_strong_verification_gate50_summary.json/md` |
-| `no_deterministic_shortcuts` | running next | - | - | - | 目标：验证 TabFact deterministic audit 对准确率和 token 的贡献 | pending |
+| `no_deterministic_shortcuts` | completed 2026-08-01 | 33/50 vs current ref 32/50 | 39/50 vs current ref 48/50 | 30/50 vs current ref 37/50 | 关闭 deterministic shortcuts 后 TabFact 下降 9/50 且 token 变为 current 的 1.4487 倍；CRT 下降 7/50；说明 deterministic audit 是高价值低成本模块，不只是 TabFact 局部补丁 | `no_deterministic_shortcuts_gate50_summary.json/md` |
+
+coarse 总表：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_coarse_ablation_gate50_20260801_0040/coarse_ablation_gate50_summary.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_coarse_ablation_gate50_20260801_0040/coarse_ablation_gate50_summary.md
+```
+
+P2 coarse 结论：
+
+1. `legacy` 和 `no_strong_verification` 在 diagnostic Gate-50 上结果相同：WTQ `25/50`、TabFact `47/50`、CRT `37/50`；相对 current reference 最大差距是 WTQ `-7`，支持 strong verification / 劝返路径是 WTQ 诊断增益的主要来源。
+2. `no_deterministic_shortcuts` 对 TabFact 影响最大：TabFact 从 current reference `48/50` 降至 `39/50`，token ratio vs current 为 `1.4487`；这直接支撑“确定性审计既提准确率又省 token”的专利论点。
+3. `no_deterministic_shortcuts` 在 CRT 上也从 current reference `37/50` 降至 `30/50`，说明 deterministic audit 应写成跨数据集模块，而不是只写 TabFact 特例。
+4. 三个 coarse 变体均为 failed/missing `0/0`，所以差异主要来自机制开关，不是运行失败。
 
 ## 2. 唯一文档规则
 
