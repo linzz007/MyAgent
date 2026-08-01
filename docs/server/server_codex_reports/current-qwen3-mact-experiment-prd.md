@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-01 17:47 CST
+最后更新：2026-08-01 21:28 CST
 
 ## 0. 下一次启动先看这里
 
@@ -203,6 +203,56 @@ bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --comm
 
 ```text
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/qwen3_policy_v6b_patent_evidence_index.md
+```
+
+### 1.2.4 专利实验完善总目标
+
+从 2026-08-01 21:28 CST 起，当前长期目标定义为：
+
+> 完善面向专利编写的 MyAgent vs MACT 实验数据体系：在已达标的 Qwen3-32B full200 基础上，补齐 WTQ 泛化诊断、机制消融、多 seed 稳定性、多模型 gate、正式实验包和专利说明书初稿所需证据，并将过程与结果持续写入唯一 PRD 和 MACT 结果目录后同步 GitHub。
+
+这个目标的交付物不是“再跑很多数据”本身，而是形成一套能支撑专利代理人/专家理解的证据链：先说明机制，再证明机制有效，再证明不是单一样本、单一模型、单一数据集上的偶然结果。
+
+目标拆分如下：
+
+| milestone | subgoal | required evidence | pass condition | status |
+|---|---|---|---|---|
+| E0 | 冻结 Qwen3-32B 主结果 | WTQ/TabFact/CRT full200 paired summary、token、耗时、失败/缺答案 | 三数据集单项均超过 MACT，整体 token 明显低 | completed |
+| E1 | WTQ 新 seed 风险诊断 | P4b WTQ `mact_only=9`、`myagent_only=3` 分歧样本分类表 | 说明 WTQ 新 seed 输在哪里，并给出是否需要机制修复的判断 | next |
+| E2 | 机制消融补强 | `legacy`、`no_strong_verification`、`no_deterministic_shortcuts` 已有 coarse Gate-50；必要时补细粒度开关消融 | 至少证明风险协作/劝返、确定性审计、证据保留中 2-3 个模块有因果贡献 | in progress |
+| E3 | 多 seed 稳定性 | 至少 2 组新增 seed Gate-50 或 1 组 Gate-100/150，优先覆盖 WTQ | 不要求每组都三项全赢，但必须解释波动并证明总体/token 优势稳定 | pending |
+| E4 | 多模型 gate | 新本地模型或外部 API 模型按 Gate-10 -> Gate-50 -> Gate-150 -> paired-200 漏斗执行 | 至少 1 个额外模型给出可解释结果；no-go 模型不扩 full200 | pending |
+| E5 | 正式实验包 | 方法说明、数据切分、baseline 定义、模型配置、硬件、token/elapsed 统计、失败规则、raw/eval/summary 索引 | 专家可按路径复核每个表格数值和每次实验口径 | pending |
+| E6 | 专利说明书初稿 | 技术问题、系统流程、模块定义、实施例、权利要求草案、实验效果表 | 能从实验结果直接支撑“选择性风险协作/劝返”相对 MACT 的效果 | pending |
+| E7 | 最终收口审计 | MyAgent 与 MACT git 状态、提交号、关键命令、进程/GPU 状态、结果目录完整性 | 仓库 clean 且已 push；没有未保存主实验产物 | pending |
+
+实验优先级：
+
+1. 先做 E1 WTQ 分歧诊断。P4b 已暴露 WTQ 新 seed `37/50 < 43/50`，这是当前最大泛化风险；如果不解释，后续专利材料不能稳妥写“跨样本稳定超过 MACT”。
+2. 再做 E2 机制消融补强。已有 coarse 消融能支持大方向，但专利最好补 1-2 个细粒度 causal 证据，例如关闭 WTQ verifier override 或关闭 evidence retention。
+3. 扩容后做 E3/E4。服务器时间优先给新增 seed 和新增模型 gate，不做全模型全量枚举；只有 gate 通过的候选进入 paired-200。
+4. 实验边跑边写 E5/E6。不要等全部实验结束才写专利草稿；先把技术方案和已成立的 full200 证据写起来，后续把消融/泛化/多模型表格逐步补入。
+
+停止条件：
+
+| condition | action |
+|---|---|
+| 新模型 Gate-10 明显低于 Qwen3-32B reference 或失败/缺答案过多 | 记录 no-go，不扩 Gate-50 |
+| Gate-50 overall 不超过 reference，且没有明确专利价值 | 记录 no-go，不扩 Gate-150 |
+| Gate-150 未达到 paired-200 门槛 | 不进入 MACT paired-200，除非 PRD 中明确写人工例外原因 |
+| 某个优化只改善单个样本、不能抽象成机制 | 不写入专利主方案，只保留为错误分析 |
+| 新 seed 连续显示 WTQ 单项不稳 | 暂停扩样，优先做 WTQ evidence retention / verifier override 诊断 |
+
+所有新增主实验产物继续写入：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/<run_name>/
+```
+
+所有目标状态、结论边界、下一步安排继续只更新本文档：
+
+```text
+/home/ubuntu/lzz/MyAgent/docs/server/server_codex_reports/current-qwen3-mact-experiment-prd.md
 ```
 
 ## 1.3 专利草稿骨架
