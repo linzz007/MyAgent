@@ -22,6 +22,7 @@
 | 当前进程状态 | 2026-08-01 22:07：`curl` 访问 `8000/8001` 仍 connection refused；`nvidia-smi --query-gpu` 显示 GPU `6,7` 约 `42031/42027 MiB` 占用且 GPU 利用率 `100%/100%`，但 `nvidia-smi --query-compute-apps` 未返回可见 compute PID，process scan 未发现 vLLM/评测 runner。按用户约束暂时只用 `6,7` 时，当前不能可靠启动 Qwen3-32B fresh run |
 | 当前进程状态 | 2026-08-01 22:31：`curl` 访问 `8000/8001` 仍 connection refused；`nvidia-smi --query-gpu` 显示 GPU `6,7` 约 `42031/42027 MiB`、利用率 `100%/100%`，process scan 未发现 vLLM/API server/MACT runner/tqa/run_sharded_tqa。当前只准备不依赖模型的 E3 multi-seed 实验包，不启动 fresh run |
 | 当前进程状态 | 2026-08-01 22:44：`8000/8001` 仍 connection refused；GPU `6,7` 约 `42031/42027 MiB` 且利用率 `100%/100%`；`nvidia-smi --query-compute-apps` 与 `nvidia-smi pmon -c 1` 均无可见 PID；`fuser` 未安装；process scan 未发现 vLLM/API server/MACT runner/tqa/run_sharded_tqa。按用户只用 `6,7` 的约束，本轮仍不启动 fresh Qwen run |
+| 当前进程状态 | 2026-08-01 23:34：最新 preflight 仍为 `blocked_gpu_runtime_residual`；`8000/8001` connection refused；目标 GPU `6,7` 分别约 `42031/42027 MiB` 且 `100%/100%` util，`nvidia-smi --query-compute-apps` 与 `nvidia-smi pmon -c 1` 均无可见 PID。GPU `0,1,2,3` 当前为 `0 MiB/0%`，但用户最新执行口径是暂时使用 `6,7`，因此不擅自改卡启动正式 Qwen3 队列；需服务器清理 `6,7` runtime 或用户授权其他干净 GPU pair |
 | 最新 fresh preflight | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_wtq_targeted_fresh_preflight_20260801_2207.md`；记录本轮未启动 fresh run 的 endpoint/GPU/进程证据，以及新增自动总结器入口 |
 | 最新 after-targeted full50 自动化 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_after_targeted_full50_automation_20260801_2217.md`；记录 affected-slice 通过后如何自动跑 WTQ full50 和 paired summary，并验证 fresh summary 缺失时会阻止误扩样 |
 | 最新机制证据矩阵 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_patent_mechanism_evidence_20260801_2222/patent_mechanism_evidence_matrix.md`；将 full200 anchor、coarse Gate-50 消融和 offline attribution 合并为专利可引用的机制证据表 |
@@ -869,7 +870,7 @@ MACT run 目录里的 `LIVE_LEDGER.md` 只作为运行证据账本存在，不�
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/SHA256SUMS
 ```
 
-当前硬阻塞：2026-08-01 23:19:45 CST 的 runtime preflight 显示 `http://127.0.0.1:8000/v1/models` 和 `http://127.0.0.1:8001/v1/models` 均为 connection refused；目标 GPU `6,7` 分别约 `42031/42027 MiB` 显存占用且 `100%` util，但 `nvidia-smi --query-compute-apps` 和 `nvidia-smi pmon` 均未列出进程。该证据已保存到 MACT `qwen3_runtime_preflight_20260801_231945.json/md` 和 latest preflight。不能把任何 pending online run 写成已完成；服务器扩容或清理 runtime 后先重跑 preflight，再启动 Qwen3 服务并按队列脚本阶段运行。
+当前硬阻塞：2026-08-01 23:34:05 CST 的 runtime preflight 显示 `http://127.0.0.1:8000/v1/models` 和 `http://127.0.0.1:8001/v1/models` 均为 connection refused；目标 GPU `6,7` 分别约 `42031/42027 MiB` 显存占用且 `100%` util，但 `nvidia-smi --query-compute-apps` 和 `nvidia-smi pmon` 均未列出进程。GPU `0,1,2,3` 当前空闲，但按用户最新口径本阶段暂时只用 `6,7`，所以不改卡强跑。该证据已保存到 MACT `qwen3_runtime_preflight_20260801_233405.json/md` 和 latest preflight。不能把任何 pending online run 写成已完成；服务器扩容或清理 runtime 后先重跑 preflight，再启动 Qwen3 服务并按队列脚本阶段运行。
 
 正式结果台账：2026-08-01 新增 `build_current_formal_result_ledger.py`，从 frozen full200 summary、P4b summary、正式模板和 latest preflight 生成 `latest_formal_result_ledger_current.json/md`。该台账用于专家/专利表格填充，明确区分 completed rows 和 pending rows，不把 WTQ fresh、E3 multi-seed 或多模型 gate 写成已完成。
 
@@ -877,7 +878,7 @@ MACT run 目录里的 `LIVE_LEDGER.md` 只作为运行证据账本存在，不�
 
 一致性审计：2026-08-01 新增 `audit_patent_package_consistency.py`，提交前检查 PRD、manifest、latest formal ledger、latest preflight 和关键数字是否一致；在线阻塞只作为 warning，路径或数字不一致作为 error。
 
-最新一致性审计：`patent_package_consistency_audit_20260801_232219.json/md`，`overall_status=pass`，`errors=0`，`warnings=1`；唯一 warning 是在线实验仍被 `blocked_gpu_runtime_residual` 阻塞。
+最新一致性审计入口：MACT 专利实验包内 `latest_patent_package_consistency_audit.json/md`；当前 `overall_status=pass`，`errors=0`，`warnings=1`，唯一 warning 是在线实验仍被 `blocked_gpu_runtime_residual` 阻塞。时间戳审计文件会随每次同步刷新，不再要求 PRD 逐个硬编码最新文件名。
 
 恢复完整性校验：2026-08-01 新增 `build_patent_package_checksums.py` 和 `SHA256SUMS`，覆盖专利实验包文件及 manifest 中已存在的关键证据文件。服务器清空/迁移后，在 `/home/ubuntu/lzz` 下执行 `sha256sum -c MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/SHA256SUMS` 可验证恢复文件是否损坏或缺失。
 
