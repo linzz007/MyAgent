@@ -863,11 +863,19 @@ MACT run 目录里的 `LIVE_LEDGER.md` 只作为运行证据账本存在，不�
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_qwen3_runtime_preflight_zh.md
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/build_current_formal_result_ledger.py
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_formal_result_ledger_current_zh.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/audit_patent_package_consistency.py
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_patent_package_consistency_audit_zh.md
 ```
 
-当前硬阻塞：2026-08-01 23:10:59 CST 的 runtime preflight 显示 `http://127.0.0.1:8000/v1/models` 和 `http://127.0.0.1:8001/v1/models` 均为 connection refused；目标 GPU `6,7` 分别约 `42031/42027 MiB` 显存占用且 `100%` util，但 `nvidia-smi --query-compute-apps` 和 `nvidia-smi pmon` 均未列出进程。该证据已保存到 MACT `qwen3_runtime_preflight_20260801_231059.json/md` 和 latest preflight。不能把任何 pending online run 写成已完成；服务器扩容或清理 runtime 后先重跑 preflight，再启动 Qwen3 服务并按队列脚本阶段运行。
+当前硬阻塞：2026-08-01 23:19:45 CST 的 runtime preflight 显示 `http://127.0.0.1:8000/v1/models` 和 `http://127.0.0.1:8001/v1/models` 均为 connection refused；目标 GPU `6,7` 分别约 `42031/42027 MiB` 显存占用且 `100%` util，但 `nvidia-smi --query-compute-apps` 和 `nvidia-smi pmon` 均未列出进程。该证据已保存到 MACT `qwen3_runtime_preflight_20260801_231945.json/md` 和 latest preflight。不能把任何 pending online run 写成已完成；服务器扩容或清理 runtime 后先重跑 preflight，再启动 Qwen3 服务并按队列脚本阶段运行。
 
 正式结果台账：2026-08-01 新增 `build_current_formal_result_ledger.py`，从 frozen full200 summary、P4b summary、正式模板和 latest preflight 生成 `latest_formal_result_ledger_current.json/md`。该台账用于专家/专利表格填充，明确区分 completed rows 和 pending rows，不把 WTQ fresh、E3 multi-seed 或多模型 gate 写成已完成。
+
+当前正式台账状态：`active_not_complete`。
+
+一致性审计：2026-08-01 新增 `audit_patent_package_consistency.py`，提交前检查 PRD、manifest、latest formal ledger、latest preflight 和关键数字是否一致；在线阻塞只作为 warning，路径或数字不一致作为 error。
+
+最新一致性审计：`patent_package_consistency_audit_20260801_232219.json/md`，`overall_status=pass`，`errors=0`，`warnings=1`；唯一 warning 是在线实验仍被 `blocked_gpu_runtime_residual` 阻塞。
 
 ## 3. 仓库和同步位置
 
