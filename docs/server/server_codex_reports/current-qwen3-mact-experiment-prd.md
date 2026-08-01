@@ -859,9 +859,11 @@ MACT run 目录里的 `LIVE_LEDGER.md` 只作为运行证据账本存在，不�
 ```text
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/run_remaining_qwen3_patent_queue.sh
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/remaining_qwen3_queue_runbook_zh.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/preflight_qwen3_runtime.py
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_qwen3_runtime_preflight_zh.md
 ```
 
-当前硬阻塞：2026-08-01 复核时 `http://127.0.0.1:8000/v1/models` 和 `http://127.0.0.1:8001/v1/models` 均为 connection refused，不能把任何 pending online run 写成已完成。服务器扩容后先启动 Qwen3 服务，再按队列脚本阶段运行。
+当前硬阻塞：2026-08-01 23:07:39 CST 的 runtime preflight 显示 `http://127.0.0.1:8000/v1/models` 和 `http://127.0.0.1:8001/v1/models` 均为 connection refused；目标 GPU `6,7` 分别约 `42031/42027 MiB` 显存占用且 `100%` util，但 `nvidia-smi --query-compute-apps` 和 `nvidia-smi pmon` 均未列出进程。该证据已保存到 MACT `qwen3_runtime_preflight_20260801_230739.json/md` 和 latest preflight。不能把任何 pending online run 写成已完成；服务器扩容或清理 runtime 后先重跑 preflight，再启动 Qwen3 服务并按队列脚本阶段运行。
 
 ## 3. 仓库和同步位置
 
