@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-01 22:52 CST
+最后更新：2026-08-01 23:42 CST
 
 ## 0. 下一次启动先看这里
 
@@ -23,6 +23,7 @@
 | 当前进程状态 | 2026-08-01 22:31：`curl` 访问 `8000/8001` 仍 connection refused；`nvidia-smi --query-gpu` 显示 GPU `6,7` 约 `42031/42027 MiB`、利用率 `100%/100%`，process scan 未发现 vLLM/API server/MACT runner/tqa/run_sharded_tqa。当前只准备不依赖模型的 E3 multi-seed 实验包，不启动 fresh run |
 | 当前进程状态 | 2026-08-01 22:44：`8000/8001` 仍 connection refused；GPU `6,7` 约 `42031/42027 MiB` 且利用率 `100%/100%`；`nvidia-smi --query-compute-apps` 与 `nvidia-smi pmon -c 1` 均无可见 PID；`fuser` 未安装；process scan 未发现 vLLM/API server/MACT runner/tqa/run_sharded_tqa。按用户只用 `6,7` 的约束，本轮仍不启动 fresh Qwen run |
 | 当前进程状态 | 2026-08-01 23:34：最新 preflight 仍为 `blocked_gpu_runtime_residual`；`8000/8001` connection refused；目标 GPU `6,7` 分别约 `42031/42027 MiB` 且 `100%/100%` util，`nvidia-smi --query-compute-apps` 与 `nvidia-smi pmon -c 1` 均无可见 PID。GPU `0,1,2,3` 当前为 `0 MiB/0%`，但用户最新执行口径是暂时使用 `6,7`，因此不擅自改卡启动正式 Qwen3 队列；需服务器清理 `6,7` runtime 或用户授权其他干净 GPU pair |
+| 当前进程状态 | 2026-08-01 23:42：latest preflight 仍为 `blocked_gpu_runtime_residual`；`8000/8001` connection refused；目标 GPU `6,7` 仍约 `42031/42027 MiB` 且 `100%/100%` util，`nvidia-smi --query-compute-apps` 和 `nvidia-smi pmon -c 1` 均无可见 PID。GPU `0` 约 `6489 MiB`、`1,2,3` 约 `3 MiB`，但仍未获得改用其他 GPU pair 的用户授权。本阻塞已连续多轮复现，剩余 WTQ fresh、E3 Seed-C/D 和多模型 gate 不能继续在线执行 |
 | 最新 fresh preflight | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_wtq_targeted_fresh_preflight_20260801_2207.md`；记录本轮未启动 fresh run 的 endpoint/GPU/进程证据，以及新增自动总结器入口 |
 | 最新 after-targeted full50 自动化 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_after_targeted_full50_automation_20260801_2217.md`；记录 affected-slice 通过后如何自动跑 WTQ full50 和 paired summary，并验证 fresh summary 缺失时会阻止误扩样 |
 | 最新机制证据矩阵 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_patent_mechanism_evidence_20260801_2222/patent_mechanism_evidence_matrix.md`；将 full200 anchor、coarse Gate-50 消融和 offline attribution 合并为专利可引用的机制证据表 |
@@ -870,7 +871,9 @@ MACT run 目录里的 `LIVE_LEDGER.md` 只作为运行证据账本存在，不�
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/SHA256SUMS
 ```
 
-当前硬阻塞：2026-08-01 23:34:05 CST 的 runtime preflight 显示 `http://127.0.0.1:8000/v1/models` 和 `http://127.0.0.1:8001/v1/models` 均为 connection refused；目标 GPU `6,7` 分别约 `42031/42027 MiB` 显存占用且 `100%` util，但 `nvidia-smi --query-compute-apps` 和 `nvidia-smi pmon` 均未列出进程。GPU `0,1,2,3` 当前空闲，但按用户最新口径本阶段暂时只用 `6,7`，所以不改卡强跑。该证据已保存到 MACT `qwen3_runtime_preflight_20260801_233405.json/md` 和 latest preflight。不能把任何 pending online run 写成已完成；服务器扩容或清理 runtime 后先重跑 preflight，再启动 Qwen3 服务并按队列脚本阶段运行。
+当前硬阻塞：2026-08-01 23:42:46 CST 的 runtime preflight 显示 `http://127.0.0.1:8000/v1/models` 和 `http://127.0.0.1:8001/v1/models` 均为 connection refused；目标 GPU `6,7` 分别约 `42031/42027 MiB` 显存占用且 `100%` util，但 `nvidia-smi --query-compute-apps` 和 `nvidia-smi pmon` 均未列出进程。按用户最新口径本阶段暂时只用 `6,7`，所以不改卡强跑。该证据已保存到 MACT `qwen3_runtime_preflight_20260801_234246.json/md` 和 latest preflight。不能把任何 pending online run 写成已完成；服务器扩容或清理 runtime 后先重跑 preflight，再启动 Qwen3 服务并按队列脚本阶段运行。
+
+Blocked audit 结论：同一 `blocked_gpu_runtime_residual` 条件已经连续多轮复现，且当前剩余目标都依赖可用 Qwen3 endpoint、新授权 GPU pair、新模型或 API key。代码、输入、runbook、formal ledger、checksum 和恢复入口均已准备并同步；在服务器清理 `6,7` runtime 或用户授权其他干净 GPU pair 前，本目标不能继续产生有效在线实验结果。
 
 正式结果台账：2026-08-01 新增 `build_current_formal_result_ledger.py`，从 frozen full200 summary、P4b summary、正式模板和 latest preflight 生成 `latest_formal_result_ledger_current.json/md`。该台账用于专家/专利表格填充，明确区分 completed rows 和 pending rows，不把 WTQ fresh、E3 multi-seed 或多模型 gate 写成已完成。
 
