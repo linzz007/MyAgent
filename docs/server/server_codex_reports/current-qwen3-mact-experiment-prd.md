@@ -374,6 +374,7 @@ E5/E6 已完成 draft 版，不是最终版。它把当前 full200、coarse abla
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/README.md
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/evidence_manifest.json
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/experiment_package_index_zh.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/formal_experiment_schedule_zh.md
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/patent_disclosure_draft_zh.md
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/next_validation_checklist_zh.md
 ```
@@ -382,8 +383,9 @@ E5/E6 已完成 draft 版，不是最终版。它把当前 full200、coarse abla
 
 1. `evidence_manifest.json` 是机器可读索引，记录 MyAgent/MACT commit、full200 主结果、P4b、E1/E2 证据路径和剩余工作。
 2. `experiment_package_index_zh.md` 是中文实验包索引，面向专家复核实验口径和数值来源。
-3. `patent_disclosure_draft_zh.md` 是中文专利说明书初稿，包含技术领域、背景问题、技术方案、方法流程、创新点、实验效果、权利要求草案方向和写作边界。
-4. `next_validation_checklist_zh.md` 是服务器清理/扩容后的下一次验证清单，优先跑 WTQ affected-slice fresh Qwen。
+3. `formal_experiment_schedule_zh.md` 是正式实验排期和成本控制方案，按 affected-slice、WTQ full50、机制消融、多 seed、多模型 gate 分阶段设置停止规则。
+4. `patent_disclosure_draft_zh.md` 是中文专利说明书初稿，包含技术领域、背景问题、技术方案、方法流程、创新点、实验效果、权利要求草案方向和写作边界。
+5. `next_validation_checklist_zh.md` 是服务器清理/扩容后的下一次验证清单，优先跑 WTQ affected-slice fresh Qwen。
 
 当前写作边界仍然不变：E5/E6 可以支撑“Qwen3-32B full200 阶段原型有效”和“机制设计清晰”，但不能替代 fresh targeted run、多 seed、多模型和最终正式实验。
 
