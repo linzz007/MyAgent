@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-01 22:31 CST
+最后更新：2026-08-01 22:44 CST
 
 ## 0. 下一次启动先看这里
 
@@ -21,10 +21,12 @@
 | 当前进程状态 | 2026-08-01 21:49：`curl` 访问 `8000/8001` 均 connection refused；`nvidia-smi --query-compute-apps` 未返回任何 compute PID；`nvidia-smi --query-gpu` 显示 GPU `0,1,2,3,4,5,6,7` 分别约 `25.8GB/46.9GB/20GB/20GB/42GB/42GB/42GB/42GB` 显存占用但无可见计算进程。当前不强启 Qwen3；fresh targeted run 等服务器清理/扩容后执行 |
 | 当前进程状态 | 2026-08-01 22:07：`curl` 访问 `8000/8001` 仍 connection refused；`nvidia-smi --query-gpu` 显示 GPU `6,7` 约 `42031/42027 MiB` 占用且 GPU 利用率 `100%/100%`，但 `nvidia-smi --query-compute-apps` 未返回可见 compute PID，process scan 未发现 vLLM/评测 runner。按用户约束暂时只用 `6,7` 时，当前不能可靠启动 Qwen3-32B fresh run |
 | 当前进程状态 | 2026-08-01 22:31：`curl` 访问 `8000/8001` 仍 connection refused；`nvidia-smi --query-gpu` 显示 GPU `6,7` 约 `42031/42027 MiB`、利用率 `100%/100%`，process scan 未发现 vLLM/API server/MACT runner/tqa/run_sharded_tqa。当前只准备不依赖模型的 E3 multi-seed 实验包，不启动 fresh run |
+| 当前进程状态 | 2026-08-01 22:44：`8000/8001` 仍 connection refused；GPU `6,7` 约 `42031/42027 MiB` 且利用率 `100%/100%`；`nvidia-smi --query-compute-apps` 与 `nvidia-smi pmon -c 1` 均无可见 PID；`fuser` 未安装；process scan 未发现 vLLM/API server/MACT runner/tqa/run_sharded_tqa。按用户只用 `6,7` 的约束，本轮仍不启动 fresh Qwen run |
 | 最新 fresh preflight | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_wtq_targeted_fresh_preflight_20260801_2207.md`；记录本轮未启动 fresh run 的 endpoint/GPU/进程证据，以及新增自动总结器入口 |
 | 最新 after-targeted full50 自动化 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_after_targeted_full50_automation_20260801_2217.md`；记录 affected-slice 通过后如何自动跑 WTQ full50 和 paired summary，并验证 fresh summary 缺失时会阻止误扩样 |
 | 最新机制证据矩阵 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_patent_mechanism_evidence_20260801_2222/patent_mechanism_evidence_matrix.md`；将 full200 anchor、coarse Gate-50 消融和 offline attribution 合并为专利可引用的机制证据表 |
 | 最新 multi-seed 准备包 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_multiseed_gate50_20260801_2231/`；已生成 Seed-C/Seed-D 各 WTQ/TabFact/CRT 50 行输入，总计 `300` 行；排除 full200、coarse diagnostic、P4b new-seed 和 targeted affected slices；`verify_multiseed_package.py` 校验通过，模型执行 pending |
+| 最新完成度审计 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/completion_gap_audit_20260801_2244_zh.md`；逐项确认 R1 full200 主证据完成、R2 机制证据基本完成、R3 WTQ fresh 闭环未完成、R4 multi-seed prepared 未执行、R5 多模型 gate 仍缺可行新候选、R6 专利包 draft complete、R7 当前状态已同步 |
 | 下次本地模型服务资源 | 用户 2026-07-31 最新口径：暂时只使用 GPU `6,7` 跑 Qwen3-32B；若后续可用其他卡，用户会另行提供 |
 | 当前本机模型候选 | 2026-07-30 22:52 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计 JSON 现在包含 `local_model_paths` 和 `untested_local_model_paths`，新候选出现时可直接取路径传给 `--model-id` |
 | 当前外部 API 候选 | 2026-07-30 22:52 环境变量和现有实际 env 文件未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量，默认检查 `MyAgent/configs/server/*.env` 中的真实 env 文件并跳过 `.example`/`.bak`，也支持额外 `--env-file`，只读取 key 名不输出 secret 值；`experiment_api_registry.py` 统一维护 OpenRouter 默认 `api_base_url` / `api_key_env`，readiness JSON 会在 key 出现时输出 `api_provider_profiles`，`prepare_model_gate_run.py --backend api --readiness-audit ... --model-name <provider_model>` 可直接消费该 profile；API Gate healthcheck 会在 Gate-10 前检查 key、`/models` endpoint 和目标 model 是否列出 |
