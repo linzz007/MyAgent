@@ -1393,6 +1393,14 @@ def _canonicalize_crt_scalar(
         if numeric is not None and re.search(r"\bstandard\s+deviation\b", question_text, flags=re.I):
             return round(numeric, 3)
         return value
+    if not value.strip():
+        return value
+    stripped_entity = _strip_entity_metadata(value)
+    if (
+        stripped_entity != value
+        and re.search(r"\b(nation|country|team|player|winner|highest\s+score)\b", question_text, flags=re.I)
+    ):
+        return stripped_entity
     if re.search(r"\b(highest|long jump|mark|achieved)\b", question_text, flags=re.I):
         metric_text = _metric_number_text(value)
         if metric_text is not None:
@@ -1466,12 +1474,13 @@ def _is_empty_answer_value(value: Any) -> bool:
 def _strip_entity_metadata(value: Any) -> Any:
     if not isinstance(value, str):
         return value
-    return re.split(
+    text = re.split(
         r"\s+release\s+date\s*:\s*",
         value.strip(),
         maxsplit=1,
         flags=re.I,
     )[0].strip()
+    return re.sub(r"\s*\([a-z]{2,4}\)\s*$", "", text, flags=re.I).strip()
 
 
 # ------------------------ Router ------------------------
@@ -3543,6 +3552,21 @@ class TableQAPipeline:
         ]
         if work.empty:
             return None
+        threshold_match = re.search(
+            r"\bat\s+least\s+((?:\d+)|one|two|three|four|five|six|seven|eight|nine|ten)\s+gold\s+medals?\b",
+            text,
+            flags=re.I,
+        )
+        if threshold_match and re.search(r"\bnation\b|\bcountry\b", text, flags=re.I):
+            threshold = _small_number_from_text(threshold_match.group(1))
+            if threshold is None:
+                return None
+            gold = pd.to_numeric(work[gold_cols[0]], errors="coerce")
+            total = int(gold.notna().sum())
+            if not total:
+                return None
+            percentage = int(gold.ge(threshold).sum()) / total * 100
+            return f"{percentage:.1f}%"
         if re.search(r"\brandomly\s+chosen\s+medalist\b", text, flags=re.I):
             match = re.search(r"\bfrom\s+(.+?)[?.]?$", text, flags=re.I)
             if not match or not total_cols:
@@ -3567,6 +3591,27 @@ class TableQAPipeline:
         return None
 
     @staticmethod
+    def _crt_country_matches(phrase: str, value: Any) -> bool:
+        phrase_key = re.sub(r"^the\s+", "", _loose_text_key(_strip_entity_metadata(phrase))).strip()
+        value_key = re.sub(r"^the\s+", "", _loose_text_key(_strip_entity_metadata(value))).strip()
+        if not phrase_key or not value_key:
+            return False
+        aliases = {
+            "uk": {"uk", "united kingdom", "great britain", "britain", "gb"},
+            "united kingdom": {"uk", "united kingdom", "great britain", "britain", "gb"},
+            "great britain": {"uk", "united kingdom", "great britain", "britain", "gb"},
+            "britain": {"uk", "united kingdom", "great britain", "britain", "gb"},
+            "united states": {"united states", "usa", "us", "u s"},
+            "usa": {"united states", "usa", "us", "u s"},
+            "us": {"united states", "usa", "us", "u s"},
+        }
+        phrase_aliases = aliases.get(phrase_key, {phrase_key})
+        value_aliases = aliases.get(value_key, {value_key})
+        if phrase_aliases & value_aliases:
+            return True
+        return any(alias and (alias == value_key or alias in value_key) for alias in phrase_aliases)
+
+    @staticmethod
     def _crt_medal_ratio_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
         text = question or ""
         if not re.search(r"\bratio\b", text, flags=re.I):
@@ -3575,6 +3620,36 @@ class TableQAPipeline:
         silver_cols = [col for col in df.columns if re.fullmatch(r"(?i)silver", str(col).strip())]
         total_cols = [col for col in df.columns if re.fullmatch(r"(?i)total", str(col).strip())]
         rank_cols = [col for col in df.columns if re.fullmatch(r"(?i)rank", str(col).strip())]
+        nation_cols = [col for col in df.columns if re.search(r"\b(nation|country)\b", str(col), flags=re.I)]
+        named_match = re.search(
+            r"\bratio\s+of\s+(.+?)\s+medals?\s+earned\s+by\s+(.+?)\s+to\s+"
+            r"(?:the\s+)?(.+?)\s+medals?\s+earned\s+by\s+(.+?)[?.]?$",
+            text,
+            flags=re.I,
+        )
+        if named_match and nation_cols:
+            left_metric_phrase, left_country, right_metric_phrase, right_country = [
+                part.strip(" \t\r\n\"'")
+                for part in named_match.groups()
+            ]
+            metric_cols = {
+                "gold": gold_cols[0] if gold_cols else None,
+                "silver": silver_cols[0] if silver_cols else None,
+                "total": total_cols[0] if total_cols else None,
+            }
+            left_col = metric_cols.get(_loose_text_key(left_metric_phrase))
+            right_col = metric_cols.get(_loose_text_key(right_metric_phrase))
+            if left_col is not None and right_col is not None:
+                left_value = right_value = None
+                for _, row in df.iterrows():
+                    if left_value is None and TableQAPipeline._crt_country_matches(left_country, row[nation_cols[0]]):
+                        left_value = _numeric_measure_value(row[left_col])
+                    if right_value is None and TableQAPipeline._crt_country_matches(right_country, row[nation_cols[0]]):
+                        right_value = _numeric_measure_value(row[right_col])
+                if left_value is not None and right_value is not None:
+                    left_int = int(left_value) if float(left_value).is_integer() else left_value
+                    right_int = int(right_value) if float(right_value).is_integer() else right_value
+                    return f"{left_int}:{right_int}"
         if gold_cols and silver_cols and re.search(r"\bsilver\s+to\s+gold\b", text, flags=re.I):
             work = df.copy()
             work["_gold"] = pd.to_numeric(work[gold_cols[0]], errors="coerce").fillna(0)
@@ -3600,6 +3675,153 @@ class TableQAPipeline:
                 return None
             return round(float(gold_total / medal_total), 2)
         return None
+
+    @staticmethod
+    def _crt_total_points_season_ratio_answer(question: str, df: pd.DataFrame) -> Optional[float]:
+        text = question or ""
+        if not re.search(r"\bratio\b.*\btotal\s+points\b", text, flags=re.I):
+            return None
+        season_matches = re.findall(r"\b(20\d{2})\s+([A-Za-z])\s+season\b", text, flags=re.I)
+        if len(season_matches) < 2:
+            return None
+
+        def select_col(year_text: str, group_text: str) -> Optional[Any]:
+            short_year = year_text[-2:]
+            group_key = group_text.lower()
+            for col in df.columns:
+                col_key = _loose_text_key(col)
+                if short_year in col_key.split() and group_key in col_key.split() and re.search(r"\b(pt|pts|points?)\b", col_key):
+                    return col
+            return None
+
+        left_col = select_col(*season_matches[0])
+        right_col = select_col(*season_matches[1])
+        if left_col is None or right_col is None:
+            return None
+        left_total = pd.to_numeric(df[left_col], errors="coerce").sum()
+        right_total = pd.to_numeric(df[right_col], errors="coerce").sum()
+        if not right_total:
+            return None
+        return round(float(left_total / right_total), 2)
+
+    @staticmethod
+    def _crt_average_metric_for_threshold_answer(question: str, df: pd.DataFrame) -> Optional[float]:
+        text = question or ""
+        match = re.search(
+            r"\baverage\s+(.+?)\s+of\s+.+?\bmore\s+than\s+([\d.]+)\s+(.+?)(?:\s+at\b|\s+in\b|\?|$)",
+            text,
+            flags=re.I,
+        )
+        if not match:
+            return None
+        metric_phrase, threshold_text, threshold_phrase = match.groups()
+        metric_col = _select_numeric_measure_column_by_phrase(df, metric_phrase)
+        threshold_col = _select_numeric_measure_column_by_phrase(df, threshold_phrase)
+        threshold = _numeric_measure_value(threshold_text)
+        if metric_col is None or threshold_col is None or threshold is None:
+            return None
+        work = pd.DataFrame({
+            "metric": _numeric_measure_series(df, metric_col),
+            "threshold": _numeric_measure_series(df, threshold_col),
+        }).dropna()
+        work = work[work["threshold"].gt(float(threshold))]
+        if work.empty:
+            return None
+        return round(float(work["metric"].mean()), 1)
+
+    @staticmethod
+    def _crt_penalty_score_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        text = question or ""
+        if not re.search(r"\bpenalt", text, flags=re.I):
+            return None
+        score_match = re.search(r"\bscore\s+of\s+(\d+)\s*-\s*(\d+)|\baggregate\s+score\s+of\s+(\d+)\s*-\s*(\d+)", text, flags=re.I)
+        if not score_match:
+            return None
+        score_parts = [part for part in score_match.groups() if part is not None]
+        target = rf"{score_parts[0]}\s*-\s*{score_parts[1]}"
+        score_cols = [col for col in df.columns if re.search(r"\b(score|agg|aggregate)\b", str(col), flags=re.I)]
+        team_cols = [col for col in df.columns if re.search(r"\b(team\s*1|home|visitor|away)\b", str(col), flags=re.I)]
+        other_team_cols = [col for col in df.columns if re.search(r"\b(team\s*2|opponent)\b", str(col), flags=re.I)]
+        if not score_cols:
+            return None
+        matched_rows = [
+            row
+            for _, row in df.iterrows()
+            if re.search(target, str(row[score_cols[0]]))
+            and re.search(r"\bp\b|\bpenalt", str(row[score_cols[0]]), flags=re.I)
+        ]
+        if re.match(r"\s*did\b", text, flags=re.I):
+            return "Yes" if matched_rows else "No"
+        if matched_rows and team_cols and other_team_cols:
+            row = matched_rows[0]
+            return f"{str(row[team_cols[0]]).strip()} and {str(row[other_team_cols[0]]).strip()}"
+        return None
+
+    @staticmethod
+    def _crt_partner_win_loss_ratio_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(r"\bwin[-\s]*loss\s+ratio\b.*?\bwith\s+(.+?)[?.]?$", question or "", flags=re.I)
+        if not match:
+            return None
+        partner_phrase = match.group(1)
+        partner_cols = [col for col in df.columns if re.search(r"\bpartner\b", str(col), flags=re.I)]
+        outcome_cols = [col for col in df.columns if re.search(r"\b(outcome|result|status)\b", str(col), flags=re.I)]
+        if not partner_cols or not outcome_cols:
+            return None
+        wins = losses = 0
+        for _, row in df.iterrows():
+            if not _cell_contains_entity_phrase(partner_phrase, row[partner_cols[0]]):
+                continue
+            outcome_key = _loose_text_key(row[outcome_cols[0]])
+            if re.search(r"\bwinner\b|\bwon\b|\bchampion\b", outcome_key):
+                wins += 1
+            elif re.search(r"\brunner\s+up\b|\blost\b|\bloss\b|\bfinalist\b", outcome_key):
+                losses += 1
+        if wins == 0 and losses == 0:
+            return None
+        return f"{wins}:{losses}"
+
+    @staticmethod
+    def _crt_year_variation_answer(question: str, df: pd.DataFrame) -> Optional[int]:
+        text = question or ""
+        if not re.search(r"\bvariation\b.*\byear\s+established\b|\byear\s+established\b.*\bvariation\b", text, flags=re.I):
+            return None
+        year_cols = [col for col in df.columns if re.search(r"\byear\s+established\b|\bestablished\b", str(col), flags=re.I)]
+        if not year_cols:
+            return None
+        years = _numeric_measure_series(df, year_cols[0]).dropna()
+        if years.empty:
+            return None
+        variation = float(years.max() - years.min())
+        return int(variation) if variation.is_integer() else round(variation, 3)
+
+    @staticmethod
+    def _crt_named_team_largest_margin_answer(question: str, df: pd.DataFrame) -> Optional[int]:
+        match = re.search(r"\blargest\s+margin\s+of\s+victory\s+for\s+(.+?)(?:\s+during\b|\s+in\b|\?|$)", question or "", flags=re.I)
+        if not match:
+            return None
+        team_phrase = match.group(1).strip(" \t\r\n\"'")
+        left_cols = [col for col in df.columns if re.search(r"\b(visitor|away|team\s*1)\b", str(col), flags=re.I)]
+        right_cols = [col for col in df.columns if re.search(r"\b(home|team\s*2|opponent)\b", str(col), flags=re.I)]
+        score_cols = [col for col in df.columns if re.search(r"\bscore\b", str(col), flags=re.I)]
+        if not left_cols or not right_cols or not score_cols:
+            return None
+
+        def team_matches(value: Any) -> bool:
+            team_key = _loose_text_key(team_phrase)
+            value_key = _loose_text_key(value)
+            return bool(value_key and team_key and (value_key == team_key or value_key in team_key or team_key in value_key))
+
+        margins: List[int] = []
+        for _, row in df.iterrows():
+            score_match = re.search(r"\b(\d+)\s*-\s*(\d+)\b", str(row[score_cols[0]]))
+            if not score_match:
+                continue
+            left_score, right_score = int(score_match.group(1)), int(score_match.group(2))
+            if team_matches(row[left_cols[0]]) and left_score > right_score:
+                margins.append(left_score - right_score)
+            if team_matches(row[right_cols[0]]) and right_score > left_score:
+                margins.append(right_score - left_score)
+        return max(margins) if margins else None
 
     @staticmethod
     def _crt_majority_medal_by_group_answer(question: str, df: pd.DataFrame) -> Optional[str]:
@@ -5325,6 +5547,167 @@ class TableQAPipeline:
         return "true" if abs(observed_diff - float(expected_diff)) <= 1e-6 else "false"
 
     @staticmethod
+    def _tabfact_only_not_from_country_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+only\s+(.+?)\s+who\s+be\s+not\s+from\s+the\s+(.+?)\s+be\s+from\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        entity_phrase, excluded_country, expected_country = match.groups()
+        entity_cols = [
+            col
+            for col in df.columns
+            if re.search(rf"\b{re.escape(_singular_token(entity_phrase.strip().lower()))}\b|\b(player|name|person)\b", str(col), flags=re.I)
+        ]
+        country_cols = [col for col in df.columns if re.search(r"\b(country|nation|nationality)\b", str(col), flags=re.I)]
+        if not country_cols:
+            return None
+        country_col = country_cols[0]
+        non_excluded = [
+            row
+            for _, row in df.iterrows()
+            if not _cell_contains_entity_phrase(excluded_country, row[country_col])
+        ]
+        if len(non_excluded) != 1:
+            return "false"
+        if entity_cols and not any(_loose_text_key(row[entity_cols[0]]) for row in non_excluded):
+            return None
+        return "true" if _cell_contains_entity_phrase(expected_country, non_excluded[0][country_col]) else "false"
+
+    @staticmethod
+    def _tabfact_entity_numeric_year_value_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+(.+?)\s+have\s+a\s+(.+?)\s+of\s+([\d,]+(?:\.\d+)?)\s+in\s+(\d{4})[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        entity_phrase, metric_phrase, expected_text, year_text = match.groups()
+        metric_col = None
+        metric_tokens = set(_loose_tokens(metric_phrase))
+        for col in df.columns:
+            col_key = _loose_text_key(col)
+            col_tokens = set(_loose_tokens(col))
+            if str(year_text) not in col_key:
+                continue
+            if metric_tokens & col_tokens or _loose_text_key(metric_phrase) in col_key:
+                metric_col = col
+                break
+        if metric_col is None:
+            metric_col = _select_numeric_measure_column_by_phrase(df, metric_phrase)
+        expected = _numeric_measure_value(expected_text)
+        if metric_col is None or expected is None:
+            return None
+        search_cols = [col for col in df.columns if col != metric_col]
+        rows = _find_rows_for_entity_across_row(df, entity_phrase, search_cols)
+        if not rows:
+            entity_key = _loose_text_key(entity_phrase)
+            for col in search_cols:
+                col_key = _loose_text_key(col)
+                if entity_key.endswith(f" {col_key}"):
+                    rows = _find_rows_for_entity_across_row(df, entity_key[: -len(col_key)].strip(), search_cols)
+                    break
+        if not rows:
+            return None
+        return "true" if any(abs((_numeric_measure_value(row[metric_col]) or float("nan")) - expected) <= 1e-6 for row in rows) else "false"
+
+    @staticmethod
+    def _tabfact_column_value_fraction_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+(.+?)\s+be\s+(.+?)\s+for\s+(\d+)\s+of\s+the\s+(\d+)\s+.+?[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        column_phrase, value_phrase, expected_text, total_text = match.groups()
+        target_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, column_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, column_phrase)
+        )
+        if target_col is None:
+            return None
+        expected = int(expected_text)
+        stated_total = int(total_text)
+        count = sum(1 for value in df[target_col].tolist() if _value_matches_phrase(value, value_phrase))
+        return "true" if count == expected and len(df) == stated_total else "false"
+
+    @staticmethod
+    def _tabfact_finish_position_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+finish\s+(\d+)(?:st|nd|rd|th)?\s+(\d+)\s+times?[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        entity_phrase, position_text, expected_text = match.groups()
+        position_cols = [col for col in df.columns if re.search(r"\b(finish|position|rank|place|result)\b", str(col), flags=re.I)]
+        if not position_cols:
+            return None
+        target_position = int(position_text)
+        count = 0
+        for _, row in df.iterrows():
+            if not _row_contains_entity_phrase(row, entity_phrase, [col for col in df.columns if col not in position_cols]):
+                continue
+            if any((_numeric_measure_value(row[col]) or float("nan")) == target_position for col in position_cols):
+                count += 1
+        return "true" if count == int(expected_text) else "false"
+
+    @staticmethod
+    def _tabfact_zero_score_team_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+teams?\s+score\s+(zero|\d+)\s+points?[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected = _small_number_from_text(match.group(1))
+        score_text = match.group(2)
+        target_score = 0 if score_text.lower() == "zero" else int(score_text)
+        score_cols = [col for col in df.columns if re.search(r"\b(score|points?|pts)\b", str(col), flags=re.I)]
+        if expected is None or not score_cols:
+            return None
+        count = 0
+        for _, row in df.iterrows():
+            values = [_numeric_measure_value(row[col]) for col in score_cols]
+            if any(value is not None and abs(value - target_score) <= 1e-6 for value in values):
+                count += 1
+        return "true" if count == expected else "false"
+
+    @staticmethod
+    def _tabfact_minmax_numeric_difference_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+(lowest|smallest|highest|largest)\s+(.+?)\s+be\s+([\d.]+)\s+"
+            r"(lower|higher|more|less)\s+than\s+the\s+(lowest|smallest|highest|largest)\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_extreme, metric_phrase, expected_text, _, right_extreme, _ = match.groups()
+        metric_col = _select_numeric_measure_column_by_phrase(df, metric_phrase)
+        if metric_col is None:
+            numeric_cols = [
+                col for col in df.columns if _numeric_measure_series(df, col).dropna().nunique() >= 2
+            ]
+            if len(numeric_cols) == 1:
+                metric_col = numeric_cols[0]
+        expected = _numeric_measure_value(expected_text)
+        if metric_col is None or expected is None:
+            return None
+        series = _numeric_measure_series(df, metric_col).dropna()
+        if series.empty:
+            return None
+        left_value = float(series.min()) if left_extreme.lower() in {"lowest", "smallest"} else float(series.max())
+        right_value = float(series.min()) if right_extreme.lower() in {"lowest", "smallest"} else float(series.max())
+        return "true" if abs(abs(right_value - left_value) - float(expected)) <= 1e-6 else "false"
+
+    @staticmethod
     def _tabfact_entity_attribute_answer(question: str, df: pd.DataFrame) -> Optional[str]:
         match = re.search(
             r"^(?:the\s+)?(.+?)\s+(?:have|has|had|be|is|are|was|were)\s+(?:an?\s+)?(.+?)[?.]?$",
@@ -5334,6 +5717,13 @@ class TableQAPipeline:
         if not match:
             return None
         subject_phrase, remainder = match.groups()
+        if re.search(r"\b(?:when|with)\b", question or "", flags=re.I):
+            question_key = _loose_text_key(question)
+            mentioned_cols = [
+                col for col in df.columns if _loose_text_key(col) and _loose_text_key(col) in question_key
+            ]
+            if len(mentioned_cols) >= 2:
+                return None
         remainder_key = _loose_text_key(remainder)
         if not remainder_key:
             return None
@@ -5380,6 +5770,46 @@ class TableQAPipeline:
             return None
         if re.search(r"\b(?:less|more|greater|higher|lower|fewer)\s+than\b", text, flags=re.I):
             return None
+
+        def clause_value(clause: str) -> Optional[str]:
+            clause_key = _loose_text_key(clause)
+            if not clause_key:
+                return None
+            conditions: List[Tuple[Any, set[int]]] = []
+            for col in df.columns:
+                col_key = _loose_text_key(col)
+                if not col_key or col_key not in clause_key:
+                    continue
+                matched_rows: set[int] = set()
+                for row_position, value in enumerate(df[col].tolist()):
+                    value_key = _loose_text_key(value)
+                    if not value_key or value_key in {"none", "nan", "na", "n a", "-"}:
+                        continue
+                    if len(value_key) < 3 and not re.search(r"\d", value_key):
+                        continue
+                    if value_key in clause_key:
+                        matched_rows.add(row_position)
+                if matched_rows:
+                    conditions.append((col, matched_rows))
+            if len(conditions) < 2:
+                return None
+            for row_position in range(len(df)):
+                if all(row_position in rows for _, rows in conditions):
+                    return "true"
+            return "false"
+
+        clauses = [
+            part.strip()
+            for part in re.split(r"\s+\band\s+", text, flags=re.I)
+            if part.strip()
+        ]
+        if len(clauses) > 1:
+            clause_results = [clause_value(clause) for clause in clauses]
+            if any(result == "false" for result in clause_results):
+                return "false"
+            if clause_results and all(result == "true" for result in clause_results):
+                return "true"
+
         question_key = _loose_text_key(text)
         if not question_key:
             return None
@@ -5401,7 +5831,7 @@ class TableQAPipeline:
             if matched_rows:
                 conditions.append((col, matched_rows))
 
-        if len(conditions) < 3:
+        if len(conditions) < 2:
             return None
         for row_position in range(len(df)):
             if all(row_position in rows for _, rows in conditions):
@@ -7120,12 +7550,36 @@ class TableQAPipeline:
                 self._tabfact_date_metric_difference_answer(question, df),
             ),
             (
-                "TabFact entity attribute row checked deterministically.",
-                self._tabfact_entity_attribute_answer(question, df),
+                "TabFact only-not-country claim checked deterministically.",
+                self._tabfact_only_not_from_country_answer(question, df),
+            ),
+            (
+                "TabFact entity numeric year value checked deterministically.",
+                self._tabfact_entity_numeric_year_value_answer(question, df),
+            ),
+            (
+                "TabFact column value fraction count checked deterministically.",
+                self._tabfact_column_value_fraction_count_answer(question, df),
+            ),
+            (
+                "TabFact finish position count checked deterministically.",
+                self._tabfact_finish_position_count_answer(question, df),
+            ),
+            (
+                "TabFact zero-score team count checked deterministically.",
+                self._tabfact_zero_score_team_count_answer(question, df),
+            ),
+            (
+                "TabFact min/max numeric difference checked deterministically.",
+                self._tabfact_minmax_numeric_difference_answer(question, df),
             ),
             (
                 "TabFact same-row cell mentions checked deterministically.",
                 self._tabfact_same_row_cell_mention_answer(question, df),
+            ),
+            (
+                "TabFact entity attribute row checked deterministically.",
+                self._tabfact_entity_attribute_answer(question, df),
             ),
             (
                 "TabFact column value count assertion checked deterministically.",
@@ -7308,6 +7762,30 @@ class TableQAPipeline:
             (
                 "CRT medal ratio computed deterministically.",
                 self._crt_medal_ratio_answer(question, df),
+            ),
+            (
+                "CRT total-points season ratio rounded deterministically.",
+                self._crt_total_points_season_ratio_answer(question, df),
+            ),
+            (
+                "CRT threshold-filtered average rounded deterministically.",
+                self._crt_average_metric_for_threshold_answer(question, df),
+            ),
+            (
+                "CRT penalty score relation checked deterministically.",
+                self._crt_penalty_score_answer(question, df),
+            ),
+            (
+                "CRT partner win-loss ratio formatted deterministically.",
+                self._crt_partner_win_loss_ratio_answer(question, df),
+            ),
+            (
+                "CRT year-established variation computed as range.",
+                self._crt_year_variation_answer(question, df),
+            ),
+            (
+                "CRT named-team largest winning margin computed deterministically.",
+                self._crt_named_team_largest_margin_answer(question, df),
             ),
             (
                 "CRT majority medal group checked deterministically.",

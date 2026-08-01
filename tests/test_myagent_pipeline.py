@@ -4018,6 +4018,231 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertIsNone(result.risk_assessment)
         self.assertIsNone(result.evidence_pack)
 
+    def test_tabfact_same_row_pair_shortcut_handles_two_column_conditions(self):
+        df = pd.DataFrame(
+            {
+                "home team": ["norwich city", "chelsea"],
+                "score": ["1 - 2", "2 - 3"],
+                "away team": ["bradford city", "crystal palace"],
+            }
+        )
+        pipeline, _ = self._pipeline(FakePipelineLLM(0.8, [], []))
+        question = (
+            "chelsea be the home team when crystal palace be the away team and "
+            "norwich city be the home team when bradford city be the away team"
+        )
+        state = TQASessionState(
+            question=question,
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="true_false",
+            answer_contract=infer_answer_contract(question, "true_false"),
+            dataset_profile="tabfact",
+        )
+
+        self.assertTrue(pipeline._try_tabfact_semantic_shortcut(state))
+        self.assertEqual(state.final_value, "true")
+
+    def test_tabfact_only_not_from_country_shortcut(self):
+        df = pd.DataFrame(
+            {
+                "player": ["byron nelson", "jimmy thomson", "tommy armour"],
+                "country": ["united states", "scotland united states", "scotland"],
+            }
+        )
+        pipeline, _ = self._pipeline(FakePipelineLLM(0.8, [], []))
+        question = "the only player who be not from the united state be from scotland"
+        state = TQASessionState(
+            question=question,
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="true_false",
+            answer_contract=infer_answer_contract(question, "true_false"),
+            dataset_profile="tabfact",
+        )
+
+        self.assertTrue(pipeline._try_tabfact_semantic_shortcut(state))
+        self.assertEqual(state.final_value, "true")
+
+    def test_tabfact_entity_numeric_year_value_shortcut(self):
+        df = pd.DataFrame(
+            {
+                "district": ["paco", "santa mesa"],
+                "population (2010 census)": ["70978", "99993"],
+            }
+        )
+        pipeline, _ = self._pipeline(FakePipelineLLM(0.8, [], []))
+        question = "the santa mesa district have a population of 99993 in 2010"
+        state = TQASessionState(
+            question=question,
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="true_false",
+            answer_contract=infer_answer_contract(question, "true_false"),
+            dataset_profile="tabfact",
+        )
+
+        self.assertTrue(pipeline._try_tabfact_semantic_shortcut(state))
+        self.assertEqual(state.final_value, "true")
+
+    def test_tabfact_column_value_count_and_minmax_diff_shortcuts(self):
+        pipeline, _ = self._pipeline(FakePipelineLLM(0.8, [], []))
+        count_df = pd.DataFrame(
+            {
+                "race name": [f"race {index}" for index in range(20)],
+                "constructor": ["lotus - climax"] * 11 + ["cooper - climax"] * 9,
+            }
+        )
+        count_question = "the constructor be lotus - climax for 11 of the 20 one race"
+        count_state = TQASessionState(
+            question=count_question,
+            df=count_df,
+            table_schema=_build_table_schema(count_df),
+            answer_mode="true_false",
+            answer_contract=infer_answer_contract(count_question, "true_false"),
+            dataset_profile="tabfact",
+        )
+
+        self.assertTrue(pipeline._try_tabfact_semantic_shortcut(count_state))
+        self.assertEqual(count_state.final_value, "true")
+
+        diff_df = pd.DataFrame({"name": ["a", "b"], "avge": ["0.15", "0.48"]})
+        diff_question = "the lowest average be 0.33 lower than the highest average"
+        diff_state = TQASessionState(
+            question=diff_question,
+            df=diff_df,
+            table_schema=_build_table_schema(diff_df),
+            answer_mode="true_false",
+            answer_contract=infer_answer_contract(diff_question, "true_false"),
+            dataset_profile="tabfact",
+        )
+
+        self.assertTrue(pipeline._try_tabfact_semantic_shortcut(diff_state))
+        self.assertEqual(diff_state.final_value, "true")
+
+    def test_crt_medal_ratio_probability_and_rounding_shortcuts(self):
+        medals = pd.DataFrame(
+            {
+                "nation": ["united states (usa)", "great britain (gbr)", "belarus (blr)"],
+                "gold": [3, 1, 1],
+                "total": [4, 2, 2],
+            }
+        )
+        ratio_question = (
+            "What is the ratio of gold medals earned by the United States to "
+            "the total medals earned by UK?"
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_medal_ratio_answer(ratio_question, medals),
+            "3:2",
+        )
+
+        probability_question = (
+            "What is the probability that a nation will earn at least two gold medals "
+            "in the 2012 Summer Olympics?"
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_medal_probability_answer(probability_question, medals),
+            "33.3%",
+        )
+
+        season_df = pd.DataFrame({"08 a pts": [27, 22], "09 c pts": [36, 22]})
+        self.assertEqual(
+            TableQAPipeline._crt_total_points_season_ratio_answer(
+                "What is the ratio of total points earned in the 2008 A season to "
+                "total points earned in the 2009 C season?",
+                season_df,
+            ),
+            0.84,
+        )
+
+    def test_crt_average_threshold_penalty_and_win_loss_shortcuts(self):
+        golfers = pd.DataFrame(
+            {
+                "weeks": [656, 331, 97, 61, 56, 50, 44, 39],
+                "order": [9, 3, 4, 2, 15, 5, 7, 16],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_average_metric_for_threshold_answer(
+                "What is the average order of world number one golfers who have "
+                "spent more than 40 weeks at the top?",
+                golfers,
+            ),
+            6.4,
+        )
+
+        uefa = pd.DataFrame(
+            {
+                "team 1": ["manchester city", "marseille"],
+                "agg": ["2 - 2 (4 - 3 p )", "4 - 3"],
+                "team 2": ["aalborg bk", "ajax"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_penalty_score_answer(
+                "Did any teams have an aggregate score of 4 - 3 with a penalty shootout?",
+                uefa,
+            ),
+            "Yes",
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_penalty_score_answer(
+                "What teams played in a match with a score of 4 - 3 and went to penalties?",
+                uefa,
+            ),
+            "manchester city and aalborg bk",
+        )
+
+        doubles = pd.DataFrame(
+            {
+                "outcome": ["winner", "winner", "runner - up", "runner - up"],
+                "partner": ["jaime fillol", "jaime fillol", "jaime fillol", "other"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_partner_win_loss_ratio_answer(
+                "What is the win-loss ratio when Patricio Cornejo plays with Jaime Fillol?",
+                doubles,
+            ),
+            "2:1",
+        )
+
+    def test_crt_range_variation_margin_and_entity_suffix_normalization(self):
+        years = pd.DataFrame({"year established": [1769, 1832, 1477, 1911]})
+        self.assertEqual(
+            TableQAPipeline._crt_year_variation_answer(
+                "How much variation is there in the year established among the members?",
+                years,
+            ),
+            434,
+        )
+
+        games = pd.DataFrame(
+            {
+                "visitor": ["atlanta", "new jersey", "philadelphia"],
+                "score": ["2 - 3", "3 - 1", "2 - 4"],
+                "home": ["new jersey", "edmonton", "new jersey"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._crt_named_team_largest_margin_answer(
+                "What was the largest margin of victory for New Jersey Devils during the season?",
+                games,
+            ),
+            2,
+        )
+
+        self.assertEqual(_strip_entity_metadata("netherlands (ned)"), "netherlands")
+        self.assertEqual(
+            _canonicalize_crt_scalar(
+                "netherlands (ned)",
+                "If a nation's score was equal to the sum of the number of gold and silver medals it won, which nation had the highest score?",
+                pd.DataFrame({"nation": ["netherlands (ned)", "belgium (bel)"]}),
+            ),
+            "netherlands",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
