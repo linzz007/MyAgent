@@ -865,6 +865,8 @@ MACT run 目录里的 `LIVE_LEDGER.md` 只作为运行证据账本存在，不�
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_formal_result_ledger_current_zh.md
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/audit_patent_package_consistency.py
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_patent_package_consistency_audit_zh.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/build_patent_package_checksums.py
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/SHA256SUMS
 ```
 
 当前硬阻塞：2026-08-01 23:19:45 CST 的 runtime preflight 显示 `http://127.0.0.1:8000/v1/models` 和 `http://127.0.0.1:8001/v1/models` 均为 connection refused；目标 GPU `6,7` 分别约 `42031/42027 MiB` 显存占用且 `100%` util，但 `nvidia-smi --query-compute-apps` 和 `nvidia-smi pmon` 均未列出进程。该证据已保存到 MACT `qwen3_runtime_preflight_20260801_231945.json/md` 和 latest preflight。不能把任何 pending online run 写成已完成；服务器扩容或清理 runtime 后先重跑 preflight，再启动 Qwen3 服务并按队列脚本阶段运行。
@@ -876,6 +878,8 @@ MACT run 目录里的 `LIVE_LEDGER.md` 只作为运行证据账本存在，不�
 一致性审计：2026-08-01 新增 `audit_patent_package_consistency.py`，提交前检查 PRD、manifest、latest formal ledger、latest preflight 和关键数字是否一致；在线阻塞只作为 warning，路径或数字不一致作为 error。
 
 最新一致性审计：`patent_package_consistency_audit_20260801_232219.json/md`，`overall_status=pass`，`errors=0`，`warnings=1`；唯一 warning 是在线实验仍被 `blocked_gpu_runtime_residual` 阻塞。
+
+恢复完整性校验：2026-08-01 新增 `build_patent_package_checksums.py` 和 `SHA256SUMS`，覆盖专利实验包文件及 manifest 中已存在的关键证据文件。服务器清空/迁移后，在 `/home/ubuntu/lzz` 下执行 `sha256sum -c MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/SHA256SUMS` 可验证恢复文件是否损坏或缺失。
 
 ## 3. 仓库和同步位置
 
