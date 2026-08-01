@@ -832,6 +832,37 @@ after-fix full50 结论：P4a current-only 新 seed 门槛已通过，WTQ `37/50
 
 MACT run 目录里的 `LIVE_LEDGER.md` 只作为运行证据账本存在，不替代本文档，也不再新增第二份 PRD。
 
+## 2.1 当前活动目标和完成判定
+
+当前对话的活动目标已经固定为：
+
+```text
+完善面向专利编写的 MyAgent vs MACT 实验数据体系：在已达标的 Qwen3-32B full200 基础上，补齐 WTQ 泛化诊断、机制消融、多 seed 稳定性、多模型 gate、正式实验包和专利说明书初稿所需证据，并将过程与结果持续写入唯一 PRD 和 MACT 结果目录后同步 GitHub。
+```
+
+当前主锚点使用 policy-v6b full200，不再用更早的 canonical full200 作为最终效果口径：Qwen3-32B full200 已完成 WTQ/TabFact/CRT 三数据集同 ID 200 条验收，MyAgent `489/600` vs MACT `450/600`，总体 token ratio `0.5717`，三数据集单项分别为 WTQ `155/200 > 148/200`、TabFact `194/200 > 189/200`、CRT `140/200 > 113/200`，failed/missing `0/0`。旧 canonical full200 段落保留为历史证据，不作为当前收口判定。
+
+完成判定：
+
+| subgoal | status | pass condition / evidence |
+|---|---|---|
+| Qwen3-32B full200 主证据 | completed | 三数据集单项均超过 MACT，总体 token 明显更低，summary 在 MACT `qwen3_32b_policy_v6b_all200_acceptance_20260731_132611` |
+| P4b 新 seed paired gate | completed with WTQ risk | overall MyAgent `112/150` vs MACT `111/150`，但 WTQ `37/50 < 43/50`，因此需要 WTQ fresh 闭环 |
+| WTQ targeted fresh | pending endpoint recovery | 9-row affected slice 真实 Qwen run `>=7/9`，failed/missing `0/0`；通过后才跑 P4b WTQ full50 |
+| P4b WTQ after-fix full50 | pending WTQ fresh | 目标 MyAgent `>43/50`，token ratio `<0.75`，failed/missing `0/0` |
+| E3 multi-seed 稳定性 | prepared not run | Seed-C/Seed-D 输入和 runner 已在 MACT 准备；先 current-only Gate-50，通过才跑 MACT paired |
+| 多模型 gate | waiting new model/API | 新本地模型或 API key 出现后才按 Gate-10 -> Gate-50 -> Gate-150 执行，不重跑已 no-go 模型 |
+| 专利材料收口 | draft complete final pending | 当前已有说明书初稿、机制矩阵、权利要求追踪；fresh/seed/model 结果补齐后更新正式实验表 |
+
+剩余 Qwen3 队列入口已经写入 MACT 专利实验包：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/run_remaining_qwen3_patent_queue.sh
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/remaining_qwen3_queue_runbook_zh.md
+```
+
+当前硬阻塞：2026-08-01 复核时 `http://127.0.0.1:8000/v1/models` 和 `http://127.0.0.1:8001/v1/models` 均为 connection refused，不能把任何 pending online run 写成已完成。服务器扩容后先启动 Qwen3 服务，再按队列脚本阶段运行。
+
 ## 3. 仓库和同步位置
 
 | repo | path | branch | sync rule | role |
