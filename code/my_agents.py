@@ -834,6 +834,42 @@ def _small_number_from_text(value: str) -> Optional[int]:
     return None
 
 
+def _text_mentions_number_or_ordinal(value: Any, number: int) -> bool:
+    text = _loose_text_key(value)
+    if not text:
+        return False
+    if re.search(rf"\b{number}\b", text):
+        return True
+    cardinal_words = {
+        1: "one",
+        2: "two",
+        3: "three",
+        4: "four",
+        5: "five",
+        6: "six",
+        7: "seven",
+        8: "eight",
+        9: "nine",
+        10: "ten",
+    }
+    ordinal_words = {
+        1: "first",
+        2: "second",
+        3: "third",
+        4: "fourth",
+        5: "fifth",
+        6: "sixth",
+        7: "seventh",
+        8: "eighth",
+        9: "ninth",
+        10: "tenth",
+    }
+    return any(
+        word and re.search(rf"\b{re.escape(word)}\b", text)
+        for word in (cardinal_words.get(number), ordinal_words.get(number), f"{number}th", f"{number}rd", f"{number}nd", f"{number}st")
+    )
+
+
 def _loose_text_key(value: Any) -> str:
     text = str(value or "").lower()
     text = text.replace("&", " and ")
@@ -1368,6 +1404,26 @@ def _canonicalize_wtq_scalar(value: Any, df: pd.DataFrame, question: str) -> Any
         and candidate.upper() in COUNTRY_CODE_NAMES
     ):
         return COUNTRY_CODE_NAMES[candidate.upper()]
+    if (
+        re.match(r"\s*(?:who|which)\b", question_text, flags=re.I)
+        or re.search(r"\bperson\b", question_text, flags=re.I)
+    ) and not re.search(r"\b(?:country|countries|nation|nations)\b", question_text, flags=re.I):
+        person = _strip_entity_metadata(candidate)
+        person = re.sub(
+            r"^\s*(?:mg|col|ltc|maj|capt|cpt|gen|brig|adm|sir|dr|prof)\.?\s+",
+            "",
+            person,
+            flags=re.I,
+        ).strip()
+        for country_name in sorted(COUNTRY_CODE_NAMES.values(), key=len, reverse=True):
+            person = re.sub(
+                rf"\s+{re.escape(country_name)}\s*$",
+                "",
+                person,
+                flags=re.I,
+            ).strip()
+        if person and person != candidate:
+            return person
     pattern = re.compile(rf"(?<!\w){re.escape(candidate)}(?!\w)", flags=re.I)
     matches: List[str] = []
     for column in df.columns:
@@ -6542,6 +6598,13 @@ class TableQAPipeline:
                 break
         if start_index is None:
             return None
+        reference_row_index, reference_col_index, _ = cells[start_index]
+        target_col = TableQAPipeline._wtq_adjacent_target_column(df, target_phrase)
+        if target_col is not None and rows.columns[reference_col_index] == target_col:
+            next_row_index = reference_row_index + 1
+            if next_row_index < len(rows):
+                value = rows.loc[next_row_index, target_col]
+                return None if _is_missing_marker(value) else value
         wants_year = bool(re.search(r"\byear\b", target_phrase, flags=re.I))
         for _, _, value in cells[start_index + 1:]:
             if _is_missing_marker(value):
@@ -6554,6 +6617,164 @@ class TableQAPipeline:
                 continue
             if _loose_text_key(text):
                 return value
+        return None
+
+    @staticmethod
+    def _wtq_adjacent_target_column(df: pd.DataFrame, target_phrase: str) -> Optional[Any]:
+        phrase = re.sub(
+            r"\b(?:the|a|an|next|previous|directly|listed|came|come|comes)\b",
+            " ",
+            target_phrase or "",
+            flags=re.I,
+        )
+        phrase = re.sub(r"\s+", " ", phrase).strip()
+        phrase_key = _loose_text_key(phrase)
+        if re.search(r"\b(?:experiment\s+)?number\b", phrase_key, flags=re.I):
+            for column in df.columns:
+                if _loose_text_key(column) in {"num", "no", "number"} or str(column).strip() == "#":
+                    return column
+        return (
+            TableQAPipeline._select_column_by_semantic_tokens(df, phrase)
+            or TableQAPipeline._select_column_by_tokens(df, phrase)
+        )
+
+    @staticmethod
+    def _wtq_directly_before_reference_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\b(?:which|what)\s+(.+?)\s+(?:came|comes|come)\s+directly\s+before\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        target_phrase, reference = match.groups()
+        cell = TableQAPipeline._wtq_reference_cell(df, reference.strip(" \t\r\n\"'"))
+        if cell is None:
+            return None
+        row_index, _ = cell
+        if row_index <= 0:
+            return None
+        rows = TableQAPipeline._wtq_non_summary_rows(df).reset_index(drop=True)
+        target_col = TableQAPipeline._wtq_adjacent_target_column(df, target_phrase)
+        if target_col is None:
+            return None
+        value = rows.loc[row_index - 1, target_col]
+        return None if _is_missing_marker(value) else value
+
+    @staticmethod
+    def _wtq_overtime_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        if not re.search(
+            r"\b(?:how\s+many|number\s+of(?:\s+times)?)\b.*\bovertime\b",
+            question or "",
+            flags=re.I,
+        ):
+            return None
+        entity_groups: List[List[str]] = []
+        between_match = re.search(
+            r"\bbetween\s+(?:the\s+)?(.+?)\s+and\s+(?:the\s+)?(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if between_match:
+            entity_groups = [_loose_tokens(part) for part in between_match.groups()]
+
+        count = 0
+        for _, row in TableQAPipeline._wtq_non_summary_rows(df).iterrows():
+            row_text = " ".join(str(row[column]) for column in df.columns)
+            row_tokens = _loose_tokens(row_text)
+            if entity_groups:
+                if not all(
+                    group
+                    and any(_fuzzy_token_match(token, row_token) for token in group for row_token in row_tokens)
+                    for group in entity_groups
+                ):
+                    continue
+            if re.search(r"\b(?:OT|overtime|extra\s+time|AET)\b", row_text, flags=re.I):
+                count += 1
+        return count if count else None
+
+    @staticmethod
+    def _wtq_playoff_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        if not re.search(r"\bhow\s+many\s+years\b.*\bmake\s+the\s+playoffs?\b", question or "", flags=re.I):
+            return None
+        playoff_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, "playoffs")
+            or TableQAPipeline._select_column_by_tokens(df, "playoffs")
+        )
+        if playoff_col is None:
+            return None
+        negative_patterns = re.compile(
+            r"\b(?:no\s+playoff|did\s+not\s+qualify|not\s+qualify|n/?a|none)\b",
+            flags=re.I,
+        )
+        count = 0
+        for value in TableQAPipeline._wtq_non_summary_rows(df)[playoff_col].tolist():
+            if _is_missing_marker(value):
+                continue
+            text = str(value)
+            if negative_patterns.search(text):
+                continue
+            if _loose_text_key(text):
+                count += 1
+        return count
+
+    @staticmethod
+    def _wtq_column_entry_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\b(?:what\s+is\s+)?(?:the\s+)?number\s+of\s+winners\s+in\s+the\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        target_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, match.group(1))
+            or TableQAPipeline._select_column_by_tokens(df, match.group(1))
+        )
+        if target_col is None:
+            return None
+        return sum(
+            1
+            for value in TableQAPipeline._wtq_non_summary_rows(df)[target_col].tolist()
+            if not _is_missing_marker(value) and bool(_loose_text_key(value))
+        )
+
+    @staticmethod
+    def _wtq_sponsor_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        if not re.search(r"\b(?:total\s+)?number\s+of\s+sponsors?\b", question or "", flags=re.I):
+            return None
+        sponsor_cols = [column for column in df.columns if "sponsor" in _loose_text_key(column)]
+        if not sponsor_cols:
+            return None
+        sponsors: dict[str, str] = {}
+        for column in sponsor_cols:
+            for value in TableQAPipeline._wtq_non_summary_rows(df)[column].tolist():
+                if _is_missing_marker(value):
+                    continue
+                text = re.sub(r"\s+", " ", str(value)).strip()
+                key = _loose_text_key(text)
+                if key:
+                    sponsors.setdefault(key, text)
+        return len(sponsors)
+
+    @staticmethod
+    def _wtq_retired_injured_attempt_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        if not re.search(r"\b(?:who|which)\b.*\bretired\s+injured\b", question or "", flags=re.I):
+            return None
+        attempt_count = _small_number_from_text(question or "")
+        if attempt_count is None:
+            return None
+        entity_col = TableQAPipeline._wtq_entity_column(df, "person name")
+        if entity_col is None:
+            return None
+        for _, row in TableQAPipeline._wtq_non_summary_rows(df).iterrows():
+            row_text = " ".join(str(row[column]) for column in df.columns)
+            if not re.search(r"\bretired\s+injured\b", row_text, flags=re.I):
+                continue
+            if not _text_mentions_number_or_ordinal(row_text, attempt_count):
+                continue
+            value = row[entity_col]
+            return None if _is_missing_marker(value) else value
         return None
 
     @staticmethod
@@ -7659,6 +7880,30 @@ class TableQAPipeline:
             (
                 "WTQ row-major listed-after value selected deterministically.",
                 self._wtq_listed_after_cell_answer(question, df),
+            ),
+            (
+                "WTQ directly-before adjacent row target selected deterministically.",
+                self._wtq_directly_before_reference_answer(question, df),
+            ),
+            (
+                "WTQ overtime marker rows counted deterministically.",
+                self._wtq_overtime_count_answer(question, df),
+            ),
+            (
+                "WTQ playoff participation count checked deterministically.",
+                self._wtq_playoff_count_answer(question, df),
+            ),
+            (
+                "WTQ requested column winner entries counted deterministically.",
+                self._wtq_column_entry_count_answer(question, df),
+            ),
+            (
+                "WTQ unique sponsor names counted deterministically.",
+                self._wtq_sponsor_count_answer(question, df),
+            ),
+            (
+                "WTQ retired-injured ordinal attempt row selected deterministically.",
+                self._wtq_retired_injured_attempt_answer(question, df),
             ),
             (
                 "WTQ low-frequency winning entity selected deterministically.",

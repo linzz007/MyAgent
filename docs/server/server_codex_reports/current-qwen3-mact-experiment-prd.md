@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-01 21:35 CST
+最后更新：2026-08-01 21:49 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,13 +11,14 @@
 | item | status |
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
-| 当前正在执行 | P0/P1/P2/P3 已完成；P4a 新 seed Gate-50 current 原始结果为 `stop_or_inspect`；本轮按 TDD 补 TabFact/CRT 机制修复后，affected-slice fresh Qwen targeted 验证 `12/12` 正确，TabFact/CRT after-fix full50 实跑为 `45/50`、`30/50`；P4a after-fix 总表为 WTQ `37/50`、TabFact `45/50`、CRT `30/50`、overall `112/150`、weighted token ratio `0.5533`、failed/missing `0/0`，decision=`p4a_after_fix_pass`；P4b 同 ID MACT Gate-50 已完成，existing paired gate `accepted=true`，overall MyAgent `112/150` vs MACT `111/150`，token ratio `0.5444`，但 WTQ 新 seed 单项 MyAgent `37/50` vs MACT `43/50`；E1 WTQ discordant 诊断已完成，下一步转入 WTQ targeted checks 和细粒度消融，不直接盲扩 Gate-100/full200 |
-| 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold，以及 v6b 的实体属性审计、同一行多条件审计、列值计数审计、双实体出现次数、首尾时间差、实体数值差 |
+| 当前正在执行 | P0/P1/P2/P3 已完成；P4a 新 seed Gate-50 current 原始结果为 `stop_or_inspect`；本轮按 TDD 补 TabFact/CRT 机制修复后，affected-slice fresh Qwen targeted 验证 `12/12` 正确，TabFact/CRT after-fix full50 实跑为 `45/50`、`30/50`；P4a after-fix 总表为 WTQ `37/50`、TabFact `45/50`、CRT `30/50`、overall `112/150`、weighted token ratio `0.5533`、failed/missing `0/0`，decision=`p4a_after_fix_pass`；P4b 同 ID MACT Gate-50 已完成，existing paired gate `accepted=true`，overall MyAgent `112/150` vs MACT `111/150`，token ratio `0.5444`，但 WTQ 新 seed 单项 MyAgent `37/50` vs MACT `43/50`；E1 WTQ discordant 诊断已完成；E2 WTQ targeted fixes 已按 TDD 实现，离线投影 WTQ P4b `37/50 -> 46/50`、wrong->correct `9`、correct->wrong `0`，下一步需要 fresh targeted/Qwen 验证 |
+| 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；2026-08-01 E2 targeted fixes 新增 listed-after 目标列、directly-before 目标列、overtime `(OT)` 标记计数、rank/country suffix person canonicalization、playoff parenthetical negator、division winner entry count、unique sponsor count、retired-injured ordinal attempt；TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold，以及 v6b 的实体属性审计、同一行多条件审计、列值计数审计、双实体出现次数、首尾时间差、实体数值差 |
 | 当前本轮 targeted evidence | WTQ v6b full200 `155/200` vs MACT `148/200`，token ratio `0.6187`；TabFact v6b full200 `194/200` vs MACT `189/200`，token ratio `0.2014`；CRT current full200 `140/200` vs MACT `113/200`，token ratio `0.8461`；三项失败/缺答案均为 `0/0` |
 | 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact policy-v6 实跑为 `185/200` vs MACT `189/200` 未过线，v6b 新 audit shortcuts 基于该 raw 离线投影 `194/200`、净 gain 9、harm 0，fresh full200 已确认 `194/200` |
 | 已完成并同步的 full200 MACT 数据集 | WTQ `200/200`，TabFact `200/200`，CRT `200/200` |
 | 暂停的数据集 | 无；按用户 2026-07-30 最新要求，当前 MyAgent 的 CRT full200 已补跑完成 |
 | 当前进程状态 | 2026-08-01 17:47：P4b MACT Gate-50 六个 shard 全部完成并合并，`run_p4b_eval_compare.sh` 已生成 eval 和 paired summary；MyAgent 和 MACT 均已提交推送；两个 Qwen3-32B vLLM endpoint 已关闭，`curl` 访问 `8000/8001` 均 connection refused，`pgrep` 未发现 `vllm` / `api_server` / `run_mact_one_by_one.py` / `tqa.py` / `run_sharded_tqa` 进程。最终 `nvidia-smi --query-compute-apps` 未返回任何 compute PID，但 `nvidia-smi --query-gpu` 显示 GPU `0,1,2,3` 仍有约 `14GB/14GB/20GB/20GB` 显存残留，GPU `4,5,6,7` 仍有约 `42GB/卡` 残留；这些残留当前没有可见计算进程可关闭，属于服务器 GPU runtime/driver 状态 |
+| 当前进程状态 | 2026-08-01 21:49：`curl` 访问 `8000/8001` 均 connection refused；`nvidia-smi --query-compute-apps` 未返回任何 compute PID；`nvidia-smi --query-gpu` 显示 GPU `0,1,2,3,4,5,6,7` 分别约 `25.8GB/46.9GB/20GB/20GB/42GB/42GB/42GB/42GB` 显存占用但无可见计算进程。当前不强启 Qwen3；fresh targeted run 等服务器清理/扩容后执行 |
 | 下次本地模型服务资源 | 用户 2026-07-31 最新口径：暂时只使用 GPU `6,7` 跑 Qwen3-32B；若后续可用其他卡，用户会另行提供 |
 | 当前本机模型候选 | 2026-07-30 22:52 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计 JSON 现在包含 `local_model_paths` 和 `untested_local_model_paths`，新候选出现时可直接取路径传给 `--model-id` |
 | 当前外部 API 候选 | 2026-07-30 22:52 环境变量和现有实际 env 文件未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量，默认检查 `MyAgent/configs/server/*.env` 中的真实 env 文件并跳过 `.example`/`.bak`，也支持额外 `--env-file`，只读取 key 名不输出 secret 值；`experiment_api_registry.py` 统一维护 OpenRouter 默认 `api_base_url` / `api_key_env`，readiness JSON 会在 key 出现时输出 `api_provider_profiles`，`prepare_model_gate_run.py --backend api --readiness-audit ... --model-name <provider_model>` 可直接消费该 profile；API Gate healthcheck 会在 Gate-10 前检查 key、`/models` endpoint 和目标 model 是否列出 |
@@ -33,7 +34,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
-| 下一步建议 | 不建议把三个 coarse 变体都扩 full200。P4b 已给出“overall 过、token 明显低、但 WTQ 新 seed 未单项过 MACT”的结果；E1 WTQ discordant 诊断已完成，下一步应做 targeted WTQ checks：listed-after 目标列、experiment-number 目标选择、overtime `(OT)` 标记、实体表面规范化、parenthetical negator verifier override；通过 targeted 验证后再决定是否做细粒度消融或新增 seed，不直接扩 Gate-100/150/full200 |
+| 下一步建议 | 不建议把三个 coarse 变体都扩 full200。P4b 已给出“overall 过、token 明显低、但 WTQ 新 seed 未单项过 MACT”的结果；E1 WTQ discordant 诊断已完成，E2 WTQ targeted fixes 离线投影已覆盖 9 条 `mact_only` 且无 projected harm。下一步优先跑 fresh targeted/Qwen affected slice；若通过，再跑 P4b WTQ after-fix full50 或 E2 fine-grained ablation，不直接扩 Gate-100/150/full200 |
 
 ### 0.1 2026-08-01 本次继续执行台账
 
@@ -219,7 +220,7 @@ bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --comm
 |---|---|---|---|---|
 | E0 | 冻结 Qwen3-32B 主结果 | WTQ/TabFact/CRT full200 paired summary、token、耗时、失败/缺答案 | 三数据集单项均超过 MACT，整体 token 明显低 | completed |
 | E1 | WTQ 新 seed 风险诊断 | P4b WTQ `mact_only=9`、`myagent_only=3` 分歧样本分类表 | 说明 WTQ 新 seed 输在哪里，并给出是否需要机制修复的判断 | completed 2026-08-01 |
-| E2 | 机制消融补强 | `legacy`、`no_strong_verification`、`no_deterministic_shortcuts` 已有 coarse Gate-50；必要时补细粒度开关消融 | 至少证明风险协作/劝返、确定性审计、证据保留中 2-3 个模块有因果贡献 | in progress |
+| E2 | 机制消融补强 | `legacy`、`no_strong_verification`、`no_deterministic_shortcuts` 已有 coarse Gate-50；WTQ targeted fixes 已有 TDD + offline projection；必要时补细粒度开关消融 | 至少证明风险协作/劝返、确定性审计、证据保留中 2-3 个模块有因果贡献 | in progress: WTQ targeted fixes projected |
 | E3 | 多 seed 稳定性 | 至少 2 组新增 seed Gate-50 或 1 组 Gate-100/150，优先覆盖 WTQ | 不要求每组都三项全赢，但必须解释波动并证明总体/token 优势稳定 | pending |
 | E4 | 多模型 gate | 新本地模型或外部 API 模型按 Gate-10 -> Gate-50 -> Gate-150 -> paired-200 漏斗执行 | 至少 1 个额外模型给出可解释结果；no-go 模型不扩 full200 | pending |
 | E5 | 正式实验包 | 方法说明、数据切分、baseline 定义、模型配置、硬件、token/elapsed 统计、失败规则、raw/eval/summary 索引 | 专家可按路径复核每个表格数值和每次实验口径 | pending |
@@ -289,6 +290,61 @@ E1 已完成，不启动模型，只读取 P4b frozen artifacts 并复用 `MyAge
 1. 先写 targeted WTQ checks，不直接扩 Gate-100/full200。
 2. 优先覆盖 `listed-after` 目标列、`which experiment number` 目标列选择、sports score `(OT)` 标记、rank/country suffix 实体规范化、`Champion (no playoff)` 这类 parenthetical negator verifier override。
 3. 如果 targeted checks 显示可解释收益，再决定是否实现细粒度开关并跑 E2 fine-grained ablation；否则把 WTQ P4b 记录为泛化风险边界。
+
+### 1.2.6 E2 WTQ targeted fixes 与离线投影
+
+E2 本轮已完成 WTQ targeted fixes 的 RED/GREEN cycle，修复都来自 E1 分类，不按样本 ID 或 gold answer 分支。
+
+代码范围：
+
+```text
+/home/ubuntu/lzz/MyAgent/code/my_agents.py
+/home/ubuntu/lzz/MyAgent/tests/test_myagent_pipeline.py
+```
+
+新增/覆盖机制：
+
+| mechanism | purpose | E1 rows covered |
+|---|---|---|
+| listed-after target column | `what is the next <column> listed after <entity>` 返回下一行同目标列，而不是当前行下一个单元格 | `nu-1825` |
+| directly-before target column | `which experiment number came directly before <entity>` 返回前一行目标编号列 | `nu-3990` |
+| overtime marker count | 对 `(OT)` / overtime / extra-time 显式标记计数，优先于比分相等启发式 | `nu-1478` |
+| WTQ person canonicalization | `who/person` 问题清理 rank 前缀和 country/code 后缀 | `nu-1108`、`nu-3905` |
+| playoff parenthetical negator | `Champion (no playoff)` 这类含 negator 的 playoff 单元不计为 make playoff | `nu-3537` |
+| division winner entry count | `number of winners in <division>` 计数目标列非空 entry，不误解为 distinct winner | `nu-2825` |
+| unique sponsor count | `total number of sponsors` 对 sponsor 列唯一 sponsor 名称计数，不简单求非空 cell 总数 | `nu-3317` |
+| retired injured ordinal attempt | 将 `three attempts` 与 `third attempt` 等 ordinal/cardinal 表达对齐 | `nu-3320` |
+
+验证：
+
+```text
+/home/ubuntu/miniconda3/envs/lzz-agent/bin/python -m unittest discover -s tests -p 'test_myagent_pipeline.py' -k <8 targeted WTQ tests>
+/home/ubuntu/miniconda3/envs/lzz-agent/bin/python -m unittest discover -s tests -p 'test_myagent_pipeline.py'
+/home/ubuntu/miniconda3/envs/lzz-agent/bin/python -m unittest discover -s tests
+```
+
+结果：8 个 targeted tests `OK`；`test_myagent_pipeline.py` 全量 `192 tests OK`；完整 `tests/` 为 `338 tests OK`。
+
+离线投影产物：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/project_wtq_targeted_fixes.py
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/p4b_wtq_targeted_fix_projection.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/p4b_wtq_targeted_fix_projection.md
+```
+
+投影结论：在 P4b WTQ frozen MyAgent merged rows 上重放新 deterministic shortcuts 和 scalar canonicalization，不启动模型，WTQ 从 `37/50` 投影到 `46/50`，`wrong_to_correct=9`，`correct_to_wrong=0`。如果 fresh Qwen targeted/full50 验证复现该方向，P4b WTQ 将从落后 MACT `37/50 < 43/50` 变为预计超过 MACT `46/50 > 43/50`。
+
+fresh 验证入口已准备：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/input/wtq_p4b_targeted_fix_affected_slice.jsonl
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/run_myagent_wtq_targeted_fix_slice.sh
+```
+
+`wtq_p4b_targeted_fix_affected_slice.jsonl` 共 9 行，ID 为 `nu-3537`、`nu-1108`、`nu-2825`、`nu-3905`、`nu-3317`、`nu-3990`、`nu-1478`、`nu-3320`、`nu-1825`。
+
+边界：这是 offline projection，不是 fresh model run，也不是新的 paired MACT 结果。2026-08-01 21:49 本机 `8000/8001` endpoint 均关闭，GPU 有无可见 PID 的显存残留，因此当前不强启 Qwen3。下一步不能直接宣称 P4b WTQ 已过线；应在服务器清理/扩容后先跑 affected-slice fresh Qwen，再决定是否重跑 P4b WTQ after-fix full50。
 
 ## 1.3 专利草稿骨架
 

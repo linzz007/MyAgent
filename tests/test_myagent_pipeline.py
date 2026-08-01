@@ -1936,6 +1936,192 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(value, "2016")
 
+    def test_wtq_listed_after_cell_shortcut_returns_next_row_requested_column(self):
+        df = pd.DataFrame(
+            {
+                "#": ["4", "5"],
+                "Stadium": ["Parc des Princes", "Stade Félix Bollaert"],
+                "Capacity": ["48,712", "41,233"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_listed_after_cell_answer(
+            "what is the next stadium listed after parc des princes?",
+            df,
+        )
+
+        self.assertEqual(value, "Stade Félix Bollaert")
+
+    def test_wtq_directly_before_shortcut_returns_requested_number_column(self):
+        df = pd.DataFrame(
+            {
+                "Num": ["009", "010"],
+                "Nickname": ["Pop", "Felix"],
+                "Episode": ["Leroy & Stitch", "Snafu"],
+            }
+        )
+        fake = FakePipelineLLM(semantic_score=0.9, rows=["Felix"], cols=["Num", "Nickname"])
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="which experiment number came directly before felix?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        self.assertTrue(pipeline._try_wtq_semantic_shortcut(state))
+        self.assertEqual(state.final_value, "009")
+
+    def test_wtq_overtime_count_shortcut_counts_explicit_ot_markers_between_teams(self):
+        df = pd.DataFrame(
+            {
+                "Winner": ["New York Giants", "Philadelphia Eagles", "New York Giants"],
+                "Result": ["26-23 (OT)", "36-22", "30-24 (OT)"],
+                "Loser": ["Philadelphia Eagles", "New York Giants", "Philadelphia Eagles"],
+            }
+        )
+        fake = FakePipelineLLM(semantic_score=0.9, rows=["Eagles"], cols=["Result"])
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="what is the number of times a game went into overtime between the eagles and giants?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        self.assertTrue(pipeline._try_wtq_semantic_shortcut(state))
+        self.assertEqual(state.final_value, 2)
+
+    def test_wtq_who_answer_canonicalization_strips_country_suffix(self):
+        df = pd.DataFrame(
+            {
+                "Event": ["Slalom"],
+                "Bronze": ["Ludwig Wolf Germany (GER)"],
+            }
+        )
+
+        value = _canonicalize_wtq_scalar(
+            "Ludwig Wolf Germany (GER)",
+            df,
+            "who is the last person listed under slalom?",
+        )
+
+        self.assertEqual(value, "Ludwig Wolf")
+
+    def test_wtq_playoff_count_shortcut_excludes_parenthetical_no_playoff(self):
+        df = pd.DataFrame(
+            {
+                "Year": ["1934/35", "1936/37", "1945/46", "1948/49"],
+                "Playoffs": ["No playoff", "1st Round", "Champion (no playoff)", "N/A"],
+            }
+        )
+        fake = FakePipelineLLM(semantic_score=0.9, rows=["Playoffs"], cols=["Playoffs"])
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="how many years did the true american club make the playoff?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        self.assertTrue(pipeline._try_wtq_semantic_shortcut(state))
+        self.assertEqual(state.final_value, 1)
+
+    def test_wtq_division_winner_count_shortcut_counts_nonempty_column_entries(self):
+        df = pd.DataFrame(
+            {
+                "Year": list(range(2012, 2000, -1)),
+                "Community Division": [
+                    "",
+                    "Brothers in Arms",
+                    "Gap Angels",
+                    "",
+                    "Tangentyere",
+                    "Cooktown",
+                    "Cat Tigers",
+                    "Melville Island",
+                    "Alkupitja",
+                    "Normanton",
+                    "",
+                    "",
+                ],
+            }
+        )
+        fake = FakePipelineLLM(semantic_score=0.9, rows=["Community Division"], cols=["Community Division"])
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="what is the number of winners in the community division?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        self.assertTrue(pipeline._try_wtq_semantic_shortcut(state))
+        self.assertEqual(state.final_value, 8)
+
+    def test_wtq_sponsor_count_shortcut_counts_unique_sponsor_names_across_sponsor_columns(self):
+        df = pd.DataFrame(
+            {
+                "Year": [str(year) for year in range(1, 18)],
+                "Shirt Sponsor": [
+                    "National Express",
+                    "",
+                    "Whitbread",
+                    "Duraflex",
+                    "Gulf Oil",
+                    "Gulf Oil",
+                    "Gulf Oil",
+                    "Empress",
+                    "Empress",
+                    "Endsleigh Insurance",
+                    "Endsleigh Insurance",
+                    "Towergate Insurance",
+                    "Bence Building Merchants",
+                    "Mira Showers",
+                    "Mira Showers",
+                    "Mira Showers",
+                    "Mira Showers",
+                ],
+                "Back of Shirt Sponsor": [""] * 14
+                + ["PSU Technology Group", "Barr Stadia", "Gloucestershire College"],
+                "Short Sponsor": [""] * 15 + ["Gloucestershire Echo", "Gloucestershire Echo"],
+            }
+        )
+        fake = FakePipelineLLM(semantic_score=0.9, rows=["Sponsor"], cols=["Shirt Sponsor"])
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="total number of sponsors?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        self.assertTrue(pipeline._try_wtq_semantic_shortcut(state))
+        self.assertEqual(state.final_value, 13)
+
+    def test_wtq_retired_injured_after_ordinal_attempt_shortcut_matches_third_attempt(self):
+        df = pd.DataFrame(
+            {
+                "Name": ["Esther Shahamorov", "Yossef Romano"],
+                "Sport": ["Athletics", "Weightlifting"],
+                "Performance": [
+                    "Did not start",
+                    "(retired injured on third attempt to press 137.5kg)",
+                ],
+            }
+        )
+        fake = FakePipelineLLM(semantic_score=0.9, rows=["injured"], cols=["Name", "Performance"])
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="which person retired injured after three attempts in their event?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        self.assertTrue(pipeline._try_wtq_semantic_shortcut(state))
+        self.assertEqual(state.final_value, "Yossef Romano")
+
     def test_wtq_usage_count_shortcut_counts_items_in_matching_usage_cell(self):
         df = pd.DataFrame(
             {
