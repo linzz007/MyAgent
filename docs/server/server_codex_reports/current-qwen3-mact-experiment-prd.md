@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-01 21:28 CST
+最后更新：2026-08-01 21:35 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,7 +11,7 @@
 | item | status |
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
-| 当前正在执行 | P0/P1/P2/P3 已完成；P4a 新 seed Gate-50 current 原始结果为 `stop_or_inspect`；本轮按 TDD 补 TabFact/CRT 机制修复后，affected-slice fresh Qwen targeted 验证 `12/12` 正确，TabFact/CRT after-fix full50 实跑为 `45/50`、`30/50`；P4a after-fix 总表为 WTQ `37/50`、TabFact `45/50`、CRT `30/50`、overall `112/150`、weighted token ratio `0.5533`、failed/missing `0/0`，decision=`p4a_after_fix_pass`；P4b 同 ID MACT Gate-50 已完成，existing paired gate `accepted=true`，overall MyAgent `112/150` vs MACT `111/150`，token ratio `0.5444`，但 WTQ 新 seed 单项 MyAgent `37/50` vs MACT `43/50`，未满足“新 seed 三数据集单项全赢”的更严目标 |
+| 当前正在执行 | P0/P1/P2/P3 已完成；P4a 新 seed Gate-50 current 原始结果为 `stop_or_inspect`；本轮按 TDD 补 TabFact/CRT 机制修复后，affected-slice fresh Qwen targeted 验证 `12/12` 正确，TabFact/CRT after-fix full50 实跑为 `45/50`、`30/50`；P4a after-fix 总表为 WTQ `37/50`、TabFact `45/50`、CRT `30/50`、overall `112/150`、weighted token ratio `0.5533`、failed/missing `0/0`，decision=`p4a_after_fix_pass`；P4b 同 ID MACT Gate-50 已完成，existing paired gate `accepted=true`，overall MyAgent `112/150` vs MACT `111/150`，token ratio `0.5444`，但 WTQ 新 seed 单项 MyAgent `37/50` vs MACT `43/50`；E1 WTQ discordant 诊断已完成，下一步转入 WTQ targeted checks 和细粒度消融，不直接盲扩 Gate-100/full200 |
 | 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold，以及 v6b 的实体属性审计、同一行多条件审计、列值计数审计、双实体出现次数、首尾时间差、实体数值差 |
 | 当前本轮 targeted evidence | WTQ v6b full200 `155/200` vs MACT `148/200`，token ratio `0.6187`；TabFact v6b full200 `194/200` vs MACT `189/200`，token ratio `0.2014`；CRT current full200 `140/200` vs MACT `113/200`，token ratio `0.8461`；三项失败/缺答案均为 `0/0` |
 | 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact policy-v6 实跑为 `185/200` vs MACT `189/200` 未过线，v6b 新 audit shortcuts 基于该 raw 离线投影 `194/200`、净 gain 9、harm 0，fresh full200 已确认 `194/200` |
@@ -21,7 +21,7 @@
 | 下次本地模型服务资源 | 用户 2026-07-31 最新口径：暂时只使用 GPU `6,7` 跑 Qwen3-32B；若后续可用其他卡，用户会另行提供 |
 | 当前本机模型候选 | 2026-07-30 22:52 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计 JSON 现在包含 `local_model_paths` 和 `untested_local_model_paths`，新候选出现时可直接取路径传给 `--model-id` |
 | 当前外部 API 候选 | 2026-07-30 22:52 环境变量和现有实际 env 文件未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量，默认检查 `MyAgent/configs/server/*.env` 中的真实 env 文件并跳过 `.example`/`.bak`，也支持额外 `--env-file`，只读取 key 名不输出 secret 值；`experiment_api_registry.py` 统一维护 OpenRouter 默认 `api_base_url` / `api_key_env`，readiness JSON 会在 key 出现时输出 `api_provider_profiles`，`prepare_model_gate_run.py --backend api --readiness-audit ... --model-name <provider_model>` 可直接消费该 profile；API Gate healthcheck 会在 Gate-10 前检查 key、`/models` endpoint 和目标 model 是否列出 |
-| 当前阻塞条件 | 无环境阻塞。2026-07-31 用户要求的 Qwen3-32B full200 目标已经按三数据集单项准确率过线；2026-08-01 P4b 新 seed 小样本 existing paired gate 通过，但 WTQ 单项没有超过 MACT，因此它是后续机制优化/泛化验证的主要剩余风险 |
+| 当前阻塞条件 | 无环境阻塞。2026-07-31 用户要求的 Qwen3-32B full200 目标已经按三数据集单项准确率过线；2026-08-01 P4b 新 seed 小样本 existing paired gate 通过，但 WTQ 单项没有超过 MACT。E1 诊断显示 WTQ 风险主要来自语义/答案契约、目标列选择、count 语义、显式标记解析和 conflict gate，不是执行失败 |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 当前 Qwen3 policy-v6b/current 三数据集合计：MyAgent `489/600` vs MACT `450/600`，总体 token ratio `0.5717`，总体 elapsed ratio `0.1337`，失败/缺答案 `0/0`；总表：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/qwen3_policy_v6b_all200_acceptance_summary.json` |
 | 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
@@ -33,7 +33,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；Qwen3-32B 单服务 example 对齐为 GPU `4,5` |
-| 下一步建议 | 不建议把三个 coarse 变体都扩 full200。P4b 已给出“overall 过、token 明显低、但 WTQ 新 seed 未单项过 MACT”的结果；若继续优化，应先做 WTQ P4b discordant 诊断，重点看 `mact_only=9` / `myagent_only=3` 的证据压缩、答案规范化、verifier gate 和 MACT 执行优势，不直接扩 Gate-100/150 或 full200 |
+| 下一步建议 | 不建议把三个 coarse 变体都扩 full200。P4b 已给出“overall 过、token 明显低、但 WTQ 新 seed 未单项过 MACT”的结果；E1 WTQ discordant 诊断已完成，下一步应做 targeted WTQ checks：listed-after 目标列、experiment-number 目标选择、overtime `(OT)` 标记、实体表面规范化、parenthetical negator verifier override；通过 targeted 验证后再决定是否做细粒度消融或新增 seed，不直接扩 Gate-100/150/full200 |
 
 ### 0.1 2026-08-01 本次继续执行台账
 
@@ -218,7 +218,7 @@ bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --comm
 | milestone | subgoal | required evidence | pass condition | status |
 |---|---|---|---|---|
 | E0 | 冻结 Qwen3-32B 主结果 | WTQ/TabFact/CRT full200 paired summary、token、耗时、失败/缺答案 | 三数据集单项均超过 MACT，整体 token 明显低 | completed |
-| E1 | WTQ 新 seed 风险诊断 | P4b WTQ `mact_only=9`、`myagent_only=3` 分歧样本分类表 | 说明 WTQ 新 seed 输在哪里，并给出是否需要机制修复的判断 | next |
+| E1 | WTQ 新 seed 风险诊断 | P4b WTQ `mact_only=9`、`myagent_only=3` 分歧样本分类表 | 说明 WTQ 新 seed 输在哪里，并给出是否需要机制修复的判断 | completed 2026-08-01 |
 | E2 | 机制消融补强 | `legacy`、`no_strong_verification`、`no_deterministic_shortcuts` 已有 coarse Gate-50；必要时补细粒度开关消融 | 至少证明风险协作/劝返、确定性审计、证据保留中 2-3 个模块有因果贡献 | in progress |
 | E3 | 多 seed 稳定性 | 至少 2 组新增 seed Gate-50 或 1 组 Gate-100/150，优先覆盖 WTQ | 不要求每组都三项全赢，但必须解释波动并证明总体/token 优势稳定 | pending |
 | E4 | 多模型 gate | 新本地模型或外部 API 模型按 Gate-10 -> Gate-50 -> Gate-150 -> paired-200 漏斗执行 | 至少 1 个额外模型给出可解释结果；no-go 模型不扩 full200 | pending |
@@ -254,6 +254,41 @@ bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --comm
 ```text
 /home/ubuntu/lzz/MyAgent/docs/server/server_codex_reports/current-qwen3-mact-experiment-prd.md
 ```
+
+### 1.2.5 E1 WTQ 新 seed 分歧诊断结论
+
+E1 已完成，不启动模型，只读取 P4b frozen artifacts 并复用 `MyAgent/code/evaluate_results.py` 的 WTQ denotation metric 重新计算配对正确性。
+
+产物：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/analyze_wtq_p4b_discordants.py
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/p4b_wtq_discordant_diagnosis.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/p4b_wtq_discordant_diagnosis.md
+```
+
+配对混淆：
+
+| bucket | count |
+|---|---:|
+| both_correct | 34 |
+| myagent_only | 3 |
+| mact_only | 9 |
+| both_wrong | 4 |
+
+诊断结论：
+
+1. WTQ P4b 不是运行稳定性问题：MyAgent/MACT failed 和 missing 均为 `0/0`。
+2. WTQ P4b 的 MyAgent 单项落后主要是语义/答案契约问题，不是单纯的 token 节省或表格行丢失。9 条 `mact_only` 的 MyAgent 平均 compression ratio 为 `0.6364`，其中 `2/9` 已经使用近似完整行上下文。
+3. 9 条 `mact_only` 的主要类别是：实体表面契约 `2`、count 语义 `2`、目标列选择 `1`、listed-after shortcut 目标错误 `1`、overtime 显式标记解析 `1`、ordinal phrase matching `1`、conflict gate 没有接管更好 verifier candidate `1`。
+4. 3 条 `myagent_only` 可作为专利正向证据：MyAgent 的语义 disambiguation、紧凑 denotation 输出契约、row-neighbor temporal evidence retention 分别避免了 MACT 的 min-date、解释性回答和非邻近行选择错误。
+5. 4 条 `both_wrong` 不是对 MACT 的净差来源，但提示下一轮 WTQ 稳定性仍要关注 numeric range parsing、US location alias、row-major next-field、multi-answer list contract。
+
+下一步执行优先级：
+
+1. 先写 targeted WTQ checks，不直接扩 Gate-100/full200。
+2. 优先覆盖 `listed-after` 目标列、`which experiment number` 目标列选择、sports score `(OT)` 标记、rank/country suffix 实体规范化、`Champion (no playoff)` 这类 parenthetical negator verifier override。
+3. 如果 targeted checks 显示可解释收益，再决定是否实现细粒度开关并跑 E2 fine-grained ablation；否则把 WTQ P4b 记录为泛化风险边界。
 
 ## 1.3 专利草稿骨架
 
