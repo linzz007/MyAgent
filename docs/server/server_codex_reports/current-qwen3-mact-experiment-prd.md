@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-03 11:00 CST
+最后更新：2026-08-03 11:13 CST
 
 ## 0. 下一次启动先看这里
 
@@ -28,6 +28,7 @@
 | 当前进程状态 | 2026-08-03 09:31：`0,1,2,3` 已恢复为 `0 MiB/0%`，并成功启动两个 Qwen3-32B vLLM endpoint：GPU `0,1` -> `8000`，GPU `2,3` -> `8001`；`/v1/models` 均返回 `qwen3-32b-local`。`6,7` 仍有约 `42GB/卡` 残留但不影响当前 `0-3` online queue。09:39 WTQ fresh + after-targeted full50 队列完成并 checkpoint 推送到 MACT：fresh `9/9`，after-targeted WTQ `46/50` vs MACT `43/50`，overall after-targeted P4b `121/150` vs `111/150` |
 | 当前进程状态 | 2026-08-03 10:23：E3 Seed-C current-only queue 已在 GPU `0,1,2,3` 完成并按 gate 停止，未进入 paired MACT；结果写入 `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_multiseed_gate50_20260801_2231/summary/seed_c_myagent_gate50_summary.json/md`。两个 Qwen3 endpoint 仍在 `8000/8001` 运行，可继续 Seed-D current-only 或 Seed-C inspect |
 | 当前进程状态 | 2026-08-03 11:00：E3 Seed-D current-only queue 已在 GPU `0,1,2,3` 完成并按 gate 停止，未进入 paired MACT；结果写入 `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_multiseed_gate50_20260801_2231/summary/seed_d_myagent_gate50_summary.json/md`，raw/merged/eval 分别保存在同目录 `myagent_current/seed_d/` 下。两个 Qwen3 endpoint 仍在 `8000/8001` 运行，可用于后续小规模 inspect 或多模型前的 sanity check |
+| 当前进程状态 | 2026-08-03 11:13：按用户要求已关闭本轮所有可见 Qwen3/vLLM/runner 进程。`ps` 未发现 `vllm serve`、`run_remaining_qwen3`、`run_sharded_tqa.py`、`MyAgent/code/tqa.py`、`run_seed_*`、`run_mact`；`nvidia-smi --query-compute-apps` 无 compute PID；GPU `0,1,2,3` 均约 `3 MiB/0%`。latest runtime preflight 为 `start_service_required`，下一次在线实验必须先启动 Qwen3 服务，再重跑 preflight |
 | 最新 fresh preflight | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_wtq_targeted_fresh_preflight_20260801_2207.md`；记录本轮未启动 fresh run 的 endpoint/GPU/进程证据，以及新增自动总结器入口 |
 | 最新 after-targeted full50 自动化 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_after_targeted_full50_automation_20260801_2217.md`；记录 affected-slice 通过后如何自动跑 WTQ full50 和 paired summary，并验证 fresh summary 缺失时会阻止误扩样 |
 | 最新机制证据矩阵 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_patent_mechanism_evidence_20260801_2222/patent_mechanism_evidence_matrix.md`；将 full200 anchor、coarse Gate-50 消融和 offline attribution 合并为专利可引用的机制证据表 |
@@ -38,7 +39,7 @@
 | 下次本地模型服务资源 | 用户 2026-07-31 最新口径：暂时只使用 GPU `6,7` 跑 Qwen3-32B；若后续可用其他卡，用户会另行提供 |
 | 当前本机模型候选 | 2026-07-30 22:52 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；除 Qwen3-32B 外均已 Gate-50 no-go，审计脚本返回 `untested_local_models=[]`；审计 JSON 现在包含 `local_model_paths` 和 `untested_local_model_paths`，新候选出现时可直接取路径传给 `--model-id` |
 | 当前外部 API 候选 | 2026-07-30 22:52 环境变量和现有实际 env 文件未发现 OpenAI / DeepSeek / DashScope / Anthropic / SiliconFlow / Moonshot / Zhipu / Gemini / OpenRouter / Together / Fireworks / Ark / Volc / Azure OpenAI 可用 key；审计脚本已能识别这些 provider 的常见 `*_API_KEY` 变量，默认检查 `MyAgent/configs/server/*.env` 中的真实 env 文件并跳过 `.example`/`.bak`，也支持额外 `--env-file`，只读取 key 名不输出 secret 值；`experiment_api_registry.py` 统一维护 OpenRouter 默认 `api_base_url` / `api_key_env`，readiness JSON 会在 key 出现时输出 `api_provider_profiles`，`prepare_model_gate_run.py --backend api --readiness-audit ... --model-name <provider_model>` 可直接消费该 profile；API Gate healthcheck 会在 Gate-10 前检查 key、`/models` endpoint 和目标 model 是否列出 |
-| 当前阻塞条件 | 当前没有 0-3 runtime 阻塞；`6,7` 仍有 GPU runtime 残留但不影响当前 Qwen3-32B endpoint。2026-07-31 full200 目标和 2026-08-03 P4b after-targeted 新 seed 三数据集目标已过线；Seed-C/Seed-D current-only 均暴露 multi-seed 稳定性边界，paired MACT 不应继续消耗。剩余在线任务是 Seed-C/Seed-D 错误边界诊断的小样本复核，以及新模型/API 出现后的 gate funnel |
+| 当前阻塞条件 | 当前没有 0-3 runtime 残留，但 Qwen3 endpoint 已按要求关闭，latest preflight 为 `start_service_required`；`6,7` 仍有 GPU runtime 残留。2026-07-31 full200 目标和 2026-08-03 P4b after-targeted 新 seed 三数据集目标已过线；Seed-C/Seed-D current-only 均暴露 multi-seed 稳定性边界，paired MACT 不应继续消耗。剩余在线任务是 Seed-C/Seed-D 错误边界诊断的小样本复核，以及新模型/API 出现后的 gate funnel |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 当前 Qwen3 policy-v6b/current 三数据集合计：MyAgent `489/600` vs MACT `450/600`，总体 token ratio `0.5717`，总体 elapsed ratio `0.1337`，失败/缺答案 `0/0`；总表：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/qwen3_policy_v6b_all200_acceptance_summary.json` |
 | 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
@@ -901,7 +902,7 @@ MACT run 目录里的 `LIVE_LEDGER.md` 只作为运行证据账本存在，不�
 /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/SHA256SUMS
 ```
 
-当前在线状态：2026-08-03 11:00 CST 两个 Qwen3-32B endpoint 仍在 `8000/8001`，由 GPU `0,1,2,3` 承载；latest preflight 为 `ready_existing_endpoint`。WTQ fresh、P4b after-targeted、E3 Seed-C/D current-only 均已在线完成。历史 `blocked_gpu_runtime_residual` 段落保留为服务器风险记录，不再代表当前阻塞。
+当前在线状态：2026-08-03 11:13 CST 本轮 Qwen3-32B endpoint 已按用户要求关闭；GPU `0,1,2,3` 已释放到约 `3 MiB/0%`，latest preflight 为 `start_service_required`。WTQ fresh、P4b after-targeted、E3 Seed-C/D current-only 均已在线完成。下一次继续在线实验时，先启动 Qwen3 服务，再重跑 preflight；历史 `blocked_gpu_runtime_residual` 段落保留为服务器风险记录，不再代表当前 0-3 状态。
 
 当前边界审计结论：Qwen3-32B 主锚点已达标，但 Seed-C/Seed-D current-only 没有形成稳定性通过证据。后续不要把 E3 写成“多 seed 稳定超过 MACT”；应写成“额外随机种子揭示适用边界，系统在 full200 与 targeted new seed 上有效，但仍需多模型/更多 seed 证明泛化稳定性”。代码、输入、runbook、formal ledger、checksum 和恢复入口均已准备并同步。
 
