@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-03 12:24 CST
+最后更新：2026-08-03 12:36 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,7 +11,7 @@
 | item | status |
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
-| 当前正在执行 | P0/P1/P2/P3、P4b paired、E1 WTQ 分歧诊断、E2 WTQ targeted fresh 闭环已完成；P4b after-targeted 总表为 MyAgent `121/150` vs MACT `111/150`、overall token ratio `0.5310`、failed/missing `0/0`、accepted=`true`，且 WTQ/TabFact/CRT 单项均高于 MACT；E2 专利机制证据矩阵已把 full200、coarse ablation 和 fresh attribution 汇总。E3 multi-seed current-only 与离线边界诊断已完成：Seed-C `114/150`、token ratio `0.6096`；Seed-D `98/150`、token ratio `0.5735`；合计 `212/300`、weighted token ratio `0.5916`、failed/missing `0/0`、row-level evaluator 复算 `pass`。E4 最新 readiness audit 已完成，结果为 `no_candidate_wait`：只发现 4 个已测本地模型，`untested_local_model_paths={}`，API key/profile 均为空，因此当前不能启动 Gate-10。E5/E6 当前专利实验章节已 consolidated：`latest_current_patent_experiment_section_zh.md` 明确列出可写正证据和不能写的边界；当前 completion gap audit 已刷新为 `latest_completion_gap_audit_current_zh.md`，不再使用旧固定文件判断当前缺口。2026-08-03 12:24 已刷新权利要求矩阵和正式实验排期，移除“WTQ fresh/E3 execution pending”的旧口径。结论：当前 Qwen3-32B full200 与 P4b after-targeted 已达用户“单项超过 MACT + token 更低”的核心锚点；E3 可写成稳定性边界与适用条件，E4 写成 no-candidate 等待状态，不能写成多模型正证据 |
+| 当前正在执行 | P0/P1/P2/P3、P4b paired、E1 WTQ 分歧诊断、E2 WTQ targeted fresh 闭环已完成；P4b after-targeted 总表为 MyAgent `121/150` vs MACT `111/150`、overall token ratio `0.5310`、failed/missing `0/0`、accepted=`true`，且 WTQ/TabFact/CRT 单项均高于 MACT；E2 专利机制证据矩阵已把 full200、coarse ablation 和 fresh attribution 汇总。E3 multi-seed current-only 与离线边界诊断已完成：Seed-C `114/150`、token ratio `0.6096`；Seed-D `98/150`、token ratio `0.5735`；合计 `212/300`、weighted token ratio `0.5916`、failed/missing `0/0`、row-level evaluator 复算 `pass`。E4 最新 readiness audit 已完成，结果为 `no_candidate_wait`：只发现 4 个已测本地模型，`untested_local_model_paths={}`，API key/profile 均为空，因此当前不能启动 Gate-10。E5/E6 当前专利实验章节已 consolidated：`latest_current_patent_experiment_section_zh.md` 明确列出可写正证据和不能写的边界；当前 completion gap audit 已刷新为 `latest_completion_gap_audit_current_zh.md`，不再使用旧固定文件判断当前缺口。2026-08-03 12:24 已刷新权利要求矩阵和正式实验排期，移除 WTQ fresh 与 E3 仍待执行的旧口径；12:31 已刷新中文专利说明书初稿，补 full200、P4b 原始、WTQ fresh/after-targeted、E3 边界、E4 no-candidate 和证据路径实施例。结论：当前 Qwen3-32B full200 与 P4b after-targeted 已达用户“单项超过 MACT + token 更低”的核心锚点；E3 可写成稳定性边界与适用条件，E4 写成 no-candidate 等待状态，不能写成多模型正证据 |
 | 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；2026-08-01 E2 targeted fixes 新增 listed-after 目标列、directly-before 目标列、overtime `(OT)` 标记计数、rank/country suffix person canonicalization、playoff parenthetical negator、division winner entry count、unique sponsor count、retired-injured ordinal attempt；TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold，以及 v6b 的实体属性审计、同一行多条件审计、列值计数审计、双实体出现次数、首尾时间差、实体数值差 |
 | 当前本轮 targeted evidence | WTQ v6b full200 `155/200` vs MACT `148/200`，token ratio `0.6187`；TabFact v6b full200 `194/200` vs MACT `189/200`，token ratio `0.2014`；CRT current full200 `140/200` vs MACT `113/200`，token ratio `0.8461`；三项失败/缺答案均为 `0/0` |
 | 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact policy-v6 实跑为 `185/200` vs MACT `189/200` 未过线，v6b 新 audit shortcuts 基于该 raw 离线投影 `194/200`、净 gain 9、harm 0，fresh full200 已确认 `194/200` |
@@ -42,8 +42,10 @@
 | 最新当前专利实验章节 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_current_patent_experiment_section_zh.md`；从 full200、P4b after-targeted、机制矩阵、E3 边界诊断、E4 readiness 自动生成，结论为 `stage_patent_draft_ready_with_boundaries`。它是当前给专家/专利代理人看的实验章节收口稿，不把多模型或多 seed 稳定性写成已完成 |
 | 最新完成度审计 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_completion_gap_audit_current_zh.md`；2026-08-03 12:06 从 latest evidence 自动生成，逐项确认 R1 full200 主证据完成、R2 机制证据基本完成、R3 WTQ fresh/after-targeted 闭环完成、R4 multi-seed 已执行 Seed-C/D 但只能写成边界、R5 多模型 gate 为 `pending_no_candidate`、R6 当前实验章节 `stage_patent_draft_ready_with_boundaries`、R7 本次生成物需提交推送。旧 `completion_gap_audit_20260801_2244_zh.md` 只保留为历史文件 |
 | 最新权利要求证据矩阵 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/claim_evidence_traceability_20260801_2248_zh.md`；2026-08-03 12:24 已刷新，把 WTQ targeted fresh/P4b after-targeted 写成已闭合，把 E3 Seed-C/D 写成 current-only 边界证据，把 E4 写成 pending/no-candidate；C1 风险分层协作、C2 证据保留压缩、C3 确定性审计、C4 受控劝返、C5 答案契约、C6 预算感知实验漏斗均逐项对齐到代码/实验证据和剩余缺口 |
+| 最新专利说明书初稿 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/patent_disclosure_draft_zh.md`；2026-08-03 12:31 已补“当前实验效果与实施例”，包括 full200 主结果、P4b 原始风险、WTQ targeted fresh/after-targeted 闭环、E3 current-only 边界、E4 no-candidate 和证据路径索引 |
 | 最新正式结果表/模板 | 当前台账：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_formal_result_ledger_current_zh.md`；模板：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/formal_result_tables_template_20260801_2252_zh.md`。台账已包含 WTQ fresh、P4b after-targeted、E3 current-only、E4 no-candidate，并保留 pending rows |
 | 下次本地模型服务资源 | 2026-08-03 12:16 最新口径：`0,1,2,3` 当前仍是无可见 runner/model PID、无 compute-app/lsof 记录但 `nvidia-smi` 高显存/高利用的 runtime 状态，不能直接启动 Qwen3-32B endpoint；`4,5,6,7` 仍有约 `42GB/卡` 占用。下一次在线实验必须先重跑 E4/runtime preflight，确认某个 GPU pair 干净后再启动 |
+| 用户最新资源补充 | 2026-08-03 12:36 用户提示 `0,1,2,3` 卡当前没有被使用；下一次如要继续在线实验，优先复核 `0-3` 并按 `0,1 -> 8000`、`2,3 -> 8001` 启动两个 Qwen3-32B endpoint。启动前仍必须以实时 preflight 为准，避免无可见 PID 的驱动侧显存/利用率残留污染实验 |
 | 当前本机模型候选 | 2026-08-03 11:37 E4 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；这些都属于已测/已 no-go 清单，`untested_local_models=[]`、`untested_local_model_paths={}`；当前不能生成新的本地模型 Gate run |
 | 当前外部 API 候选 | 2026-08-03 11:37 E4 审计显示环境变量和现有真实 `configs/server/*.env` 均未发现可用 API key，`api_keys_present=[]`、`api_provider_profiles={}`；外部 API Gate 仍需用户提供 key 和目标 provider model 后才能生成 run |
 | 当前阻塞条件 | 当前有两类阻塞：第一，E4 没有新候选，latest E4 readiness 为 `no_candidate_wait`，未发现未测本地模型或 API profile；第二，12:16 GPU `0-3` 仍出现无可见 PID 的高显存/高利用状态，default pool available=`false`。Qwen3 endpoint 已按要求关闭；下一次在线实验需先清理/复核 GPU runtime，再启动服务并重跑 preflight。2026-07-31 full200 目标和 2026-08-03 P4b after-targeted 新 seed三数据集目标已过线；Seed-C/Seed-D current-only 与边界诊断均已完成，paired MACT 不应继续消耗 |
@@ -401,7 +403,7 @@ affected-slice 通过后的 WTQ full50 自动入口和结果：
 
 ### 1.2.7 E5/E6 正式实验包和专利说明书初稿
 
-E5/E6 已完成 draft 版，不是最终版。它把当前 full200、coarse ablation、P4b、新 seed WTQ 诊断、WTQ targeted projection、未完成验证和专利说明书初稿集中到一个 MACT 包目录中，方便专家/专利代理人复核。
+E5/E6 已完成 draft 版，不是最终版。它把当前 full200、coarse ablation、P4b、新 seed WTQ 诊断、WTQ targeted fresh/after-targeted 闭环、E3 边界、E4 no-candidate 和专利说明书初稿集中到一个 MACT 包目录中，方便专家/专利代理人复核。
 
 包目录：
 
