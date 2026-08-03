@@ -73,7 +73,7 @@ class PrepareModelGateRunTests(unittest.TestCase):
             manifest_json = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["run_dir"], str(run_dir))
             self.assertEqual(manifest_json["model_tag"], "deepseek_r1_qwen32b")
-            self.assertEqual(manifest_json["gpu_groups"], "4,5;6,7")
+            self.assertEqual(manifest_json["gpu_groups"], "0,1;2,3")
             self.assertEqual(
                 manifest_json["endpoints"],
                 ["http://127.0.0.1:8000/v1", "http://127.0.0.1:8001/v1"],
@@ -90,7 +90,7 @@ class PrepareModelGateRunTests(unittest.TestCase):
                 text=True,
                 stdout=subprocess.PIPE,
             ).stdout.splitlines()
-            self.assertEqual(env_values, [str(model_dir), "4,5;6,7", "deepseek-r1-qwen32b-local"])
+            self.assertEqual(env_values, [str(model_dir), "0,1;2,3", "deepseek-r1-qwen32b-local"])
 
             gate10 = run_dir / "run_gate10.sh"
             gate50 = run_dir / "run_gate50.sh"

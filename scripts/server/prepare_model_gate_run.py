@@ -20,7 +20,7 @@ from experiment_model_registry import KNOWN_TESTED_LOCAL_MODELS, known_tested_mo
 DEFAULT_WTQ_DATASET = "datasets_ready/frozen_qwen3_eval_150_2026-07-19/wtq.jsonl"
 DEFAULT_TABFACT_DATASET = "datasets_ready/frozen_qwen3_eval_150_2026-07-19/tabfact.jsonl"
 DEFAULT_CRT_DATASET = "datasets_ready/frozen_qwen3_eval_150_2026-07-19/crt.jsonl"
-DEFAULT_GPU_GROUPS = "4,5;6,7"
+DEFAULT_GPU_GROUPS = "0,1;2,3"
 DEFAULT_BASE_PORT = 8000
 DEFAULT_API_KEY = "local-vllm-key-change-me"
 DEFAULT_MACT_AVG_TOKENS = 11262.41
