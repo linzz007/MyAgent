@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-04 21:22 CST
+最后更新：2026-08-04 22:14 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,6 +11,8 @@
 快速 checkpoint（2026-08-04 20:08 CST）：S4 paired MACT baseline 仍在运行，尚不能写成最终 paired 超过 MACT。已完成 `seed_c/WTQ`、`seed_c/TabFact`、`seed_c/CRT`、`seed_d/WTQ` 四组各 `50/50`；正在运行 `seed_d/CRT` on `http://127.0.0.1:8000/v1`，当前 `8/50`；正在运行 `seed_d/TabFact` on `http://127.0.0.1:8001/v1`，当前 `2/50`。已知 MACT exec_error：`seed_c/WTQ` 3 条（`nu-1073`,`nu-2047`,`nu-575`），`seed_d/WTQ` 1 条（`nu-3573`），其余已完成/当前部分为 0。若会话中断，先执行 `wc -l /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/mact/*/*.jsonl`，然后用 `run_mact_dataset.sh <seed> <dataset> <api_base>` 的 `--resume` 补未满 50 的文件；六组都满 50 后执行 `python outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/summarize_s4_paired.py`。
 
 快速 checkpoint（2026-08-04 21:22 CST）：S4 paired MACT baseline 已完成五组 `50/50`：`seed_c/WTQ`、`seed_c/TabFact`、`seed_c/CRT`、`seed_d/WTQ`、`seed_d/TabFact`；只剩 `seed_d/CRT` 正在 `http://127.0.0.1:8000/v1` 运行，当前 `33/50`。已知 MACT exec_error 未新增：`seed_c/WTQ` 3 条（`nu-1073`,`nu-2047`,`nu-575`），`seed_d/WTQ` 1 条（`nu-3573`），其他已完成/当前部分为 0。若恢复，优先 `bash outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/run_mact_dataset.sh seed_d crt http://127.0.0.1:8000/v1`，完成后运行 `summarize_s4_paired.py`。
+
+快速 checkpoint（2026-08-04 22:14 CST）：S4 paired MACT 六组 baseline 全部完成并汇总。总体 MyAgent `229/300` vs MACT `223/300`，token ratio `0.5700`，MyAgent failed/missing `0/0`，MACT failed/missing `4/4`，decision=`s4_paired_pass_existing_criteria_not_strict`。分数据集：WTQ `76/100` vs `74/100`，TabFact `91/100` vs `87/100`，CRT `62/100` vs `62/100`。结论：现有 paired criteria 已通过，但用户定义的 strong patent strict 目标未过，因为 CRT 只是持平不是超过；下一小目标转为 CRT tie-breaker 诊断与 gold-free affected-slice/no-harm fresh。
 
 | item | status |
 |---|---|
@@ -64,7 +66,7 @@
 | 用户最新资源补充 | 2026-08-04 10:49 用户提示 `0,1,2,3` 卡释放并要求启动后不要释放显存；已遵守为双实例常驻：`2,3 -> 8000` 与 `0,1 -> 8001`。除非快速切换模型或用户明确要求释放，不关闭这两个 Qwen3 服务 |
 | 当前本机模型候选 | 2026-08-04 10:25 E4 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；这些都属于已测/已 no-go 清单，`untested_local_models=[]`、`untested_local_model_paths={}`；当前不能生成新的本地模型 Gate run |
 | 当前外部 API 候选 | 2026-08-04 10:25 E4 审计显示环境变量和现有真实 `configs/server/*.env` 均未发现可用 API key，`api_keys_present=[]`、`api_provider_profiles={}`；外部 API Gate 仍需用户提供 key 和目标 provider model 后才能生成 run |
-| 当前阻塞条件 | 当前 Qwen3-32B 在线服务已恢复，不再是 Qwen runtime 阻塞；Qwen3 内部 current-only gate 已通过到 paired MACT 候选阶段。剩余缺口是 S4 paired MACT 尚未完成、E4 没有新模型/API 候选。latest E4 readiness 为 `no_candidate_wait`，未发现未测本地模型或 API profile；因此当前不能确认“多模型稳定”，也不能把 E3 写成 paired MACT 最终结果 |
+| 当前阻塞条件 | 当前 Qwen3-32B 在线服务已恢复，不再是 Qwen runtime 阻塞；S4 paired MACT 已完成并通过现有 paired criteria，但未达到用户定义的 strong patent strict：CRT combined 为 MyAgent `62/100` vs MACT `62/100` 持平。E4 没有新模型/API 候选，latest E4 readiness 为 `no_candidate_wait`；因此当前不能确认“多模型稳定”，也不能把 E3 写成“全部数据集严格超过 MACT”的最终专利主结论 |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 当前 Qwen3 policy-v6b/current 三数据集合计：MyAgent `489/600` vs MACT `450/600`，总体 token ratio `0.5717`，总体 elapsed ratio `0.1337`，失败/缺答案 `0/0`；总表：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/qwen3_policy_v6b_all200_acceptance_summary.json` |
 | 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
@@ -76,7 +78,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；历史 Qwen3-32B 单服务 example 的 GPU `4,5` 口径已被当前 `prepare_model_gate_run.py` 默认 `0,1;2,3` 替代 |
-| 下一步建议 | 不建议把三个 coarse 变体都扩 full200，也不建议继续针对 TabFact 单项刷分。P4b after-targeted 已给出“WTQ/TabFact/CRT 三数据集单项均超过 MACT，overall/token 均过线”的新 seed 正证据；E3 v6c boundary fresh 已把 Seed-C/D current-only 推到 paired MACT 候选。下一步先跑完 S4 paired MACT 当前剩余的 `seed_d/CRT` 与 `seed_d/TabFact`，六组各 50 行后立即运行 S4 summarizer；若 strong patent-seed claim 不过，再针对失败数据集做同样的 gold-free boundary 诊断和 affected-slice/no-harm fresh，不直接扩 full200。多模型外延仍等待新本地模型或 API key，再按 Gate-10 -> Gate-50 -> Gate-150 漏斗执行 |
+| 下一步建议 | 不建议把三个 coarse 变体都扩 full200，也不建议继续针对 TabFact 单项刷分。P4b after-targeted 已给出“WTQ/TabFact/CRT 三数据集单项均超过 MACT，overall/token 均过线”的新 seed 正证据；S4 paired MACT 进一步证明 overall 与 WTQ/TabFact 过线，但 CRT 只持平。下一步只做 CRT tie-breaker：先定位 Seed-C/D 中 `mact_only` 与双方错的 CRT 边界模式，设计 gold-free semantic guard 或预算/格式细节优化，用 affected-slice + no-harm fresh 验证至少净增 `+1` 且不伤害已正确样本；通过后再最小化重跑 CRT paired 或 S4 CRT rerun。多模型外延仍等待新本地模型或 API key，再按 Gate-10 -> Gate-50 -> Gate-150 漏斗执行 |
 
 ### 0.1 2026-08-01 本次继续执行台账
 
@@ -431,6 +433,21 @@ python outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/
 | seed_d | CRT | 33/50 | 0 | running on `http://127.0.0.1:8000/v1` |
 
 当前结论边界：五组 MACT baseline 已完整落盘，只剩 `seed_d/CRT`。S4 仍处于 `current_only_candidate_paired_pending`，最终结论必须等 `summarize_s4_paired.py` 生成 `summary/e3_s4_paired_combined_summary.json/md` 后再写。
+
+22:14 CST 最终结果：
+
+| scope | MyAgent | MACT | delta | token ratio | decision |
+|---|---:|---:|---:|---:|---|
+| Seed-C aggregate | 118/150 | 118/150 | +0 | 0.6253 | existing paired pass; strict fail |
+| Seed-D aggregate | 111/150 | 105/150 | +6 | 0.5195 | existing paired pass; strict fail due CRT tie |
+| WTQ combined | 76/100 | 74/100 | +2 | 0.5762 | strict pass |
+| TabFact combined | 91/100 | 87/100 | +4 | 0.2571 | strict pass |
+| CRT combined | 62/100 | 62/100 | +0 | 0.8078 | strict fail; tie |
+| Overall | 229/300 | 223/300 | +6 | 0.5700 | `s4_paired_pass_existing_criteria_not_strict` |
+
+失败/缺答案：MyAgent `0/0`，MACT `4/4`。MACT failed IDs 来自 WTQ：`seed_c` 的 `nu-1073`,`nu-2047`,`nu-575` 与 `seed_d` 的 `nu-3573`。
+
+当前结论边界：S4 可以写成“Qwen3-32B + MyAgent 在 paired Gate-50 多 seed 汇总上总体超过 MACT，且 token 明显更低；WTQ/TabFact 严格超过 MACT”。不能写成“全部数据集严格超过 MACT”，因为 CRT combined 只是持平。下一步进入 CRT tie-breaker 诊断。
 
 下一次恢复命令入口：
 
