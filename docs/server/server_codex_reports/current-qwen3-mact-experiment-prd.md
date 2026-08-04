@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-04 20:08 CST
+最后更新：2026-08-04 21:22 CST
 
 ## 0. 下一次启动先看这里
 
@@ -9,6 +9,8 @@
 当前最后同步状态：
 
 快速 checkpoint（2026-08-04 20:08 CST）：S4 paired MACT baseline 仍在运行，尚不能写成最终 paired 超过 MACT。已完成 `seed_c/WTQ`、`seed_c/TabFact`、`seed_c/CRT`、`seed_d/WTQ` 四组各 `50/50`；正在运行 `seed_d/CRT` on `http://127.0.0.1:8000/v1`，当前 `8/50`；正在运行 `seed_d/TabFact` on `http://127.0.0.1:8001/v1`，当前 `2/50`。已知 MACT exec_error：`seed_c/WTQ` 3 条（`nu-1073`,`nu-2047`,`nu-575`），`seed_d/WTQ` 1 条（`nu-3573`），其余已完成/当前部分为 0。若会话中断，先执行 `wc -l /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/mact/*/*.jsonl`，然后用 `run_mact_dataset.sh <seed> <dataset> <api_base>` 的 `--resume` 补未满 50 的文件；六组都满 50 后执行 `python outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/summarize_s4_paired.py`。
+
+快速 checkpoint（2026-08-04 21:22 CST）：S4 paired MACT baseline 已完成五组 `50/50`：`seed_c/WTQ`、`seed_c/TabFact`、`seed_c/CRT`、`seed_d/WTQ`、`seed_d/TabFact`；只剩 `seed_d/CRT` 正在 `http://127.0.0.1:8000/v1` 运行，当前 `33/50`。已知 MACT exec_error 未新增：`seed_c/WTQ` 3 条（`nu-1073`,`nu-2047`,`nu-575`），`seed_d/WTQ` 1 条（`nu-3573`），其他已完成/当前部分为 0。若恢复，优先 `bash outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/run_mact_dataset.sh seed_d crt http://127.0.0.1:8000/v1`，完成后运行 `summarize_s4_paired.py`。
 
 | item | status |
 |---|---|
@@ -416,6 +418,19 @@ python outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/
 | seed_d | CRT | 8/50 | 0 | running on `http://127.0.0.1:8000/v1` |
 
 当前结论边界：四组 MACT baseline 已完整落盘，两组仍在运行；S4 仍处于 `current_only_candidate_paired_pending`，最终结论必须等 `summarize_s4_paired.py` 生成 `summary/e3_s4_paired_combined_summary.json/md` 后再写。
+
+21:22 CST 检查点：
+
+| seed | dataset | output rows | exec_error rows | status |
+|---|---:|---:|---:|---|
+| seed_c | WTQ | 50/50 | 3 | completed; failed IDs `nu-1073`,`nu-2047`,`nu-575` |
+| seed_c | TabFact | 50/50 | 0 | completed |
+| seed_c | CRT | 50/50 | 0 | completed |
+| seed_d | WTQ | 50/50 | 1 | completed; failed ID `nu-3573` |
+| seed_d | TabFact | 50/50 | 0 | completed |
+| seed_d | CRT | 33/50 | 0 | running on `http://127.0.0.1:8000/v1` |
+
+当前结论边界：五组 MACT baseline 已完整落盘，只剩 `seed_d/CRT`。S4 仍处于 `current_only_candidate_paired_pending`，最终结论必须等 `summarize_s4_paired.py` 生成 `summary/e3_s4_paired_combined_summary.json/md` 后再写。
 
 下一次恢复命令入口：
 
