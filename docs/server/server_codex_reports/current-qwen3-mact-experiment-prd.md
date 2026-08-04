@@ -1,12 +1,14 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-04 18:52 CST
+最后更新：2026-08-04 20:08 CST
 
 ## 0. 下一次启动先看这里
 
 服务器扩容/清空后，先恢复两个仓库，再看本文档这一节，不要新建第二份 PRD。
 
 当前最后同步状态：
+
+快速 checkpoint（2026-08-04 20:08 CST）：S4 paired MACT baseline 仍在运行，尚不能写成最终 paired 超过 MACT。已完成 `seed_c/WTQ`、`seed_c/TabFact`、`seed_c/CRT`、`seed_d/WTQ` 四组各 `50/50`；正在运行 `seed_d/CRT` on `http://127.0.0.1:8000/v1`，当前 `8/50`；正在运行 `seed_d/TabFact` on `http://127.0.0.1:8001/v1`，当前 `2/50`。已知 MACT exec_error：`seed_c/WTQ` 3 条（`nu-1073`,`nu-2047`,`nu-575`），`seed_d/WTQ` 1 条（`nu-3573`），其余已完成/当前部分为 0。若会话中断，先执行 `wc -l /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/mact/*/*.jsonl`，然后用 `run_mact_dataset.sh <seed> <dataset> <api_base>` 的 `--resume` 补未满 50 的文件；六组都满 50 后执行 `python outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/summarize_s4_paired.py`。
 
 | item | status |
 |---|---|
@@ -60,7 +62,7 @@
 | 用户最新资源补充 | 2026-08-04 10:49 用户提示 `0,1,2,3` 卡释放并要求启动后不要释放显存；已遵守为双实例常驻：`2,3 -> 8000` 与 `0,1 -> 8001`。除非快速切换模型或用户明确要求释放，不关闭这两个 Qwen3 服务 |
 | 当前本机模型候选 | 2026-08-04 10:25 E4 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；这些都属于已测/已 no-go 清单，`untested_local_models=[]`、`untested_local_model_paths={}`；当前不能生成新的本地模型 Gate run |
 | 当前外部 API 候选 | 2026-08-04 10:25 E4 审计显示环境变量和现有真实 `configs/server/*.env` 均未发现可用 API key，`api_keys_present=[]`、`api_provider_profiles={}`；外部 API Gate 仍需用户提供 key 和目标 provider model 后才能生成 run |
-| 当前阻塞条件 | 当前 Qwen3-32B 在线服务已恢复，不再是 Qwen runtime 阻塞；Qwen3 内部 current-only gate 已通过到 paired MACT 候选阶段。剩余缺口是 S4 paired MACT 尚未运行、E4 没有新模型/API 候选。latest E4 readiness 为 `no_candidate_wait`，未发现未测本地模型或 API profile；因此当前不能确认“多模型稳定”，也不能把 E3 写成 paired MACT 最终结果 |
+| 当前阻塞条件 | 当前 Qwen3-32B 在线服务已恢复，不再是 Qwen runtime 阻塞；Qwen3 内部 current-only gate 已通过到 paired MACT 候选阶段。剩余缺口是 S4 paired MACT 尚未完成、E4 没有新模型/API 候选。latest E4 readiness 为 `no_candidate_wait`，未发现未测本地模型或 API profile；因此当前不能确认“多模型稳定”，也不能把 E3 写成 paired MACT 最终结果 |
 | 当前主证据 | core100：myAgent `237/300` vs MACT `227/300`，token ratio `0.5913` |
 | full200 阶段证据 | 当前 Qwen3 policy-v6b/current 三数据集合计：MyAgent `489/600` vs MACT `450/600`，总体 token ratio `0.5717`，总体 elapsed ratio `0.1337`，失败/缺答案 `0/0`；总表：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_all200_acceptance_20260731_132611/qwen3_policy_v6b_all200_acceptance_summary.json` |
 | 最新机器审计产物 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_blind200_mact_full200_20260723/latest_experiment_readiness_audit.json` |
@@ -72,7 +74,7 @@
 | 多模型 Gate-50 raw artifacts | `/home/ubuntu/lzz/MACT/outputs/server_runs/multimodel_gate50_raw_artifacts_20260730_2002/` |
 | full200 问题诊断 | 诊断文件、WTQ 50 条 discordant 调试子集、压缩桶、gold 行列覆盖、候选修复收益估计、extreme/only 离线检查和 debug50 实测已保存到 MACT |
 | 本地临时文件处理 | 2026-07-30 19:58 已确认 `restart_qwen3_context_try.sh` 和 `configs/server/*.env.bak.*` 是本地临时/备份文件，已加入 `.gitignore`；历史 Qwen3-32B 单服务 example 的 GPU `4,5` 口径已被当前 `prepare_model_gate_run.py` 默认 `0,1;2,3` 替代 |
-| 下一步建议 | 不建议把三个 coarse 变体都扩 full200，也不建议继续针对 TabFact 单项刷分。P4b after-targeted 已给出“WTQ/TabFact/CRT 三数据集单项均超过 MACT，overall/token 均过线”的新 seed 正证据；E3 v6c boundary fresh 已把 Seed-C/D current-only 推到 paired MACT 候选。下一步优先做 S4 paired MACT，同 ID 对齐验证是否仍全部超过 MACT；若要求最严格 freshness，可先补一次完整 v6c S3 current-only rerun。多模型外延仍等待新本地模型或 API key，再按 Gate-10 -> Gate-50 -> Gate-150 漏斗执行 |
+| 下一步建议 | 不建议把三个 coarse 变体都扩 full200，也不建议继续针对 TabFact 单项刷分。P4b after-targeted 已给出“WTQ/TabFact/CRT 三数据集单项均超过 MACT，overall/token 均过线”的新 seed 正证据；E3 v6c boundary fresh 已把 Seed-C/D current-only 推到 paired MACT 候选。下一步先跑完 S4 paired MACT 当前剩余的 `seed_d/CRT` 与 `seed_d/TabFact`，六组各 50 行后立即运行 S4 summarizer；若 strong patent-seed claim 不过，再针对失败数据集做同样的 gold-free boundary 诊断和 affected-slice/no-harm fresh，不直接扩 full200。多模型外延仍等待新本地模型或 API key，再按 Gate-10 -> Gate-50 -> Gate-150 漏斗执行 |
 
 ### 0.1 2026-08-01 本次继续执行台账
 
@@ -401,6 +403,19 @@ python outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/
 | seed_d | WTQ | 26/50 | 1 | running on `http://127.0.0.1:8000/v1` |
 | seed_d | TabFact | 0/50 | 0 | pending |
 | seed_d | CRT | 0/50 | 0 | pending |
+
+20:08 CST 检查点：
+
+| seed | dataset | output rows | exec_error rows | status |
+|---|---:|---:|---:|---|
+| seed_c | WTQ | 50/50 | 3 | completed; failed IDs `nu-1073`,`nu-2047`,`nu-575` |
+| seed_c | TabFact | 50/50 | 0 | completed |
+| seed_c | CRT | 50/50 | 0 | completed |
+| seed_d | WTQ | 50/50 | 1 | completed; failed ID `nu-3573` |
+| seed_d | TabFact | 2/50 | 0 | running on `http://127.0.0.1:8001/v1` |
+| seed_d | CRT | 8/50 | 0 | running on `http://127.0.0.1:8000/v1` |
+
+当前结论边界：四组 MACT baseline 已完整落盘，两组仍在运行；S4 仍处于 `current_only_candidate_paired_pending`，最终结论必须等 `summarize_s4_paired.py` 生成 `summary/e3_s4_paired_combined_summary.json/md` 后再写。
 
 下一次恢复命令入口：
 
