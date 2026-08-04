@@ -149,6 +149,15 @@ class TaskModeTests(unittest.TestCase):
             answer_mode_for_sample("crt", yes_no_question),
             "yes_no",
         )
+        self.assertEqual(
+            answer_mode_for_sample(
+                "crt",
+                "Can we identify any outlier events based on the number of acts or "
+                "number of stages compared to the other events in the table? Answer "
+                "with only 'Yes' or 'No' that is most accurate and nothing else.",
+            ),
+            "yes_no",
+        )
         self.assertEqual(answer_mode_for_sample("crt", numeric_question), "")
         self.assertEqual(
             answer_mode_for_sample("scitab", "Any fact-check statement"),

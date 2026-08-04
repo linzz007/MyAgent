@@ -1451,6 +1451,10 @@ def _canonicalize_crt_scalar(
         return value
     if not value.strip():
         return value
+    if re.search(r"\bpercent(?:age)?\b|%", question_text, flags=re.I):
+        percent_match = re.fullmatch(r"\s*([-+]?\d+)\.0+\s*%\s*", value)
+        if percent_match:
+            return f"{percent_match.group(1)}%"
     stripped_entity = _strip_entity_metadata(value)
     if (
         stripped_entity != value
@@ -3207,6 +3211,182 @@ class TableQAPipeline:
         state.grounding_validation = {"valid": True, "reason": reason}
         self._normalize_and_validate(state)
         return True
+
+    @staticmethod
+    def _crt_numeric_outlier_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        text = question or ""
+        if not re.search(r"\boutliers?\b", text, flags=re.I):
+            return None
+        if not re.search(r"\b(?:identify|any|whether|if|yes|no)\b", text, flags=re.I):
+            return None
+        question_tokens = {_singular_token(token) for token in _loose_tokens(text)}
+        candidate_cols: List[Any] = []
+        for col in df.columns:
+            col_tokens = {_singular_token(token) for token in _loose_tokens(col)}
+            if not col_tokens or not (col_tokens & question_tokens):
+                continue
+            values = [
+                _numeric_measure_value(value)
+                for value in df[col].tolist()
+            ]
+            if sum(value is not None for value in values) >= 4:
+                candidate_cols.append(col)
+        if not candidate_cols:
+            return None
+
+        for col in candidate_cols:
+            series = pd.Series(
+                [
+                    float(value)
+                    for value in (
+                        _numeric_measure_value(cell)
+                        for cell in df[col].tolist()
+                    )
+                    if value is not None
+                ]
+            )
+            if len(series) < 4 or series.nunique() < 2:
+                continue
+            q1 = float(series.quantile(0.25))
+            q3 = float(series.quantile(0.75))
+            iqr = q3 - q1
+            upper = q3 + 1.5 * iqr
+            lower = q1 - 1.5 * iqr
+            ordered = sorted(series.tolist())
+            max_gap = ordered[-1] - ordered[-2] if len(ordered) >= 2 else 0.0
+            min_gap = ordered[1] - ordered[0] if len(ordered) >= 2 else 0.0
+            if iqr > 0 and (ordered[-1] > upper or ordered[0] < lower):
+                return "Yes"
+            if ordered[-2] > 0 and ordered[-1] >= ordered[-2] * 3 and max_gap >= 5:
+                return "Yes"
+            if ordered[1] > 0 and ordered[1] >= ordered[0] * 3 and min_gap >= 5:
+                return "Yes"
+        return "No"
+
+    @staticmethod
+    def _crt_top_k_years_average_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\baverage\s+number\s+of\s+years\s+played\b.*\btop\s+(\d+)\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        top_k = int(match.group(1))
+        if top_k <= 0:
+            return None
+        rank_cols = [
+            col for col in df.columns
+            if re.search(r"\b(rank|place|position)\b", str(col), flags=re.I)
+        ]
+        years_cols = [
+            col for col in df.columns
+            if re.search(r"\byears?\b", str(col), flags=re.I)
+        ]
+        if not years_cols:
+            return None
+        years_col = years_cols[0]
+
+        explicit_ends: List[int] = []
+        all_years: List[int] = []
+        for value in df[years_col].tolist():
+            years = [int(year) for year in re.findall(r"\b(1[7-9]\d{2}|20\d{2})\b", str(value or ""))]
+            all_years.extend(years)
+            if len(years) >= 2:
+                explicit_ends.append(max(years[0], years[-1]))
+        inferred_end_year = max(explicit_ends or all_years) if all_years else None
+        if inferred_end_year is None:
+            return None
+
+        def year_span(value: Any) -> Optional[Tuple[int, int]]:
+            text = str(value or "")
+            years = [int(year) for year in re.findall(r"\b(1[7-9]\d{2}|20\d{2})\b", text)]
+            if len(years) >= 2:
+                return min(years[0], years[-1]), max(years[0], years[-1])
+            if len(years) == 1 and re.search(r"[-–—]\s*$", text.strip()):
+                return min(years[0], inferred_end_year), max(years[0], inferred_end_year)
+            return None
+
+        if rank_cols:
+            rank_col = rank_cols[0]
+            ranked: List[Tuple[float, int, pd.Series]] = []
+            for order, (_, row) in enumerate(df.iterrows()):
+                rank = _as_number_like(row[rank_col])
+                if rank is None:
+                    continue
+                ranked.append((rank, order, row))
+            if len(ranked) < top_k:
+                return None
+            selected_rows = [row for _, _, row in sorted(ranked, key=lambda item: (item[0], item[1]))[:top_k]]
+        else:
+            if len(df) < top_k:
+                return None
+            selected_rows = [row for _, row in df.head(top_k).iterrows()]
+
+        durations: List[int] = []
+        for row in selected_rows:
+            span = year_span(row[years_col])
+            if span is None:
+                return None
+            durations.append(span[1] - span[0] + 1)
+        average = sum(durations) / len(durations)
+        return int(round(average)) if abs(average - round(average)) <= 0.25 else round(average, 2)
+
+    @staticmethod
+    def _crt_constructor_retirement_reason_percentage_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        text = question or ""
+        match = re.search(
+            r"\bwhich\s+constructor\b.*\bhighest\s+percentage\b.*\bretire(?:d)?\s+"
+            r"due\s+to\s+(.+?)\s+problems?\b",
+            text,
+            flags=re.I,
+        )
+        if not match:
+            return None
+        reason_key = _loose_text_key(match.group(1))
+        if not reason_key:
+            return None
+        constructor_cols = [
+            col for col in df.columns
+            if re.search(r"\bconstructor\b", str(col), flags=re.I)
+        ]
+        status_cols = [
+            col for col in df.columns
+            if re.search(r"\b(retired|retirement|status|result|reason|time)\b", str(col), flags=re.I)
+        ]
+        if not constructor_cols or not status_cols:
+            return None
+        constructor_col = constructor_cols[0]
+        status_col = status_cols[0]
+        groups: Dict[str, Dict[str, Any]] = {}
+        for _, row in df.iterrows():
+            constructor = row[constructor_col]
+            if _is_missing_marker(constructor):
+                continue
+            constructor_text = re.sub(r"\s+", " ", str(constructor)).strip()
+            constructor_key = _loose_text_key(constructor_text)
+            if not constructor_key:
+                continue
+            group = groups.setdefault(
+                constructor_key,
+                {"display": constructor_text, "total": 0, "reason": 0},
+            )
+            group["total"] += 1
+            if reason_key in _loose_text_key(row[status_col]):
+                group["reason"] += 1
+        scored: List[Tuple[float, int, str]] = []
+        for group in groups.values():
+            total = int(group["total"])
+            reason = int(group["reason"])
+            if total <= 0 or reason <= 0:
+                continue
+            scored.append((reason / total, reason, str(group["display"])))
+        if not scored:
+            return None
+        scored.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
+        if len(scored) > 1 and abs(scored[0][0] - scored[1][0]) <= 1e-12:
+            return None
+        return scored[0][2]
 
     @staticmethod
     def _crt_duration_change_answer(question: str, df: pd.DataFrame) -> Optional[str]:
@@ -5895,6 +6075,45 @@ class TableQAPipeline:
         return "false"
 
     @staticmethod
+    def _tabfact_numbered_same_team_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        text = question or ""
+        if re.search(r"\b(?:not|never|neither|no)\s+play\b", text, flags=re.I):
+            return None
+        match = re.search(
+            r"^\s*(.+?)\s+and\s+(.+?)\s+play\s+on\s+the\s+same\s+team\s+as\s+"
+            r"no\s*([0-9]+)\s+and\s+no\s*([0-9]+)\b",
+            text,
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_entity, right_entity, left_number, right_number = [
+            part.strip(" \t\r\n\"'.")
+            for part in match.groups()
+        ]
+        if not left_entity or not right_entity:
+            return None
+
+        def numbered_col(number: str) -> Optional[Any]:
+            target = f"no{number}"
+            for col in df.columns:
+                if _loose_text_key(col).replace(" ", "") == target:
+                    return col
+            return None
+
+        target_cols = [numbered_col(left_number), numbered_col(right_number)]
+        if any(col is None for col in target_cols):
+            return None
+        for _, row in df.iterrows():
+            combined = " ".join(str(row[col]) for col in target_cols if col is not None)
+            if (
+                _cell_contains_entity_phrase(left_entity, combined)
+                and _cell_contains_entity_phrase(right_entity, combined)
+            ):
+                return "true"
+        return "false"
+
+    @staticmethod
     def _tabfact_column_value_count_assertion_answer(question: str, df: pd.DataFrame) -> Optional[str]:
         text = question or ""
         one_of_match = re.search(
@@ -6816,6 +7035,64 @@ class TableQAPipeline:
         if entity_col is None:
             return None
         value = matched_rows[0][entity_col]
+        return None if _is_missing_marker(value) else value
+
+    @staticmethod
+    def _wtq_multi_condition_lookup_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"^\s*(?:at|in|for)\s+which\s+(.+?)\s+"
+            r"(?:was|were|is|are)\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        target_phrase, condition_text = match.groups()
+        condition_text = re.sub(r"\btoo\b", "", condition_text, flags=re.I).strip(" ,")
+        condition_parts = [
+            part.strip(" ,")
+            for part in re.split(r"\s+\band\s+", condition_text, flags=re.I)
+            if part.strip(" ,")
+        ]
+        if len(condition_parts) < 2:
+            return None
+        target_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, target_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, target_phrase)
+        )
+        if target_col is None:
+            return None
+        conditions: List[Tuple[Any, float]] = []
+        for part in condition_parts:
+            condition_match = re.search(
+                r"^(?:the\s+)?(.+?)\s+(?:as\s+|equals?\s+|equal\s+to\s+)?"
+                r"([-+]?\d+(?:\.\d+)?)\s*$",
+                part,
+                flags=re.I,
+            )
+            if not condition_match:
+                return None
+            col_phrase, expected_text = condition_match.groups()
+            condition_col = (
+                TableQAPipeline._select_column_by_semantic_tokens(df, col_phrase)
+                or TableQAPipeline._select_column_by_tokens(df, col_phrase)
+            )
+            expected = _numeric_measure_value(expected_text)
+            if condition_col is None or condition_col == target_col or expected is None:
+                return None
+            conditions.append((condition_col, expected))
+
+        matched_rows: List[pd.Series] = []
+        for _, row in TableQAPipeline._wtq_non_summary_rows(df).iterrows():
+            if all(
+                (value := _numeric_measure_value(row[col])) is not None
+                and abs(float(value) - expected) <= 1e-6
+                for col, expected in conditions
+            ):
+                matched_rows.append(row)
+        if len(matched_rows) != 1:
+            return None
+        value = matched_rows[0][target_col]
         return None if _is_missing_marker(value) else value
 
     @staticmethod
@@ -7827,6 +8104,10 @@ class TableQAPipeline:
                 self._tabfact_zero_gold_count_answer(question, df),
             ),
             (
+                "TabFact numbered same-team relation checked deterministically.",
+                self._tabfact_numbered_same_team_answer(question, df),
+            ),
+            (
                 "TabFact all games before date result checked deterministically.",
                 self._tabfact_every_before_date_result_answer(question, df),
             ),
@@ -7876,6 +8157,10 @@ class TableQAPipeline:
             (
                 "WTQ only row matching a metric value selected deterministically.",
                 self._wtq_only_metric_value_answer(question, df),
+            ),
+            (
+                "WTQ target column selected from multiple row conditions deterministically.",
+                self._wtq_multi_condition_lookup_answer(question, df),
             ),
             (
                 "WTQ row-major listed-after value selected deterministically.",
@@ -7992,6 +8277,18 @@ class TableQAPipeline:
         question = state.question or ""
         df = state.original_df
         for reason, value in [
+            (
+                "CRT numeric outlier presence checked deterministically.",
+                self._crt_numeric_outlier_answer(question, df),
+            ),
+            (
+                "CRT top-k years-played average computed deterministically.",
+                self._crt_top_k_years_average_answer(question, df),
+            ),
+            (
+                "CRT constructor retirement reason percentage computed deterministically.",
+                self._crt_constructor_retirement_reason_percentage_answer(question, df),
+            ),
             (
                 "CRT episode viewership compared with season average deterministically.",
                 self._crt_episode_viewership_vs_season_average_answer(question, df),

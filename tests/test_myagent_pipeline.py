@@ -264,6 +264,15 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(value, "dean parisot, ted humphrey")
 
+    def test_crt_percentage_scalar_canonicalizes_integer_decimal_percent(self):
+        value = _canonicalize_crt_scalar(
+            "80.0%",
+            "what percentage of medals were won by nations from Europe?",
+            pd.DataFrame({"total": [12]}),
+        )
+
+        self.assertEqual(value, "80%")
+
     def test_entity_metadata_suffix_is_removed_from_requested_name(self):
         self.assertEqual(
             _strip_entity_metadata("monster release date : june 28, 2006"),
@@ -1919,6 +1928,27 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, "Sébastien Bourdais")
+
+    def test_wtq_multi_condition_lookup_shortcut_returns_requested_column(self):
+        df = pd.DataFrame(
+            {
+                "Season": ["2012", "2013", "2014"],
+                "Age": ["25", "26", "27"],
+                "Overall": ["24", "48", "18"],
+                "Giant Slalom": ["16", "48", "25"],
+            }
+        )
+        fake = FakePipelineLLM(semantic_score=0.9, rows=["2013"], cols=["Age", "Overall", "Giant Slalom"])
+        pipeline, _ = self._pipeline(fake)
+        state = TQASessionState(
+            question="at which age was the overall as 48 and the giant slalom 48, too?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        self.assertTrue(pipeline._try_wtq_semantic_shortcut(state))
+        self.assertEqual(state.final_value, "26")
 
     def test_wtq_listed_after_cell_shortcut_reads_row_major_next_year(self):
         df = pd.DataFrame(
@@ -4229,6 +4259,28 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertTrue(pipeline._try_tabfact_semantic_shortcut(state))
         self.assertEqual(state.final_value, "true")
 
+    def test_tabfact_numbered_same_team_shortcut_checks_combined_number_columns(self):
+        df = pd.DataFrame(
+            {
+                "no6": ["celia paulo", "paulo telmo", "paulo"],
+                "no9": ["telmo celia", "evicted (day 87)", "telmo"],
+                "final": ["winner", "evicted", "housemate"],
+            }
+        )
+        pipeline, _ = self._pipeline(FakePipelineLLM(0.8, [], []))
+        question = "telmo and paulo play on the same team as no 6 and no 9"
+        state = TQASessionState(
+            question=question,
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="true_false",
+            answer_contract=infer_answer_contract(question, "true_false"),
+            dataset_profile="tabfact",
+        )
+
+        self.assertTrue(pipeline._try_tabfact_semantic_shortcut(state))
+        self.assertEqual(state.final_value, "true")
+
     def test_tabfact_only_not_from_country_shortcut(self):
         df = pd.DataFrame(
             {
@@ -4305,6 +4357,111 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertTrue(pipeline._try_tabfact_semantic_shortcut(diff_state))
         self.assertEqual(diff_state.final_value, "true")
+
+    def test_crt_e3_guard_shortcuts_cover_outlier_topk_and_constructor_percentage(self):
+        pipeline, _ = self._pipeline(FakePipelineLLM(0.8, [], []))
+
+        outlier_df = pd.DataFrame(
+            {
+                "event": ["a", "b", "c", "d", "e", "f", "g"],
+                "stages": ["1 stage", "1 stage", "1 stage", "1 stage", "2 stages", "1 stage", "2 stages"],
+                "acts": ["5 bands", "5 bands", "60 + djs", "6 bands", "12 bands", "9 bands", "13 bands"],
+            }
+        )
+        outlier_question = (
+            "Can we identify any outlier events based on the number of acts or number of stages "
+            "compared to the other events in the table? Answer with only 'Yes' or 'No' that is "
+            "most accurate and nothing else."
+        )
+        outlier_state = TQASessionState(
+            question=outlier_question,
+            df=outlier_df,
+            table_schema=_build_table_schema(outlier_df),
+            answer_mode="yes_no",
+            answer_contract=infer_answer_contract(outlier_question, "yes_no"),
+            dataset_profile="crt",
+        )
+        self.assertTrue(pipeline._try_crt_semantic_shortcut(outlier_state))
+        self.assertEqual(outlier_state.final_value, "Yes")
+
+        years_df = pd.DataFrame(
+            {
+                "rank": ["1", "2", "3", "4", "4", "6", "7", "8", "8", "10", "11"],
+                "name": [
+                    "silvio piola",
+                    "francesco totti",
+                    "gunnar nordahl",
+                    "giuseppe meazza",
+                    "jose altafini",
+                    "roberto baggio",
+                    "kurt hamrin",
+                    "giuseppe signori",
+                    "alessandro del piero",
+                    "gabriel batistuta",
+                    "antonio di natale",
+                ],
+                "years": [
+                    "1929 - 1954",
+                    "1992 -",
+                    "1948 - 1958",
+                    "1929 - 1947",
+                    "1958 - 1976",
+                    "1985 - 2004",
+                    "1956 - 1971",
+                    "1991 - 2004",
+                    "1993 - 2012",
+                    "1991 - 2003",
+                    "2002 -",
+                ],
+            }
+        )
+        years_question = "What is the average number of years played by the top 10 players on this list?"
+        years_state = TQASessionState(
+            question=years_question,
+            df=years_df,
+            table_schema=_build_table_schema(years_df),
+            dataset_profile="crt",
+        )
+        self.assertTrue(pipeline._try_crt_semantic_shortcut(years_state))
+        self.assertEqual(years_state.final_value, 18)
+
+        constructor_df = pd.DataFrame(
+            {
+                "driver": ["a", "b", "c", "d", "e", "f", "g", "h"],
+                "constructor": [
+                    "renault",
+                    "renault",
+                    "ferrari",
+                    "ferrari",
+                    "williams - honda",
+                    "williams - honda",
+                    "tyrrell - renault",
+                    "tyrrell - renault",
+                ],
+                "time / retired": [
+                    "transmission",
+                    "transmission",
+                    "transmission",
+                    "+ 1 lap",
+                    "transmission",
+                    "+ 1 lap",
+                    "+ 1 lap",
+                    "not classified",
+                ],
+            }
+        )
+        constructor_question = (
+            "Which constructor had the highest percentage of their drivers retire due to "
+            "transmission problems?"
+        )
+        constructor_state = TQASessionState(
+            question=constructor_question,
+            df=constructor_df,
+            table_schema=_build_table_schema(constructor_df),
+            dataset_profile="crt",
+        )
+        self.assertTrue(pipeline._try_crt_semantic_shortcut(constructor_state))
+        self.assertEqual(constructor_state.final_value, "renault")
 
     def test_crt_medal_ratio_probability_and_rounding_shortcuts(self):
         medals = pd.DataFrame(

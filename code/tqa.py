@@ -155,6 +155,21 @@ def answer_mode_for_sample(task: str, question: str) -> str:
 
     text = question or ""
     normalized_choice_text = re.sub(r"\bmroe\b", "more", text, flags=re.I)
+    modes = (
+        ("yes_no", ("yes", "no")),
+        ("better_worse_equal", ("better", "worse", "equal")),
+        ("more_less_equal", ("more", "less", "equal")),
+        (
+            "increase_decrease_no_change",
+            ("increase", "decrease", "no change"),
+        ),
+        ("better_worse", ("better", "worse")),
+    )
+    if re.search(r"answer\s+with\s+only\b", normalized_choice_text, flags=re.IGNORECASE):
+        for mode, labels in modes:
+            if all(re.search(rf"\b{re.escape(label)}\b", normalized_choice_text, flags=re.I) for label in labels):
+                return mode
+        return ""
     if re.search(
         r"\b(proportion|number|count)\b.*\bcompared\s+to\b",
         text,
@@ -171,22 +186,6 @@ def answer_mode_for_sample(task: str, question: str) -> str:
         flags=re.I,
     ):
         return "yes_no"
-    if not re.search(r"answer\s+with\s+only\b", normalized_choice_text, flags=re.IGNORECASE):
-        return ""
-
-    modes = (
-        ("yes_no", ("yes", "no")),
-        ("better_worse_equal", ("better", "worse", "equal")),
-        ("more_less_equal", ("more", "less", "equal")),
-        (
-            "increase_decrease_no_change",
-            ("increase", "decrease", "no change"),
-        ),
-        ("better_worse", ("better", "worse")),
-    )
-    for mode, labels in modes:
-        if all(re.search(rf"\b{re.escape(label)}\b", normalized_choice_text, flags=re.I) for label in labels):
-            return mode
     return ""
 
 
