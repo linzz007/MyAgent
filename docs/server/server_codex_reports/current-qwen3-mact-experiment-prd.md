@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-04 10:25 CST
+最后更新：2026-08-04 10:52 CST
 
 ## 0. 下一次启动先看这里
 
@@ -12,6 +12,7 @@
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
 | 当前正在执行 | P0/P1/P2/P3、P4b paired、E1 WTQ 分歧诊断、E2 WTQ targeted fresh 闭环已完成；P4b after-targeted 总表为 MyAgent `121/150` vs MACT `111/150`、overall token ratio `0.5310`、failed/missing `0/0`、accepted=`true`，且 WTQ/TabFact/CRT 单项均高于 MACT；E2 专利机制证据矩阵已把 full200、coarse ablation 和 fresh attribution 汇总。E3 multi-seed current-only 与离线边界诊断已完成：Seed-C `114/150`、token ratio `0.6096`；Seed-D `98/150`、token ratio `0.5735`；合计 `212/300`、weighted token ratio `0.5916`、failed/missing `0/0`、row-level evaluator 复算 `pass`。E4 最新 readiness audit 已刷新到 2026-08-04 10:25，结果仍为 `no_candidate_wait`：只发现 4 个已测本地模型，`untested_local_model_paths={}`，API key/profile 均为空，因此当前不能启动多模型 Gate-10；runtime preflight 为 `ready_existing_endpoint`，当前单实例 Qwen3-32B 服务为 GPU `2,3` -> port `8000`。E5/E6 当前专利实验章节已 consolidated：`latest_current_patent_experiment_section_zh.md` 明确列出可写正证据和不能写的边界；当前 completion gap audit 以 `latest_completion_gap_audit_current_zh.md` 判断，不再使用旧固定文件。结论：当前 Qwen3-32B full200 与 P4b after-targeted 已达用户“单项超过 MACT + token 更低”的核心锚点；E3 可写成稳定性边界与适用条件，E4 写成 no-candidate 等待状态，不能写成多模型正证据 |
+| 当前最新增量 | 2026-08-04 10:35-10:51：按用户提示释放 `0,1,2,3` 后，保留原 `2,3 -> 8000` Qwen3-32B 服务，并新增 `0,1 -> 8001` 第二个 Qwen3-32B 服务，两个 `/v1/models` 均返回 `qwen3-32b-local`、max len `8192`。完成 E3 max_replan=5 boundary budget probe：从 E3 Seed-C/D 代表错题抽取 `12` 条，原始 `max_replan=3` 全错，`max_replan=5` 恢复 `4/12`，failed/missing `0/0`，avg tokens `12444.9 -> 13136.1`，decision=`mixed_budget_sensitivity_not_enough_for_e3_stability`。结论：TabFact temporal/numeric 与部分 WTQ temporal 对预算敏感，但 CRT 和 WTQ entity 边界仍需语义 guard；该 probe 是机制/边界证据，不关闭 E3 稳定性缺口。痕迹目录：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_boundary_budget_probe_20260804_1035/`；latest runtime preflight 已刷新为 `qwen3_runtime_preflight_20260804_104903_zh.md`，latest E4 readiness 仍为 `no_candidate_wait` |
 | 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；2026-08-01 E2 targeted fixes 新增 listed-after 目标列、directly-before 目标列、overtime `(OT)` 标记计数、rank/country suffix person canonicalization、playoff parenthetical negator、division winner entry count、unique sponsor count、retired-injured ordinal attempt；TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold，以及 v6b 的实体属性审计、同一行多条件审计、列值计数审计、双实体出现次数、首尾时间差、实体数值差 |
 | 当前本轮 targeted evidence | WTQ v6b full200 `155/200` vs MACT `148/200`，token ratio `0.6187`；TabFact v6b full200 `194/200` vs MACT `189/200`，token ratio `0.2014`；CRT current full200 `140/200` vs MACT `113/200`，token ratio `0.8461`；三项失败/缺答案均为 `0/0` |
 | 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact policy-v6 实跑为 `185/200` vs MACT `189/200` 未过线，v6b 新 audit shortcuts 基于该 raw 离线投影 `194/200`、净 gain 9、harm 0，fresh full200 已确认 `194/200` |
@@ -38,10 +39,11 @@
 | 当前进程状态 | 2026-08-03 12:45：已把 runtime preflight 写入 MACT 包：`qwen3_runtime_preflight_20260803_124508_zh.md`，状态为 `blocked_gpu_runtime_residual`；`8000/8001` endpoint 不健康，`0-3` 约 `27.8GB/卡` 且 util 在 `68%-100%`，compute-app PID 为空。E4 readiness 同步刷新为 `e4_multimodel_gate_readiness_audit_20260803_124508_zh.md`，仍为 `no_candidate_wait`，不能启动 Gate-10 |
 | 当前进程状态 | 2026-08-03 12:52：已把 runtime preflight 写入 MACT 包：`qwen3_runtime_preflight_20260803_125207_zh.md`，状态仍为 `blocked_gpu_runtime_residual`；`0-3` 约 `27.8GB/卡` 且 util `95%-100%`，compute-app PID 为空。E4 readiness 同步刷新为 `e4_multimodel_gate_readiness_audit_20260803_125207_zh.md`，仍为 `no_candidate_wait` |
 | 当前进程状态 | 2026-08-04 10:25：按用户提示 `0,1,2,3` 卡释放后复核，启动前 GPU `0` 仍有约 `25395 MiB` 无可见 compute PID 残留，因此没有强启默认双实例；已用 MACT 包内配置 `qwen3_runtime_resume_gpu23_20260804_101644.env` 在 GPU `2,3` 启动单实例 Qwen3-32B，port `8000`，pid `158380`。`/v1/models` 返回 `qwen3-32b-local`，chat healthcheck 返回精确 `ok`，runtime preflight `qwen3_runtime_preflight_20260804_102526_zh.md` 为 `ready_existing_endpoint`；GPU `2,3` 保持约 `45839 MiB/卡`，compute-app PID 为 `158938/158939`。后续复核显示 GPU `0` 又出现约 `45728 MiB/99%` 无可见 compute PID 状态，因此 `0,1` 不作为默认新增服务资源。按用户要求，除非快速切换模型，不关闭该 Qwen3 服务、不释放 `2,3` 显存 |
+| 当前进程状态 | 2026-08-04 10:49：用户再次确认 `0,1,2,3` 可启动后，复核发现 `0,1` 已真正释放，已启动第二个 Qwen3-32B vLLM 服务：GPU `0,1` -> `http://127.0.0.1:8001/v1`，pid `161337`，worker PIDs `161909/161910`；原 GPU `2,3` -> `http://127.0.0.1:8000/v1` 保持常驻，pid `158380`，worker PIDs `158938/158939`。两个 endpoint 均健康，served model 均为 `qwen3-32b-local`，max len `8192`。latest runtime preflight `qwen3_runtime_preflight_20260804_104903_zh.md` 为 `ready_existing_endpoint`，healthy endpoint count `2`。按用户要求，除非快速切换模型，不关闭 `8000/8001`，不释放 `0,1,2,3` 显存 |
 | 历史 fresh preflight | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_wtq_targeted_fresh_preflight_20260801_2207.md`；记录 2026-08-01 未启动 fresh run 的 endpoint/GPU/进程证据。2026-08-03 fresh 已完成，当前结果以 `p4b_wtq_targeted_fresh_summary.json/md` 和 after-targeted summary 为准 |
 | 最新 after-targeted full50 自动化 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_after_targeted_full50_automation_20260801_2217.md`；记录 affected-slice 通过后如何自动跑 WTQ full50 和 paired summary，并验证 fresh summary 缺失时会阻止误扩样 |
 | 最新机制证据矩阵 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_patent_mechanism_evidence_20260801_2222/patent_mechanism_evidence_matrix.md`；将 full200 anchor、coarse Gate-50 消融和 offline attribution 合并为专利可引用的机制证据表 |
-| 最新 multi-seed 执行包 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_multiseed_gate50_20260801_2231/`；Seed-C 与 Seed-D current-only 均已完成 `150/150` 并 `stop_or_inspect`，paired MACT 均标记为 not required；边界诊断已写入 `summary/seed_boundary_error_diagnosis.json/md`，合计 `212/300`、wrong `88`、weighted token ratio `0.5916`、verification `pass`。该包当前用于记录稳定性边界，不作为“多 seed 稳定超过 MACT”的正证据 |
+| 最新 multi-seed 执行包 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_multiseed_gate50_20260801_2231/`；Seed-C 与 Seed-D current-only 均已完成 `150/150` 并 `stop_or_inspect`，paired MACT 均标记为 not required；边界诊断已写入 `summary/seed_boundary_error_diagnosis.json/md`，合计 `212/300`、wrong `88`、weighted token ratio `0.5916`、verification `pass`。新增 E3 budget probe 在 `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_boundary_budget_probe_20260804_1035/`：`max_replan=5` 恢复 `4/12` 原始代表错题，failed/missing `0/0`，decision=`mixed_budget_sensitivity_not_enough_for_e3_stability`。该证据用于区分 adaptive budget 和 semantic guard 边界，不作为“多 seed 稳定超过 MACT”的正证据 |
 | 最新 E4 多模型 readiness | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_e4_multimodel_gate_readiness_audit_zh.md`；2026-08-04 10:25 已刷新，decision=`no_candidate_wait`，local models discovered=`4`，untested local models=`0`，API keys/provider profiles=`0/0`，visible model/runner processes=`1`，default GPU pool `0-3` 当前 available=`false`，原因是已有 Qwen3 单实例占用 `2,3`、`0` 卡存在无可见 PID 高占用，且没有新增候选 |
 | 最新目标阻塞审计 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_goal_blocker_audit_current_zh.md`；2026-08-03 12:52 已新增，状态建议为 `blocked_waiting_external_state`，两个 blocker 是 E4 没有可用多模型候选、默认 Qwen3 GPU pool 不干净；恢复触发条件写在文档内 |
 | 最新当前专利实验章节 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_current_patent_experiment_section_zh.md`；从 full200、P4b after-targeted、机制矩阵、E3 边界诊断、E4 readiness 自动生成，结论为 `stage_patent_draft_ready_with_boundaries`。它是当前给专家/专利代理人看的实验章节收口稿，不把多模型或多 seed 稳定性写成已完成 |
@@ -49,8 +51,8 @@
 | 最新权利要求证据矩阵 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/claim_evidence_traceability_20260801_2248_zh.md`；2026-08-03 12:24 已刷新，把 WTQ targeted fresh/P4b after-targeted 写成已闭合，把 E3 Seed-C/D 写成 current-only 边界证据，把 E4 写成 pending/no-candidate；C1 风险分层协作、C2 证据保留压缩、C3 确定性审计、C4 受控劝返、C5 答案契约、C6 预算感知实验漏斗均逐项对齐到代码/实验证据和剩余缺口 |
 | 最新专利说明书初稿 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/patent_disclosure_draft_zh.md`；2026-08-03 12:31 已补“当前实验效果与实施例”，包括 full200 主结果、P4b 原始风险、WTQ targeted fresh/after-targeted 闭环、E3 current-only 边界、E4 no-candidate 和证据路径索引 |
 | 最新正式结果表/模板 | 当前台账：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_formal_result_ledger_current_zh.md`；模板：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/formal_result_tables_template_20260801_2252_zh.md`。2026-08-03 12:56 台账已包含 WTQ fresh、P4b after-targeted、E3 current-only、E4 no-candidate，并保留 `3` 个 pending rows |
-| 下次本地模型服务资源 | 2026-08-04 10:25 最新口径：当前已有 Qwen3-32B 单实例常驻，GPU `2,3` -> `http://127.0.0.1:8000/v1`，模型名 `qwen3-32b-local`，API key env 为 `LOCAL_VLLM_API_KEY=local-vllm-key-change-me`；GPU `0,1` 当前不作为默认新增服务资源，因为 `0` 卡复现无可见 PID 高占用。`4,5,6,7` 仍有约 `42GB/卡` 占用，不作为默认资源 |
-| 用户最新资源补充 | 2026-08-04 10:25 用户提示 `0,1,2,3` 卡已释放并要求启动后不要释放显存；已遵守为单实例常驻：`2,3 -> 8000`。启动前 0 卡仍有无可见 PID 残留，启动后 0 卡又复现高占用，因此没有强行按默认双实例启动 |
+| 下次本地模型服务资源 | 2026-08-04 10:49 最新口径：当前已有两个 Qwen3-32B endpoint 常驻，GPU `2,3` -> `http://127.0.0.1:8000/v1`，GPU `0,1` -> `http://127.0.0.1:8001/v1`；两个模型名均为 `qwen3-32b-local`，API key env 为 `LOCAL_VLLM_API_KEY=local-vllm-key-change-me`。后续 MyAgent 小规模 sanity/gate 可用 `VLLM_ENDPOINTS=http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1` 双端点并行。`4,5,6,7` 仍有约 `42GB/卡` 占用，不作为默认资源 |
+| 用户最新资源补充 | 2026-08-04 10:49 用户提示 `0,1,2,3` 卡释放并要求启动后不要释放显存；已遵守为双实例常驻：`2,3 -> 8000` 与 `0,1 -> 8001`。除非快速切换模型或用户明确要求释放，不关闭这两个 Qwen3 服务 |
 | 当前本机模型候选 | 2026-08-04 10:25 E4 审计 `/home/ubuntu/models`、`/home/ubuntu/.cache/huggingface`、`/data`、`/mnt` 后只发现 Qwen3-32B、Qwen3-14B-AWQ、Qwen2.5-14B-Instruct-AWQ、Qwen2.5-3B-Instruct；这些都属于已测/已 no-go 清单，`untested_local_models=[]`、`untested_local_model_paths={}`；当前不能生成新的本地模型 Gate run |
 | 当前外部 API 候选 | 2026-08-04 10:25 E4 审计显示环境变量和现有真实 `configs/server/*.env` 均未发现可用 API key，`api_keys_present=[]`、`api_provider_profiles={}`；外部 API Gate 仍需用户提供 key 和目标 provider model 后才能生成 run |
 | 当前阻塞条件 | 当前 Qwen3-32B 在线服务已恢复，不再是 Qwen runtime 阻塞；剩余阻塞是 E4 没有新候选，latest E4 readiness 为 `no_candidate_wait`，未发现未测本地模型或 API profile。2026-07-31 full200 目标和 2026-08-03 P4b after-targeted 新 seed 三数据集目标已过线；Seed-C/Seed-D current-only 与边界诊断均已完成，paired MACT 不应继续消耗。下一步只有新增模型/API 候选、或明确要做小规模 sanity/消融时，才使用当前 `8000` 常驻服务继续 |
@@ -103,6 +105,31 @@
 17:11 CST 验证记录：P4b artifact check 通过，确认三份 merged JSONL 均 `50` 行、三份 eval JSON 均 `num_samples=50`、summary 为 overall MyAgent `112/150` vs MACT `111/150`、token ratio `0.5444`、`accepted=true`；`/home/ubuntu/miniconda3/envs/lzz-agent/bin/python -m unittest discover -s tests -p 'test_myagent_pipeline.py'` 通过 `184` 个用例；外部权限运行 `/home/ubuntu/miniconda3/envs/lzz-agent/bin/python -m unittest discover -s tests` 通过 `330` 个用例。
 
 17:47 CST 收尾记录：MyAgent PRD 更新已推送到 `codex/selective-risk-collaboration`，MACT P4b artifacts 已推送到 `main`。随后关闭两个 vLLM session，`curl -sS -H 'Authorization: Bearer local-vllm-key-change-me' http://127.0.0.1:8000/v1/models` 和 `8001` 均返回 connection refused；`pgrep -af '[v]llm|[a]pi_server|[r]un_mact_one_by_one|[t]qa.py|[r]un_sharded_tqa'` 无匹配；`nvidia-smi --query-compute-apps=pid,gpu_uuid,process_name,used_memory --format=csv,noheader,nounits` 无返回，说明没有可见 compute PID 可关闭。最终 `nvidia-smi --query-gpu` 仍显示 GPU `0,1,2,3` 约 `13962/13956/19693/19689 MiB` 残留，GPU `4,5,6,7` 约 `42021/42021/42023/42021 MiB` 残留。`ss` / `netstat` 在当前环境未安装，端口关闭以 `curl` 与 `pgrep` 为准。
+
+### 0.2 2026-08-04 E3 边界预算 probe 台账
+
+本轮目标：不继续优化已经通过的 Qwen3 full200/P4b after-targeted 主锚点，而是针对 E3 Seed-C/D 的稳定性边界做低成本机制验证，判断代表错题是否只是 `max_replan=3` 预算不足。
+
+执行与结果：
+
+1. 复核 `8000` Qwen3-32B 服务健康后，构建 E3 representative wrong rows probe。源诊断 Markdown 实际保存每个 seed/dataset 两条代表错题，因此可审计样本数为 `12` 条，不使用口头记录里的 `18` 条。
+2. 运行 `max_replan=5` MyAgent probe，输出到 MACT：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_boundary_budget_probe_20260804_1035/`。
+3. 结果：原始 `max_replan=3` 代表错题 `0/12` 正确；`max_replan=5` 后 `4/12` 正确，failed/missing `0/0`，avg tokens `12444.9 -> 13136.1`，avg elapsed `45.21s`。
+4. 分项：WTQ `1/4` recovered，TabFact `3/4` recovered，CRT `0/4` recovered。TabFact temporal/numeric 和部分 WTQ temporal 对预算敏感；WTQ entity lookup/row selection 与 CRT numeric/span 类代表错题没有被 blanket replan budget 修复。
+5. 判定：`mixed_budget_sensitivity_not_enough_for_e3_stability`。这可以写成 adaptive budget 机制证据和 remaining semantic-boundary 证据，不能写成 E3 稳定性闭环。
+6. 同步更新：MACT package latest runtime preflight、E4 readiness、current patent section、completion gap audit 已刷新；两个 Qwen3 endpoint 常驻，`0,1 -> 8001` 与 `2,3 -> 8000`，后续除非用户要求或切模型，不释放显存。
+
+关键文件：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_boundary_budget_probe_20260804_1035/README.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_boundary_budget_probe_20260804_1035/input/
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_boundary_budget_probe_20260804_1035/myagent_max_replan5/
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_boundary_budget_probe_20260804_1035/summary/e3_boundary_budget_probe_summary.json
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_boundary_budget_probe_20260804_1035/summary/e3_boundary_budget_probe_summary.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_current_patent_experiment_section_zh.md
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_completion_gap_audit_current_zh.md
+```
 
 下一次恢复命令入口：
 
@@ -252,7 +279,7 @@ bash /home/ubuntu/lzz/MACT/outputs/server_runs/<run>/checkpoint_to_git.sh --comm
 | E0 | 冻结 Qwen3-32B 主结果 | WTQ/TabFact/CRT full200 paired summary、token、耗时、失败/缺答案 | 三数据集单项均超过 MACT，整体 token 明显低 | completed |
 | E1 | WTQ 新 seed 风险诊断 | P4b WTQ `mact_only=9`、`myagent_only=3` 分歧样本分类表 | 说明 WTQ 新 seed 输在哪里，并给出是否需要机制修复的判断 | completed 2026-08-01 |
 | E2 | 机制消融补强 | `legacy`、`no_strong_verification`、`no_deterministic_shortcuts` 已有 coarse Gate-50；WTQ targeted fixes 已有 TDD + offline projection + fresh affected-slice `9/9` + after-targeted P4b `121/150` vs MACT `111/150`；专利机制证据矩阵已合并 full200/coarse/attribution | 至少证明风险协作/劝返、确定性审计、证据保留中 2-3 个模块有贡献，并明确 offline 与 fresh 证据边界 | completed for current Qwen3 patent draft; fine-grained switch ablation optional |
-| E3 | 多 seed 稳定性 | Seed-C/Seed-D current-only Gate-50 与离线边界诊断已完成；Seed-C `114/150`、Seed-D `98/150`，二者均 `stop_or_inspect`，paired MACT 均不跑；诊断合计 `212/300`、wrong `88`、weighted token ratio `0.5916`、failed/missing `0/0` | 不要求每组都三项全赢，但必须解释波动并证明总体/token 优势稳定 | completed as boundary diagnosis 2026-08-03; not a stability pass |
+| E3 | 多 seed 稳定性 | Seed-C/Seed-D current-only Gate-50 与离线边界诊断已完成；Seed-C `114/150`、Seed-D `98/150`，二者均 `stop_or_inspect`，paired MACT 均不跑；诊断合计 `212/300`、wrong `88`、weighted token ratio `0.5916`、failed/missing `0/0`。2026-08-04 E3 max_replan=5 probe 恢复代表错题 `4/12`，decision=`mixed_budget_sensitivity_not_enough_for_e3_stability` | 不要求每组都三项全赢，但必须解释波动并证明总体/token 优势稳定；当前 probe 说明有部分 adaptive-budget 敏感性，但不足以关闭稳定性缺口 | completed as boundary diagnosis plus budget probe; not a stability pass |
 | E4 | 多模型 gate | 新本地模型或外部 API 模型按 Gate-10 -> Gate-50 -> Gate-150 -> paired-200 漏斗执行；2026-08-03 readiness audit 为 `no_candidate_wait`，未发现未测本地模型/API profile | 至少 1 个额外模型给出可解释结果；no-go 模型不扩 full200 | pending/no-candidate audited 2026-08-03 |
 | E5 | 正式实验包 | 方法说明、数据切分、baseline 定义、模型配置、硬件、token/elapsed 统计、失败规则、raw/eval/summary 索引、当前专利实验章节 | 专家可按路径复核每个表格数值和每次实验口径 | current section consolidated 2026-08-03; final pending E4 |
 | E6 | 专利说明书初稿 | 技术问题、系统流程、模块定义、实施例、权利要求草案、实验效果表、写作边界 | 能从实验结果直接支撑“选择性风险协作/劝返”相对 MACT 的阶段效果，并明确 E3/E4 边界 | current draft updated 2026-08-03 |
