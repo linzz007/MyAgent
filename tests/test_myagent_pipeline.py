@@ -4893,6 +4893,31 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             "netherlands",
         )
 
+    def test_crt_scalar_normalization_handles_difference_sign_and_country_codes(self):
+        df = pd.DataFrame(
+            {
+                "year": [2001, 2002],
+                "gold": ["yafei zhang ( chn )", "other"],
+            }
+        )
+
+        self.assertEqual(
+            _canonicalize_crt_scalar(
+                -1.0,
+                "What is the average score difference between the winner and runner-up?",
+                pd.DataFrame({"score": ["268", "269"]}),
+            ),
+            1,
+        )
+        self.assertEqual(
+            _canonicalize_crt_scalar(
+                "chn",
+                "What is the most common country of origin for medalists in the Double Trap competition?",
+                df,
+            ),
+            "China",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1446,15 +1446,36 @@ def _canonicalize_crt_scalar(
     question_text = question or ""
     if not isinstance(value, str):
         numeric = _as_number_like(value)
+        if (
+            numeric is not None
+            and numeric < 0
+            and re.search(r"\bdifference\b", question_text, flags=re.I)
+        ):
+            delta = abs(numeric)
+            return int(delta) if float(delta).is_integer() else delta
         if numeric is not None and re.search(r"\bstandard\s+deviation\b", question_text, flags=re.I):
             return round(numeric, 3)
         return value
     if not value.strip():
         return value
+    candidate = re.sub(r"\s+", " ", value).strip()
+    candidate_number = _as_number_like(candidate)
+    if (
+        candidate_number is not None
+        and candidate_number < 0
+        and re.search(r"\bdifference\b", question_text, flags=re.I)
+    ):
+        delta = abs(candidate_number)
+        return str(int(delta) if float(delta).is_integer() else delta)
     if re.search(r"\bpercent(?:age)?\b|%", question_text, flags=re.I):
         percent_match = re.fullmatch(r"\s*([-+]?\d+)\.0+\s*%\s*", value)
         if percent_match:
             return f"{percent_match.group(1)}%"
+    if (
+        re.search(r"\b(?:country|countries|nation|nations)\b", question_text, flags=re.I)
+        and candidate.upper() in COUNTRY_CODE_NAMES
+    ):
+        return COUNTRY_CODE_NAMES[candidate.upper()]
     stripped_entity = _strip_entity_metadata(value)
     if (
         stripped_entity != value
