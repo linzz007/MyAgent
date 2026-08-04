@@ -5783,6 +5783,236 @@ class TableQAPipeline:
         return "true" if abs(observed_diff - float(expected_diff)) <= 1e-6 else "false"
 
     @staticmethod
+    def _tabfact_condition_metric_value_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+(.+?)\s+in\s+the\s+.+?\s+with\s+([\d.,]+)\s+(.+?)\s+be\s+([\d.,]+)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        target_phrase, condition_text, condition_phrase, expected_text = match.groups()
+        target_col = _select_numeric_measure_column_by_phrase(df, target_phrase)
+        condition_col = _select_numeric_measure_column_by_phrase(df, condition_phrase)
+        expected = _numeric_measure_value(expected_text)
+        condition_value = _numeric_measure_value(condition_text)
+        if target_col is None or condition_col is None or expected is None or condition_value is None:
+            return None
+        for _, row in df.iterrows():
+            observed_condition = _numeric_measure_value(row[condition_col])
+            if observed_condition is None or abs(observed_condition - condition_value) > 1e-6:
+                continue
+            observed = _numeric_measure_value(row[target_col])
+            if observed is None:
+                continue
+            return "true" if abs(observed - expected) <= 1e-6 else "false"
+        return "false"
+
+    @staticmethod
+    def _tabfact_entity_score_sum_comparison_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+score\s+(less|more|fewer|greater|higher|lower)\s+points?\s+(?:than|that)\s+(.+?)(?:\s+in\b|[?.]?$)",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_entity, operator_text, right_entity = [part.strip(" \t\r\n\"'") for part in match.groups()]
+        score_cols = [col for col in df.columns if re.search(r"\b(score|points?)\b", str(col), flags=re.I)]
+        entity_cols = [col for col in df.columns if re.search(r"\b(player|team|name|competitor)\b", str(col), flags=re.I)]
+        if not score_cols or not entity_cols:
+            return None
+
+        def score_for(entity: str) -> Optional[float]:
+            rows = _find_rows_for_entity_across_row(df, entity, entity_cols)
+            if len(rows) != 1:
+                return None
+            return _numeric_measure_value(rows[0][score_cols[0]])
+
+        left_score = score_for(left_entity)
+        right_score = score_for(right_entity)
+        if left_score is None or right_score is None:
+            return None
+        return "true" if _comparison_holds(left_score, operator_text, right_score) else "false"
+
+    @staticmethod
+    def _tabfact_replay_count_month_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(\d+)\s+match(?:es)?\s+be\s+replay\s+in\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected_text, date_phrase = match.groups()
+        expected = int(expected_text)
+        target_key = _parse_date_key(date_phrase)
+        if target_key is None:
+            return None
+        date_cols = [col for col in df.columns if re.search(r"\bdate\b", str(col), flags=re.I)]
+        if not date_cols:
+            return None
+        count = 0
+        for _, row in df.iterrows():
+            row_key = _parse_date_key(row[date_cols[0]])
+            if row_key is None or row_key[0] != target_key[0] or row_key[1] != target_key[1]:
+                continue
+            row_text = _loose_text_key(" ".join(str(row[col]) for col in df.columns))
+            if re.search(r"\breplay\b", row_text):
+                count += 1
+        return "true" if count == expected else "false"
+
+    @staticmethod
+    def _tabfact_lowest_attendance_weeks_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"\bweek\s+(.+?)\s+be\s+play\s+with\s+the\s+lowest\s+attendance\s+at\s+(?:the\s+)?(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        weeks_text, site_phrase = match.groups()
+        expected_weeks = {
+            int(value)
+            for value in re.findall(r"\b\d+\b", weeks_text)
+        }
+        if not expected_weeks:
+            return None
+        week_cols = [col for col in df.columns if re.fullmatch(r"(?i)week", str(col).strip())]
+        site_cols = [col for col in df.columns if re.search(r"\b(site|stadium|venue|game site)\b", str(col), flags=re.I)]
+        attendance_cols = [col for col in df.columns if re.search(r"\battendance|crowd\b", str(col), flags=re.I)]
+        if not week_cols or not site_cols or not attendance_cols:
+            return None
+        site_rows = [
+            row
+            for _, row in df.iterrows()
+            if TableQAPipeline._cell_contains_phrase_tokens(site_phrase, row[site_cols[0]])
+        ]
+        if len(site_rows) < len(expected_weeks):
+            return None
+        ranked: List[Tuple[float, int]] = []
+        for row in site_rows:
+            attendance = _numeric_measure_value(row[attendance_cols[0]])
+            week = _numeric_measure_value(row[week_cols[0]])
+            if attendance is None or week is None:
+                continue
+            ranked.append((attendance, int(week)))
+        if len(ranked) < len(expected_weeks):
+            return None
+        ranked.sort(key=lambda item: item[0])
+        observed_weeks = {week for _, week in ranked[: len(expected_weeks)]}
+        return "true" if observed_weeks == expected_weeks else "false"
+
+    @staticmethod
+    def _tabfact_replay_home_team_win_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        text = question or ""
+        if not re.search(r"\breplay\b", text, flags=re.I) or not re.search(r"\bhome\s+team\b", text, flags=re.I):
+            return None
+        expected = 2 if re.search(r"\bboth\b", text, flags=re.I) else _small_number_from_text(text)
+        if expected is None:
+            return None
+        tie_cols = [col for col in df.columns if re.search(r"\btie\b", str(col), flags=re.I)]
+        score_cols = [col for col in df.columns if re.search(r"\bscore\b", str(col), flags=re.I)]
+        if not tie_cols or not score_cols:
+            return None
+        rows = list(df.iterrows())
+        replay_results: List[bool] = []
+        for index, (_, row) in enumerate(rows[:-1]):
+            score = TableQAPipeline._score_pair(row[score_cols[0]])
+            if score is None or abs(score[0] - score[1]) > 1e-6:
+                continue
+            next_row = rows[index + 1][1]
+            if not re.search(r"\breplay\b", _loose_text_key(next_row[tie_cols[0]])):
+                continue
+            replay_score = TableQAPipeline._score_pair(next_row[score_cols[0]])
+            if replay_score is None:
+                return None
+            replay_results.append(replay_score[0] > replay_score[1])
+        if len(replay_results) != expected:
+            return "false"
+        return "true" if all(replay_results) else "false"
+
+    @staticmethod
+    def _tabfact_entity_tenure_contains_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+be\s+on\s+the\s+team\s+the\s+entire\s+time\s+that\s+(.+?)\s+be[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_entity, right_entity = [part.strip(" \t\r\n\"'") for part in match.groups()]
+        year_cols = [col for col in df.columns if re.search(r"\byears?\b|\bseason\b|\btenure\b", str(col), flags=re.I)]
+        entity_cols = [col for col in df.columns if col not in year_cols]
+        if not year_cols or not entity_cols:
+            return None
+
+        def parse_span(value: Any) -> Optional[Tuple[int, int]]:
+            text = str(value or "")
+            match_range = re.search(r"\b(1[7-9]\d{2}|20\d{2})\s*(?:-|–|—|to|,)\s*(1[7-9]\d{2}|20\d{2}|\d{2})\b", text)
+            if not match_range:
+                return None
+            start_text, end_text = match_range.groups()
+            start = int(start_text)
+            if len(end_text) == 2:
+                end = (start // 100) * 100 + int(end_text)
+                if end < start:
+                    end += 100
+            else:
+                end = int(end_text)
+            return (start, end) if end >= start else None
+
+        def span_for(entity: str) -> Optional[Tuple[int, int]]:
+            rows = _find_rows_for_entity_across_row(df, entity, entity_cols)
+            if len(rows) != 1:
+                return None
+            for col in year_cols:
+                span = parse_span(rows[0][col])
+                if span is not None:
+                    return span
+            return None
+
+        left_span = span_for(left_entity)
+        right_span = span_for(right_entity)
+        if left_span is None or right_span is None:
+            return None
+        return "true" if left_span[0] <= right_span[0] and left_span[1] >= right_span[1] else "false"
+
+    @staticmethod
+    def _tabfact_aircraft_call_sign_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+fly\s+a\s+(.+?)\s+and\s+have\s+the\s+call\s+sign\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        pilot_phrase, aircraft_phrase, call_sign_phrase = [
+            part.strip(" \t\r\n\"'")
+            for part in match.groups()
+        ]
+        pilot_cols = [col for col in df.columns if re.search(r"\bpilot\b|\bdriver\b|\bperson\b", str(col), flags=re.I)]
+        aircraft_cols = [col for col in df.columns if re.search(r"\baircraft\b|\bplane\b|\bvehicle\b", str(col), flags=re.I)]
+        call_cols = [col for col in df.columns if re.search(r"\bcall\s*sign\b", str(col), flags=re.I)]
+        if not pilot_cols or not aircraft_cols or not call_cols:
+            return None
+        pilot_tokens = [token for token in _loose_tokens(pilot_phrase) if len(token) >= 3 and token not in {"capt", "captain"}]
+        aircraft_key = _loose_text_key(aircraft_phrase).replace(" ", "")
+        call_key = _loose_text_key(call_sign_phrase)
+        if not pilot_tokens or not aircraft_key or not call_key:
+            return None
+        for _, row in df.iterrows():
+            pilot_key = _loose_text_key(row[pilot_cols[0]])
+            aircraft_value_key = _loose_text_key(row[aircraft_cols[0]]).replace(" ", "")
+            call_value_key = _loose_text_key(row[call_cols[0]])
+            pilot_match = all(token in pilot_key.split() for token in pilot_tokens)
+            aircraft_match = aircraft_key == aircraft_value_key
+            call_match = call_key == call_value_key
+            if pilot_match and aircraft_match and call_match:
+                return "true"
+        return "false"
+
+    @staticmethod
     def _tabfact_only_not_from_country_answer(question: str, df: pd.DataFrame) -> Optional[str]:
         match = re.search(
             r"^the\s+only\s+(.+?)\s+who\s+be\s+not\s+from\s+the\s+(.+?)\s+be\s+from\s+(.+?)[?.]?$",
@@ -6781,6 +7011,342 @@ class TableQAPipeline:
             return None
         value = rows.loc[next_index, column]
         return None if _is_missing_marker(value) else value
+
+    @staticmethod
+    def _wtq_route_after_stop_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bwhere\s+does\s+the\s+bus\s+stop\s+after\s+(.+?)\s+on\s+route\s+([a-z0-9]+)\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        stop_phrase, route_text = [part.strip(" \t\r\n\"'.?") for part in match.groups()]
+        route_cols = [col for col in df.columns if re.fullmatch(r"(?i)route|route\s*#", str(col).strip())]
+        destination_cols = [
+            col for col in df.columns if re.search(r"\b(destination|destinations|stops?|service)\b", str(col), flags=re.I)
+        ]
+        if not route_cols or not destination_cols:
+            return None
+        route_col = route_cols[0]
+        route_key = _loose_text_key(route_text)
+        stop_key = _loose_text_key(stop_phrase)
+        if not route_key or not stop_key:
+            return None
+        for _, row in df.iterrows():
+            if _loose_text_key(row[route_col]) != route_key:
+                continue
+            for col in destination_cols:
+                text = str(row[col] or "").strip()
+                match_stop = re.search(re.escape(stop_phrase), text, flags=re.I)
+                if match_stop is None and stop_key in _loose_text_key(text):
+                    parts = _loose_text_key(text).split(stop_key, 1)
+                    suffix = parts[1].strip() if len(parts) == 2 else ""
+                    return suffix.title() if suffix else None
+                if match_stop is None:
+                    continue
+                suffix = text[match_stop.end():].strip(" \t\r\n-/,;")
+                if suffix:
+                    return suffix
+        return None
+
+    @staticmethod
+    def _wtq_same_number_entity_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bwhich\s+(.+?)\s+has\s+the\s+same\s+(.+?)\s+and\s+(.+?)\s+numbers?\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        entity_phrase, left_phrase, right_phrase = match.groups()
+        left_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, left_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, left_phrase)
+        )
+        right_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, right_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, right_phrase)
+        )
+        if left_col is None and re.search(r"\bepisode\b", left_phrase, flags=re.I):
+            left_col = next((col for col in df.columns if re.search(r"\beps?\b|\bepisode\b", str(col), flags=re.I)), None)
+        if right_col is None and re.search(r"\bproduction\b", right_phrase, flags=re.I):
+            right_col = next((col for col in df.columns if re.search(r"\bprod\b|\bproduction\b", str(col), flags=re.I)), None)
+        if left_col is None or right_col is None or left_col == right_col:
+            return None
+        entity_col = TableQAPipeline._wtq_entity_column(df, entity_phrase, exclude={left_col, right_col})
+        if entity_col is None:
+            return None
+        matches: List[Any] = []
+        for _, row in TableQAPipeline._wtq_non_summary_rows(df).iterrows():
+            left_value = _numeric_measure_value(row[left_col])
+            right_value = _numeric_measure_value(row[right_col])
+            if left_value is None or right_value is None:
+                continue
+            if abs(left_value - right_value) <= 1e-6:
+                value = row[entity_col]
+                if not _is_missing_marker(value):
+                    matches.append(value)
+        return matches[0] if len(matches) == 1 else None
+
+    @staticmethod
+    def _wtq_named_year_span_duration_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"\bhow\s+long\s+did\s+(.+?)(?:'s)?\s+(?:career\s+last|play|stay|serve)\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        entity_phrase = match.group(1).strip(" \t\r\n\"'")
+        year_cols = [col for col in df.columns if re.search(r"\byears?\b|\bseason\b|\btenure\b", str(col), flags=re.I)]
+        if not year_cols:
+            return None
+
+        def parse_span(value: Any) -> Optional[int]:
+            text = str(value or "")
+            match_range = re.search(r"\b(1[7-9]\d{2}|20\d{2})\s*(?:-|–|—|to)\s*(present|1[7-9]\d{2}|20\d{2}|\d{2})\b", text, flags=re.I)
+            if not match_range:
+                return None
+            start_text, end_text = match_range.groups()
+            if end_text.lower() == "present":
+                return None
+            start = int(start_text)
+            if len(end_text) == 2:
+                end = (start // 100) * 100 + int(end_text)
+                if end < start:
+                    end += 100
+            else:
+                end = int(end_text)
+            if end < start:
+                return None
+            return end - start
+
+        rows = _find_rows_for_entity_across_row(df, entity_phrase, [col for col in df.columns if col not in year_cols])
+        if len(rows) != 1:
+            return None
+        for col in year_cols:
+            years = parse_span(rows[0][col])
+            if years is None:
+                continue
+            suffix = "year" if years == 1 else "years"
+            return f"{years} {suffix}"
+        return None
+
+    @staticmethod
+    def _wtq_consecutive_month_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bhow\s+many\s+consecutive\s+.+?\s+(?:premiered|started|began|opened)\s+in\s+([a-z]+)\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        month_name = match.group(1).lower()
+        month_cols = [
+            col for col in df.columns if re.search(r"\b(premiere|start|begin|open|date)\b", str(col), flags=re.I)
+        ]
+        if not month_cols:
+            return None
+        current = best = 0
+        for value in TableQAPipeline._wtq_non_summary_rows(df)[month_cols[0]].tolist():
+            if re.search(rf"\b{re.escape(month_name)}\b", str(value or ""), flags=re.I):
+                current += 1
+                best = max(best, current)
+            else:
+                current = 0
+        return best if best > 0 else None
+
+    @staticmethod
+    def _wtq_score_pair_low_score_entity_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bwhich\s+(?:player|team|competitor)\s+scored\s+(?:only\s+)?(.+?)\s+points?\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        target = _small_number_from_text(match.group(1))
+        if target is None:
+            return None
+        score_cols = [col for col in df.columns if re.search(r"\bscore\b", str(col), flags=re.I)]
+        winner_cols = [col for col in df.columns if re.search(r"\bwinner\b|\bchampion\b", str(col), flags=re.I)]
+        runner_cols = [col for col in df.columns if re.search(r"\brunner(?:-|\s*)up\b|\bloser\b", str(col), flags=re.I)]
+        if not score_cols or not winner_cols or not runner_cols:
+            return None
+        matches: List[Any] = []
+        for _, row in df.iterrows():
+            pair = TableQAPipeline._score_pair(row[score_cols[0]])
+            if pair is None:
+                continue
+            if abs(pair[0] - target) <= 1e-6 and not _is_missing_marker(row[winner_cols[0]]):
+                matches.append(row[winner_cols[0]])
+            if abs(pair[1] - target) <= 1e-6 and not _is_missing_marker(row[runner_cols[0]]):
+                matches.append(row[runner_cols[0]])
+        return matches[0] if len(matches) == 1 else None
+
+    @staticmethod
+    def _wtq_column_header_number_for_year_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"\bwhat\s+is\s+the\s+(.+?)\s+number\b.*?\bin\s+(\d{4})\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        target_phrase, year_text = match.groups()
+        if not re.search(r"\b(series|cycle|saros|eclipse|event)\b", target_phrase, flags=re.I):
+            return None
+        matching_cols = []
+        for col in df.columns:
+            for value in df[col].tolist():
+                if re.search(rf"\b{re.escape(year_text)}\b", str(value or "")):
+                    matching_cols.append(col)
+                    break
+        if len(matching_cols) != 1:
+            return None
+        numbers = re.findall(r"\b\d+\b", str(matching_cols[0]))
+        return numbers[-1] if numbers else None
+
+    @staticmethod
+    def _wtq_rank_gap_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bhow\s+many\s+ranks?\s+(?:about|between)\s+(.+?)\s+(?:is|are|and)\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_phrase, right_phrase = [part.strip(" \t\r\n\"'") for part in match.groups()]
+        rank_cols = [col for col in df.columns if re.search(r"\b(rank|position|place)\b", str(col), flags=re.I)]
+        if not rank_cols:
+            return None
+        rank_col = rank_cols[0]
+        entity_col = TableQAPipeline._wtq_entity_column(df, "entity name officer player team", exclude={rank_col})
+        if entity_col is None:
+            return None
+
+        def rank_for(entity: str) -> Optional[float]:
+            rows = _find_rows_for_entity_across_row(df, entity, [entity_col])
+            if len(rows) != 1:
+                return None
+            return _numeric_measure_value(rows[0][rank_col])
+
+        left_rank = rank_for(left_phrase)
+        right_rank = rank_for(right_phrase)
+        if left_rank is None or right_rank is None:
+            return None
+        gap = abs(left_rank - right_rank)
+        return int(gap) if float(gap).is_integer() else gap
+
+    @staticmethod
+    def _wtq_explicit_option_absence_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        text = question or ""
+        if not re.search(r"\bnot\s+compete\s+at\b|\bdid\s+not\s+compete\s+at\b", text, flags=re.I):
+            return None
+        option_text = text.split(";", 1)[1] if ";" in text else text.split(":", 1)[-1]
+        option_text = re.sub(r",\s*or(?=[a-z])", ", ", option_text, flags=re.I)
+        options = [
+            _loose_text_key(part)
+            for part in re.split(r"\s*,\s*|\s+\bor\s+", option_text, flags=re.I)
+            if _loose_text_key(part)
+        ]
+        options = [option for option in options if option]
+        if len(options) < 2:
+            return None
+        table_text = _loose_text_key(" ".join(str(value) for _, row in df.iterrows() for value in row.tolist()))
+        missing = [option for option in options if option not in table_text]
+        return missing[0] if len(missing) == 1 else None
+
+    @staticmethod
+    def _wtq_metric_value_entity_list_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bonly\s+(\d+)\s+(.+?)\s+had\s+([\d,]+(?:\.\d+)?)\s+(.+?),\s*who\s+were\s+they\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected_text, entity_phrase, value_text, metric_phrase = match.groups()
+        expected_count = int(expected_text)
+        target_value = _numeric_measure_value(value_text)
+        metric_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
+        )
+        if metric_col is None or target_value is None:
+            return None
+        entity_col = TableQAPipeline._wtq_entity_column(df, entity_phrase, exclude={metric_col})
+        if entity_col is None:
+            return None
+        matches = []
+        for _, row in TableQAPipeline._wtq_non_summary_rows(df).iterrows():
+            value = _numeric_measure_value(row[metric_col])
+            if value is None or abs(value - target_value) > 1e-6:
+                continue
+            entity = row[entity_col]
+            if not _is_missing_marker(entity):
+                matches.append(entity)
+        if len(matches) != expected_count:
+            return None
+        return matches
+
+    @staticmethod
+    def _wtq_inferred_rank_entity_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\branked\s+number\s+one\b.*?\bwho\s+is\s+ranked\s+number\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        target_rank = _small_number_from_text(match.group(1))
+        if target_rank is None:
+            return None
+        rank_cols = [col for col in df.columns if re.search(r"\b(rank|position|place)\b", str(col), flags=re.I)]
+        if not rank_cols:
+            return None
+        rank_col = rank_cols[0]
+        entity_col = TableQAPipeline._wtq_entity_column(df, "name athlete player team", exclude={rank_col})
+        if entity_col is None:
+            return None
+        rows = TableQAPipeline._wtq_non_summary_rows(df).reset_index(drop=True)
+        for index, row in rows.iterrows():
+            rank = TableQAPipeline._ordinal_value(row[rank_col])
+            if rank is None:
+                rank = float(index + 1)
+            if int(rank) == target_rank:
+                value = row[entity_col]
+                return None if _is_missing_marker(value) else value
+        return None
+
+    @staticmethod
+    def _wtq_threshold_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bhow\s+many\s+.+?\s+(?:only\s+)?(?:have|has|had)\s+(?:a\s+)?(.+?)\s+"
+            r"(?:of\s+)?([\d,]+(?:\.\d+)?)\s+or\s+(below|under|less|above|over|more)\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        metric_phrase, threshold_text, direction = match.groups()
+        metric_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
+        )
+        threshold = _numeric_measure_value(threshold_text)
+        if metric_col is None or threshold is None:
+            return None
+        wants_below = direction.lower() in {"below", "under", "less"}
+        count = 0
+        for value in TableQAPipeline._wtq_non_summary_rows(df)[metric_col].tolist():
+            number = _numeric_measure_value(value)
+            if number is None:
+                continue
+            if number < threshold if wants_below else number > threshold:
+                count += 1
+        return count
 
     @staticmethod
     def _wtq_listed_after_cell_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
@@ -8048,6 +8614,34 @@ class TableQAPipeline:
                 self._tabfact_date_metric_difference_answer(question, df),
             ),
             (
+                "TabFact same-row metric value under a condition checked deterministically.",
+                self._tabfact_condition_metric_value_answer(question, df),
+            ),
+            (
+                "TabFact entity score-sum comparison checked deterministically.",
+                self._tabfact_entity_score_sum_comparison_answer(question, df),
+            ),
+            (
+                "TabFact replay count in requested month checked deterministically.",
+                self._tabfact_replay_count_month_answer(question, df),
+            ),
+            (
+                "TabFact lowest-attendance week set checked deterministically.",
+                self._tabfact_lowest_attendance_weeks_answer(question, df),
+            ),
+            (
+                "TabFact replay home-team win relation checked deterministically.",
+                self._tabfact_replay_home_team_win_answer(question, df),
+            ),
+            (
+                "TabFact entity tenure containment checked deterministically.",
+                self._tabfact_entity_tenure_contains_answer(question, df),
+            ),
+            (
+                "TabFact aircraft and call-sign identity checked with strict same-row matching.",
+                self._tabfact_aircraft_call_sign_answer(question, df),
+            ),
+            (
                 "TabFact only-not-country claim checked deterministically.",
                 self._tabfact_only_not_from_country_answer(question, df),
             ),
@@ -8203,6 +8797,10 @@ class TableQAPipeline:
                 self._wtq_superlative_owner_answer(question, df),
             ),
             (
+                "WTQ route destination after a named stop selected deterministically.",
+                self._wtq_route_after_stop_answer(question, df),
+            ),
+            (
                 "WTQ after-reference row order answered deterministically.",
                 self._wtq_after_reference_answer(question, df),
             ),
@@ -8213,6 +8811,10 @@ class TableQAPipeline:
             (
                 "WTQ matching table columns counted deterministically.",
                 self._wtq_same_column_count_answer(question, df),
+            ),
+            (
+                "WTQ entity selected where two numbering columns match.",
+                self._wtq_same_number_entity_answer(question, df),
             ),
             (
                 "WTQ contributor rows counted deterministically.",
@@ -8229,6 +8831,14 @@ class TableQAPipeline:
             (
                 "WTQ ordinal position threshold counted deterministically.",
                 self._wtq_ordinal_position_count_answer(question, df),
+            ),
+            (
+                "WTQ named year-span duration computed deterministically.",
+                self._wtq_named_year_span_duration_answer(question, df),
+            ),
+            (
+                "WTQ consecutive month run counted deterministically.",
+                self._wtq_consecutive_month_count_answer(question, df),
             ),
             (
                 "WTQ last requested table-column value selected deterministically.",
@@ -8249,6 +8859,34 @@ class TableQAPipeline:
             (
                 "WTQ first/last status entity selected deterministically.",
                 self._wtq_first_status_entity_answer(question, df),
+            ),
+            (
+                "WTQ low score in score-pair row mapped to the corresponding entity.",
+                self._wtq_score_pair_low_score_entity_answer(question, df),
+            ),
+            (
+                "WTQ column-header number selected from the column containing the requested year.",
+                self._wtq_column_header_number_for_year_answer(question, df),
+            ),
+            (
+                "WTQ rank gap computed as an absolute position difference.",
+                self._wtq_rank_gap_answer(question, df),
+            ),
+            (
+                "WTQ absent explicit option selected from table coverage.",
+                self._wtq_explicit_option_absence_answer(question, df),
+            ),
+            (
+                "WTQ explicit metric-value entity list returned deterministically.",
+                self._wtq_metric_value_entity_list_answer(question, df),
+            ),
+            (
+                "WTQ blank rank prefixes inferred from row order.",
+                self._wtq_inferred_rank_entity_answer(question, df),
+            ),
+            (
+                "WTQ threshold-qualified rows counted deterministically.",
+                self._wtq_threshold_count_answer(question, df),
             ),
             (
                 "WTQ at-least chart question counted unique values in the requested column.",

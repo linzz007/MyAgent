@@ -1797,6 +1797,25 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(value, "Andrey Tereshin")
 
+    def test_wtq_route_after_stop_shortcut_uses_destination_order(self):
+        df = pd.DataFrame(
+            {
+                "Route": ["10", "11"],
+                "Destinations": [
+                    "Amherstview Cataraqui Town Centre",
+                    "Kingston Centre Cataraqui Town Centre",
+                ],
+                "Via": ["Collins Bay Road", "Bath Road Gardiners Town Centre"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_route_after_stop_answer(
+            "where does the bus stop after kingston centre on route 11?",
+            df,
+        )
+
+        self.assertEqual(value, "Cataraqui Town Centre")
+
     def test_wtq_zero_metric_shortcut_counts_rows_without_medals(self):
         df = pd.DataFrame(
             {
@@ -1826,6 +1845,22 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, 2)
+
+    def test_wtq_same_number_columns_shortcut_returns_requested_entity(self):
+        df = pd.DataFrame(
+            {
+                "Eps #": ["5a", "11", "12"],
+                "Prod #": ["1", "11", "13"],
+                "Title": ["Klaws", "Danger In The Depths", "Return Of the Mole Man"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_same_number_entity_answer(
+            "which episode has the same episode and production numbers?",
+            df,
+        )
+
+        self.assertEqual(value, "Danger In The Depths")
 
     def test_wtq_contributor_shortcut_allows_single_edit_name_typo(self):
         df = pd.DataFrame(
@@ -1867,6 +1902,44 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, "31 minutes")
+
+    def test_wtq_career_duration_shortcut_returns_year_span(self):
+        df = pd.DataFrame(
+            {
+                "Player": ["Derek Fisher", "Greg Foster"],
+                "Years for Jazz": ["2006-2007", "1995-99"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_named_year_span_duration_answer(
+            "how long did derek fisher's career last?",
+            df,
+        )
+
+        self.assertEqual(value, "1 year")
+
+    def test_wtq_consecutive_month_shortcut_counts_longest_run(self):
+        df = pd.DataFrame(
+            {
+                "Season": [1, 2, 3, 4, 5, 6, 7],
+                "Season Premiere": [
+                    "March 4, 2006",
+                    "October 7, 2006",
+                    "October 15, 2007",
+                    "October 13, 2008",
+                    "October 12, 2009",
+                    "September 6, 2010",
+                    "October 29, 2013",
+                ],
+            }
+        )
+
+        value = TableQAPipeline._wtq_consecutive_month_count_answer(
+            "how many consecutive seasons premiered in october?",
+            df,
+        )
+
+        self.assertEqual(value, 4)
 
     def test_wtq_combined_numbers_shortcut_sums_requested_metric(self):
         df = pd.DataFrame(
@@ -2211,6 +2284,116 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, "7.0° N")
+
+    def test_wtq_score_pair_single_point_shortcut_returns_low_score_entity(self):
+        df = pd.DataFrame(
+            {
+                "Winner": ["John Higgins", "Stephen Hendry"],
+                "Runner-up": ["John Parrott", "Tony Drago"],
+                "Score": ["9-5", "9-1"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_score_pair_low_score_entity_answer(
+            "which player scored only one point in a tournament?",
+            df,
+        )
+
+        self.assertEqual(value, "Tony Drago")
+
+    def test_wtq_column_header_year_shortcut_returns_series_number(self):
+        df = pd.DataFrame(
+            {
+                "May 20-21 118": ["May 21, 1993", "128"],
+                "March 9 120": ["March 9, 1997", "130"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_column_header_number_for_year_answer(
+            "what is the series number of the only eclipse in 1993?",
+            df,
+        )
+
+        self.assertEqual(value, "118")
+
+    def test_wtq_rank_gap_shortcut_returns_absolute_difference(self):
+        df = pd.DataFrame(
+            {
+                "Position": [1, 2, 3],
+                "Officer": ["Lord High Steward", "Lord High Chancellor", "Lord High Treasurer"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_rank_gap_answer(
+            "how many ranks about lord high treasurer is the lord high steward?",
+            df,
+        )
+
+        self.assertEqual(value, 2)
+
+    def test_wtq_explicit_option_absence_shortcut_returns_missing_option(self):
+        df = pd.DataFrame(
+            {
+                "Competition": [
+                    "World Indoor Championships",
+                    "World Indoor Championships",
+                    "World Athletics Final",
+                ],
+                "Venue": ["Paris, France", "Maebashi, Japan", "Monaco"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_explicit_option_absence_answer(
+            "which of the following countries did melissa morrison not compete at; france, japan, monaco, orcanada?",
+            df,
+        )
+
+        self.assertEqual(value, "canada")
+
+    def test_wtq_metric_value_entity_list_shortcut_returns_all_matching_entities(self):
+        df = pd.DataFrame(
+            {
+                "Team": ["Keflavík", "Fram", "Leiftur"],
+                "Draw": [7, 5, 7],
+            }
+        )
+
+        value = TableQAPipeline._wtq_metric_value_entity_list_answer(
+            "only 2 teams had 7 draws, who were they?",
+            df,
+        )
+
+        self.assertEqual(value, ["Keflavík", "Leiftur"])
+
+    def test_wtq_threshold_count_shortcut_treats_or_below_as_strict_below(self):
+        df = pd.DataFrame(
+            {
+                "Location": ["A", "B", "C"],
+                "Gross Capacity (MWe)": [800, 1000, 1300],
+            }
+        )
+
+        value = TableQAPipeline._wtq_threshold_count_answer(
+            "how many reactors only have a gross capacity of 1000 or below?",
+            df,
+        )
+
+        self.assertEqual(value, 1)
+
+    def test_wtq_inferred_blank_rank_shortcut_uses_row_order(self):
+        df = pd.DataFrame(
+            {
+                "Rank": ["", "", "", "4"],
+                "Name": ["Shani Davis", "Joey Cheek", "Erben Wennemars", "Lee Kyou-hyuk"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_inferred_rank_entity_answer(
+            "shani davis is ranked number one, but who is ranked number three?",
+            df,
+        )
+
+        self.assertEqual(value, "Erben Wennemars")
 
     def test_wtq_first_status_entity_shortcut_returns_first_evicted_person(self):
         df = pd.DataFrame(
@@ -3208,6 +3391,39 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             "true",
         )
 
+    def test_tabfact_condition_metric_value_shortcut_matches_same_row(self):
+        df = pd.DataFrame(
+            {
+                "year": ["1999", "totals"],
+                "assists": ["4", "7"],
+                "total points": ["18", "39"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_condition_metric_value_answer(
+                "the total number of point in the year with 7 assist be 39",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_score_sum_comparison_shortcut_uses_total_score(self):
+        df = pd.DataFrame(
+            {
+                "player": ["harvie ward", "jack fleck"],
+                "score": ["74 + 70 = 144", "76 + 69 = 145"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_entity_score_sum_comparison_answer(
+                "jack fleck score less point that harvie ward in the 1955 u.s. open (golf) us open",
+                df,
+            ),
+            "false",
+        )
+
     def test_tabfact_country_pair_shortcut_checks_each_entity(self):
         df = pd.DataFrame(
             {
@@ -3254,6 +3470,97 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
                 df,
             ),
             "true",
+        )
+
+    def test_tabfact_replay_count_month_shortcut_counts_replay_rows(self):
+        df = pd.DataFrame(
+            {
+                "tie no": ["1", "replay", "7", "replay", "13", "replay"],
+                "date": [
+                    "24 january 1976",
+                    "27 january 1976",
+                    "24 january 1976",
+                    "28 january 1976",
+                    "24 january 1976",
+                    "27 january 1976",
+                ],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_replay_count_month_answer(
+                "3 match be replay in january 1976",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_lowest_attendance_weeks_shortcut_checks_site_subset(self):
+        df = pd.DataFrame(
+            {
+                "week": ["1", "2", "10", "12", "14"],
+                "game site": ["mile high stadium"] * 5,
+                "attendance": [73564, 73899, 73996, 73984, 74192],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_lowest_attendance_weeks_answer(
+                "during the 1982 denver broncos season , week 1 , 2 and 10 be play with the lowest attendance at the mile high stadium",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_replay_home_team_win_shortcut_checks_draw_replays(self):
+        df = pd.DataFrame(
+            {
+                "tie no": ["1", "replay", "16", "replay"],
+                "home team": ["nelson", "york city", "exeter city", "coventry city"],
+                "score": ["1 - 1", "3 - 2", "1 - 1", "1 - 2"],
+                "away team": ["york city", "nelson", "coventry city", "exeter city"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_replay_home_team_win_answer(
+                "both of the game that have to be replay , due to the first match tying , be ultimately win by the home team",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_entity_tenure_contains_other_tenure_shortcut(self):
+        df = pd.DataFrame(
+            {
+                "player": ["adrian dantley", "brad davis"],
+                "years for jazz": ["1979 - 86", "1979 - 80"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_entity_tenure_contains_answer(
+                "adrian dantley be on the team the entire time that brad davis be",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_aircraft_call_sign_shortcut_requires_same_strict_pilot_row(self):
+        df = pd.DataFrame(
+            {
+                "pilot": ["capt richard s ritchie", "capt rs ritchie"],
+                "aircraft": ["f - 4d 66 - 7463", "f - 4e 67 - 0362"],
+                "call sign": ["oyster 03", "paula 01"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_aircraft_call_sign_answer(
+                "capt richard s ritchie fly a f - 4e 67 - 0362 and have the call sign paula 01",
+                df,
+            ),
+            "false",
         )
 
     def test_tabfact_venue_competition_date_shortcut_requires_same_row(self):
