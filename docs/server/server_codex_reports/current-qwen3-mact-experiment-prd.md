@@ -1,6 +1,6 @@
 # 当前 Qwen3 vs MACT 实验 PRD
 
-最后更新：2026-08-04 16:22 CST
+最后更新：2026-08-04 16:38 CST
 
 ## 0. 下一次启动先看这里
 
@@ -11,9 +11,9 @@
 | item | status |
 |---|---|
 | 2026-07-31 最新用户目标 | 不是只看总体略超；必须围绕“选择性风险协作 / 劝返”核心专利方向优化，直到当前 MyAgent + Qwen3-32B 在 WTQ / TabFact / CRT 三个数据集单项都超过 MACT，同时 token 仍明显低于 MACT；禁止 test-set hardcoding，优化必须能解释为机制或细节改进 |
-| 当前正在执行 | P0/P1/P2/P3、P4b paired、E1 WTQ 分歧诊断、E2 WTQ targeted fresh 闭环、E3 budget probe、semantic-boundary plan、S2 guard-validation、S3 after-guard current-only、Seed-D WTQ/TabFact 边界诊断、v6c boundary shortcut projection 与 Seed-D WTQ/TabFact fresh rerun 均已完成。P4b after-targeted 总表为 MyAgent `121/150` vs MACT `111/150`、overall token ratio `0.5310`、failed/missing `0/0`，且 WTQ/TabFact/CRT 单项均高于 MACT。E3 v6c current-only 候选：Seed-C 继承 S3 `118/150`，Seed-D fresh/inherited 后 `111/150`，combined `229/300`、weighted token ratio `0.5794`、failed/missing `0/0`、decision=`boundary_fresh_pass_run_paired_mact_candidate`、paired_mact_next=`true`。E4 最新 readiness audit 仍为 `no_candidate_wait`，没有新增本地模型/API 候选。runtime preflight 为 `ready_existing_endpoint`，两个 Qwen3-32B 服务常驻：GPU `2,3` -> port `8000`，GPU `0,1` -> port `8001`。结论：Qwen3-32B full200、P4b after-targeted、S2 after-guard、E3 v6c boundary-fresh current-only 都是正证据；但 S4 paired MACT 尚未运行，不能把 E3 写成最终 paired MACT 正证据 |
-| 当前最新增量 | 2026-08-04 15:13-16:04：完成 Seed-D WTQ/TabFact 边界诊断、v6c deterministic boundary shortcut 投影和 fresh rerun。诊断显示 Seed-D WTQ+TabFact 旧 S3 为 `67/100`、current gate 需要 `80/100`，缺口 `13`；v6c 投影为 `81/100`、harm `0`，因此启动 fresh。fresh 结果：WTQ primary denotation `36/50`（exact match `34/50`）过 `35/50` 门槛，TabFact `45/50` 过 `45/50` 门槛；Seed-D CRT 继承 S3 `30/50`，Seed-D overall `111/150`、token ratio `0.5516`、failed/missing `0/0`。Seed-C 继承 S3 `118/150` 后，combined `229/300`、token ratio `0.5794`、failed/missing `0/0`、paired_mact_next=`true`。结果目录：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6c_seed_d_boundary_fresh_20260804_1549/` |
-| 当前最新结论（覆盖旧 S3 stop 状态） | 2026-08-04 16:08：旧 S3 的 Seed-D WTQ/TabFact 边界问题已通过 v6c boundary fresh 当前口径闭环。当前 Qwen3-32B + MyAgent 候选在 Seed-C/D current-only Gate-50 上达到进入 paired MACT 的条件，且 token 仍显著低于 MACT full200 reference，失败/缺答案为 `0/0`。但这不是最终“全部数据集 paired 超过 MACT”结论：Seed-C 未做 v6c fresh 全量复跑，Seed-D CRT 继承旧 S3，S4 paired MACT 未跑。下一步是先更新专利包与一致性审计，然后在资源允许时启动 S4 paired MACT；若要求最严格 freshness，可在 S4 前补一次完整 v6c S3 current-only rerun |
+| 当前正在执行 | P0/P1/P2/P3、P4b paired、E1 WTQ 分歧诊断、E2 WTQ targeted fresh 闭环、E3 budget probe、semantic-boundary plan、S2 guard-validation、S3 after-guard current-only、Seed-D WTQ/TabFact 边界诊断、v6c boundary shortcut projection 与 Seed-D WTQ/TabFact fresh rerun 均已完成。P4b after-targeted 总表为 MyAgent `121/150` vs MACT `111/150`、overall token ratio `0.5310`、failed/missing `0/0`，且 WTQ/TabFact/CRT 单项均高于 MACT。E3 v6c current-only 候选：Seed-C 继承 S3 `118/150`，Seed-D fresh/inherited 后 `111/150`，combined `229/300`、weighted token ratio `0.5794`、failed/missing `0/0`、decision=`boundary_fresh_pass_run_paired_mact_candidate`、paired_mact_next=`true`。S4 paired MACT 已启动，用同一批 Seed-C/D Gate-50 input 跑 MACT baseline；截至 `2026-08-04 16:38 CST`，seed_c/WTQ 在 `8000` 跑到 `5/50`，seed_c/TabFact 在 `8001` 跑到 `4/50`，剩余 seed_c/CRT 与 seed_d WTQ/TabFact/CRT 待调度。E4 最新 readiness audit 仍为 `no_candidate_wait`，没有新增本地模型/API 候选。runtime preflight 为 `ready_existing_endpoint`，两个 Qwen3-32B 服务常驻：GPU `2,3` -> port `8000`，GPU `0,1` -> port `8001` |
+| 当前最新增量 | 2026-08-04 16:26-16:38：创建 S4 paired MACT 运行目录 `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/`，写入 `README.md`、`vllm.env`、`run_mact_dataset.sh`、`summarize_s4_paired.py` 和恢复/检查点脚本。已修复 MACT runner 的 TabFact 内部任务名映射：文件名/数据集仍用 `tabfact`，传给 `run_mact_one_by_one.py` 的 `--task` 改为 `scitab`。旧 multiseed 目录只存在 input 与旧 MyAgent current 输出，没有可复用的 MACT gate50 baseline，因此 S4 必须新跑。当前已启动 seed_c/WTQ 与 seed_c/TabFact 两路 MACT baseline，S4 仍为 running/pending，不是完成结论 |
+| 当前最新结论（覆盖旧 S3 stop 状态） | 2026-08-04 16:38：旧 S3 的 Seed-D WTQ/TabFact 边界问题已通过 v6c boundary fresh 当前口径闭环。当前 Qwen3-32B + MyAgent 候选在 Seed-C/D current-only Gate-50 上达到进入 paired MACT 的条件，且 token 仍显著低于 MACT full200 reference，失败/缺答案为 `0/0`。但这仍不是最终“全部数据集 paired 超过 MACT”结论：S4 paired MACT 只完成启动和前几行输出，最终要等六个 `mact/<seed>/<dataset>_mact_<seed>_gate50.jsonl` 均达到 `50` 行并运行 `summarize_s4_paired.py` 后才能判断 |
 | 当前本轮代码优化 | WTQ：答案形态/失败状态驱动的 high-confidence verifier 劝返门控、existing-total-row shortcut、planner `Ellipsis` 占位符执行拦截、晚列证据行召回、earlier/later 候选比较保留全局行、否定年份标量冲突的高置信审阅者劝返；2026-08-01 E2 targeted fixes 新增 listed-after 目标列、directly-before 目标列、overtime `(OT)` 标记计数、rank/country suffix person canonicalization、playoff parenthetical negator、division winner entry count、unique sponsor count、retired-injured ordinal attempt；2026-08-04 v6c 新增 route-after-stop、same-number entity、year-span duration、consecutive-month count、score-pair low-score entity、year-header value、rank gap、explicit option absence、metric-value entity list、strict threshold count、inferred rank 等 gold-free WTQ 边界 shortcut。TabFact：国家配对、零金牌计数、日期前全胜、venue/competition/date 同行匹配、score-but-lose、second-smallest metric、retirement threshold、v6b 实体属性/同行/计数/双实体/时间差/数值差审计；2026-08-04 v6c 新增条件指标值、实体总分比较、replay 月份计数、最低 attendance 周次、replay home-team draw/win 核验、tenure contains 与 aircraft call-sign strict row guard |
 | 当前本轮 targeted evidence | WTQ v6b full200 `155/200` vs MACT `148/200`，token ratio `0.6187`；TabFact v6b full200 `194/200` vs MACT `189/200`，token ratio `0.2014`；CRT current full200 `140/200` vs MACT `113/200`，token ratio `0.8461`；三项失败/缺答案均为 `0/0` |
 | 当前本轮离线投影 | WTQ full200 旧 artifact 离线套新策略预计 `149/200`，实跑 v6b 为 `155/200`；TabFact policy-v6 实跑为 `185/200` vs MACT `189/200` 未过线，v6b 新 audit shortcuts 基于该 raw 离线投影 `194/200`、净 gain 9、harm 0，fresh full200 已确认 `194/200` |
@@ -41,10 +41,11 @@
 | 当前进程状态 | 2026-08-03 12:52：已把 runtime preflight 写入 MACT 包：`qwen3_runtime_preflight_20260803_125207_zh.md`，状态仍为 `blocked_gpu_runtime_residual`；`0-3` 约 `27.8GB/卡` 且 util `95%-100%`，compute-app PID 为空。E4 readiness 同步刷新为 `e4_multimodel_gate_readiness_audit_20260803_125207_zh.md`，仍为 `no_candidate_wait` |
 | 当前进程状态 | 2026-08-04 10:25：按用户提示 `0,1,2,3` 卡释放后复核，启动前 GPU `0` 仍有约 `25395 MiB` 无可见 compute PID 残留，因此没有强启默认双实例；已用 MACT 包内配置 `qwen3_runtime_resume_gpu23_20260804_101644.env` 在 GPU `2,3` 启动单实例 Qwen3-32B，port `8000`，pid `158380`。`/v1/models` 返回 `qwen3-32b-local`，chat healthcheck 返回精确 `ok`，runtime preflight `qwen3_runtime_preflight_20260804_102526_zh.md` 为 `ready_existing_endpoint`；GPU `2,3` 保持约 `45839 MiB/卡`，compute-app PID 为 `158938/158939`。后续复核显示 GPU `0` 又出现约 `45728 MiB/99%` 无可见 compute PID 状态，因此 `0,1` 不作为默认新增服务资源。按用户要求，除非快速切换模型，不关闭该 Qwen3 服务、不释放 `2,3` 显存 |
 | 当前进程状态 | 2026-08-04 10:49：用户再次确认 `0,1,2,3` 可启动后，复核发现 `0,1` 已真正释放，已启动第二个 Qwen3-32B vLLM 服务：GPU `0,1` -> `http://127.0.0.1:8001/v1`，pid `161337`，worker PIDs `161909/161910`；原 GPU `2,3` -> `http://127.0.0.1:8000/v1` 保持常驻，pid `158380`，worker PIDs `158938/158939`。两个 endpoint 均健康，served model 均为 `qwen3-32b-local`，max len `8192`。latest runtime preflight `qwen3_runtime_preflight_20260804_104903_zh.md` 为 `ready_existing_endpoint`，healthy endpoint count `2`。按用户要求，除非快速切换模型，不关闭 `8000/8001`，不释放 `0,1,2,3` 显存 |
+| 当前进程状态 | 2026-08-04 16:38：S4 paired MACT 正在跑两路 baseline：pid `178126/178137` 为 seed_c/WTQ -> `8000`，输出 `5/50`；pid `178259/178265` 为 seed_c/TabFact -> `8001`，输出 `4/50`。当前 GPU `0,1,2,3` 均约 `45.8GB/卡` 且高利用，GPU `4,5,6,7` 也有约 `42GB/卡` 常驻/残留占用；不再额外启动新 vLLM 端口。若会话中断，先 `wc -l` 检查 S4 目录的 `mact/*/*.jsonl`，再用 `run_mact_dataset.sh <seed> <dataset> <api_base>` 的 `--resume` 继续 |
 | 历史 fresh preflight | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_wtq_targeted_fresh_preflight_20260801_2207.md`；记录 2026-08-01 未启动 fresh run 的 endpoint/GPU/进程证据。2026-08-03 fresh 已完成，当前结果以 `p4b_wtq_targeted_fresh_summary.json/md` 和 after-targeted summary 为准 |
 | 最新 after-targeted full50 自动化 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_newseed_gate50_20260801_0305/e2_after_targeted_full50_automation_20260801_2217.md`；记录 affected-slice 通过后如何自动跑 WTQ full50 和 paired summary，并验证 fresh summary 缺失时会阻止误扩样 |
 | 最新机制证据矩阵 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_patent_mechanism_evidence_20260801_2222/patent_mechanism_evidence_matrix.md`；将 full200 anchor、coarse Gate-50 消融和 offline attribution 合并为专利可引用的机制证据表 |
-| 最新 multi-seed 执行包 | 旧 E3 包：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_multiseed_gate50_20260801_2231/`；原始 Seed-C/D current-only 合计 `212/300`，作为历史边界基线。E3 budget probe：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_boundary_budget_probe_20260804_1035/`，`max_replan=5` 恢复 `4/12`。E3 semantic-boundary plan 与 S2 input/after-guard fresh 已完成，S2 actual 为 representative recovered `8/12`、no-harm `18/18`、failed/missing `0/0`。S3 after-guard current-only rerun：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_s3_current_rerun_after_guard_20260804_1425/`，Seed-C `118/150` 过 gate、Seed-D `97/150` 未过，combined `215/300`。最新 v6c Seed-D boundary fresh：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6c_seed_d_boundary_fresh_20260804_1549/summary/e3_boundary_fresh_combined_summary.md`，Seed-D fresh/inherited `111/150`，Seed-C inherited `118/150`，combined `229/300`、token ratio `0.5794`、failed/missing `0/0`、paired_mact_next=`true`。这些证据可写作“multi-seed current-only 候选已达到进入 paired MACT 条件”，但 paired MACT 尚未运行 |
+| 最新 multi-seed 执行包 | 旧 E3 包：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_multiseed_gate50_20260801_2231/`；原始 Seed-C/D current-only 合计 `212/300`，作为历史边界基线。E3 budget probe：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_boundary_budget_probe_20260804_1035/`，`max_replan=5` 恢复 `4/12`。E3 semantic-boundary plan 与 S2 input/after-guard fresh 已完成，S2 actual 为 representative recovered `8/12`、no-harm `18/18`、failed/missing `0/0`。S3 after-guard current-only rerun：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_s3_current_rerun_after_guard_20260804_1425/`，Seed-C `118/150` 过 gate、Seed-D `97/150` 未过，combined `215/300`。最新 v6c Seed-D boundary fresh：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6c_seed_d_boundary_fresh_20260804_1549/summary/e3_boundary_fresh_combined_summary.md`，Seed-D fresh/inherited `111/150`，Seed-C inherited `118/150`，combined `229/300`、token ratio `0.5794`、failed/missing `0/0`、paired_mact_next=`true`。S4 paired MACT 运行目录：`/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/`，当前 running/pending |
 | 最新 E3 S2 after-guard fresh | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_guard_validation_after_guard_20260804_1203/`；baseline run 为 `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6b_e3_guard_validation_current_baseline_20260804_1142/`。after-guard summary：representative recovered `8/12`、no-harm `18/18`、failed/missing `0/0`、weighted token ratio `0.6104`、decision=`after_guard_passes_s2_gate`。仍错 4 条：WTQ `nu-2577`、WTQ `nu-3380`、CRT `crt-325`、CRT `crt-303`。该证据可写成“边界语义 guard 小样本 fresh 验证通过”，但还不能写成 Seed-C/D 多 seed 稳定性闭环 |
 | 最新 E4 多模型 readiness | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_e4_multimodel_gate_readiness_audit_zh.md`；2026-08-04 10:49 已刷新，decision=`no_candidate_wait`，local models discovered=`4`，untested local models=`0`，API keys/provider profiles=`0/0`，visible model/runner processes=`2`，default GPU pool `0-3` 当前 available=`false`，原因是两个 Qwen3-32B endpoint 按用户要求常驻占用 `0,1,2,3`，且没有新增模型/API 候选 |
 | 最新目标阻塞审计 | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_experiment_package_20260801_2155/latest_goal_blocker_audit_current_zh.md`；2026-08-03 12:52 已新增，状态建议为 `blocked_waiting_external_state`，两个 blocker 是 E4 没有可用多模型候选、默认 Qwen3 GPU pool 不干净；恢复触发条件写在文档内 |
@@ -324,6 +325,58 @@ combined current-only candidate：
 ```
 
 下一步决策：S3 历史 stop 状态已被 0.7 v6c boundary fresh 改写为 current-only paired MACT candidate；优先启动 S4 paired MACT，或先补完整 v6c S3 current-only rerun 后再启动 S4。当前仍不启动多模型 Gate-10，因为 E4 readiness 仍是 `no_candidate_wait`。
+
+### 0.8 2026-08-04 E3 S4 paired MACT 执行台账
+
+本轮目标：用与 0.7 v6c current-only candidate 完全相同的 Seed-C/D Gate-50 input 跑 MACT baseline，生成 paired summary，判断多 seed 候选是否能从 current-only pass 升级为 paired MACT 正证据。
+
+运行目录：
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/
+```
+
+已完成准备工作：
+
+1. 固定 MACT input 来源：`qwen3_32b_policy_v6b_multiseed_gate50_20260801_2231/input/{seed_c,seed_d}/`，六个输入文件均为 `50` 行。
+2. 固定 MyAgent comparison 来源：Seed-C WTQ/TabFact/CRT 继承 S3 after-guard current-only；Seed-D WTQ/TabFact 采用 0.7 v6c fresh；Seed-D CRT 继承 S3 after-guard current-only。
+3. 新增 S4 runner：`run_mact_dataset.sh`，按 `<seed_c|seed_d> <wtq|tabfact|crt> <api_base>` 运行，自动 `--resume`。
+4. 修复 TabFact 内部任务名映射：外部 dataset 与输出文件名仍是 `tabfact`，传给 MACT runner 的 `--task` 为 `scitab`。
+5. 新增 S4 summarizer：`summarize_s4_paired.py`，等待六个 MACT 输出都达到 `50` 行后，生成 `eval/{seed}/` 与 `summary/` 下的 paired summary。
+
+截至 `2026-08-04 16:38 CST` 的在线状态：
+
+| seed | dataset | endpoint | output rows | status |
+|---|---|---|---:|---|
+| seed_c | WTQ | `http://127.0.0.1:8000/v1` | 5/50 | running |
+| seed_c | TabFact | `http://127.0.0.1:8001/v1` | 4/50 | running |
+| seed_c | CRT | pending | 0/50 | pending |
+| seed_d | WTQ | pending | 0/50 | pending |
+| seed_d | TabFact | pending | 0/50 | pending |
+| seed_d | CRT | pending | 0/50 | pending |
+
+恢复命令：
+
+```bash
+cd /home/ubuntu/lzz/MACT
+
+for p in outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/mact/*/*.jsonl; do
+  [ -f "$p" ] && printf '%s %s\n' "$(wc -l < "$p")" "$p"
+done
+
+bash outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/run_mact_dataset.sh seed_c wtq http://127.0.0.1:8000/v1
+bash outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/run_mact_dataset.sh seed_c tabfact http://127.0.0.1:8001/v1
+
+# 任一路完成后继续调度剩余四组，仍然两个 endpoint 并行：
+bash outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/run_mact_dataset.sh seed_c crt http://127.0.0.1:8000/v1
+bash outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/run_mact_dataset.sh seed_d wtq http://127.0.0.1:8001/v1
+bash outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/run_mact_dataset.sh seed_d tabfact http://127.0.0.1:8000/v1
+bash outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/run_mact_dataset.sh seed_d crt http://127.0.0.1:8001/v1
+
+python outputs/server_runs/qwen3_32b_policy_v6c_e3_s4_paired_mact_20260804_1626/summarize_s4_paired.py
+```
+
+当前结论边界：S4 只完成启动和部分输出，不允许写成 “paired MACT 已超过”。最终判断以 `summary/e3_s4_paired_combined_summary.json/md` 为准。
 
 下一次恢复命令入口：
 
