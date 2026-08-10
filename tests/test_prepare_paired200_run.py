@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import os
 import stat
 import subprocess
 import sys
@@ -32,6 +33,17 @@ def write_gate150_paired200_summary(gate_run: Path) -> None:
     )
 
 
+def assert_executable_when_supported(testcase: unittest.TestCase, path: Path) -> None:
+    testcase.assertTrue(path.exists())
+    if os.name != "nt":
+        testcase.assertTrue(path.stat().st_mode & stat.S_IXUSR)
+
+
+def assert_bash_syntax_when_supported(path: Path) -> None:
+    if os.name != "nt":
+        subprocess.run(["bash", "-n", str(path)], check=True)
+
+
 def assert_checkpoint_script_stages_ignored_run_dir(
     testcase: unittest.TestCase,
     mact_root: Path,
@@ -45,8 +57,11 @@ def assert_checkpoint_script_stages_ignored_run_dir(
     marker.write_text('{"ok": true}\n', encoding="utf-8")
 
     checkpoint = run_dir / "checkpoint_to_git.sh"
-    testcase.assertTrue(checkpoint.stat().st_mode & stat.S_IXUSR)
-    subprocess.run(["bash", "-n", str(checkpoint)], check=True)
+    assert_executable_when_supported(testcase, checkpoint)
+    assert_bash_syntax_when_supported(checkpoint)
+    if os.name == "nt":
+        testcase.assertIn("git add -f -- \"$RUN_REL\"", checkpoint.read_text(encoding="utf-8"))
+        return
     subprocess.run(["bash", str(checkpoint)], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     staged = subprocess.run(
@@ -134,11 +149,11 @@ class PreparePaired200RunTests(unittest.TestCase):
             ]
             for script_name in scripts:
                 script = paired_run / script_name
-                self.assertTrue(script.stat().st_mode & stat.S_IXUSR)
-                subprocess.run(["bash", "-n", str(script)], check=True)
+                assert_executable_when_supported(self, script)
+                assert_bash_syntax_when_supported(script)
             healthcheck_script = paired_run / "healthcheck_services.sh"
-            self.assertTrue(healthcheck_script.stat().st_mode & stat.S_IXUSR)
-            subprocess.run(["bash", "-n", str(healthcheck_script)], check=True)
+            assert_executable_when_supported(self, healthcheck_script)
+            assert_bash_syntax_when_supported(healthcheck_script)
             healthcheck_text = healthcheck_script.read_text(encoding="utf-8")
             self.assertIn('bash scripts/server/healthcheck_vllm_pool.sh "$SOURCE_GATE_RUN_DIR/vllm.env"', healthcheck_text)
 
@@ -221,8 +236,8 @@ class PreparePaired200RunTests(unittest.TestCase):
             myagent_script = (paired_run / "run_myagent_paired200.sh").read_text(encoding="utf-8")
             mact_script = (paired_run / "run_mact_wtq_paired200.sh").read_text(encoding="utf-8")
             healthcheck_script = paired_run / "healthcheck_services.sh"
-            self.assertTrue(healthcheck_script.stat().st_mode & stat.S_IXUSR)
-            subprocess.run(["bash", "-n", str(healthcheck_script)], check=True)
+            assert_executable_when_supported(self, healthcheck_script)
+            assert_bash_syntax_when_supported(healthcheck_script)
             healthcheck_text = healthcheck_script.read_text(encoding="utf-8")
             self.assertIn('source "$SOURCE_GATE_RUN_DIR/api.env"', healthcheck_text)
             self.assertIn("healthcheck_openai_compatible.py", healthcheck_text)

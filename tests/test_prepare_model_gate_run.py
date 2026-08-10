@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import os
+import shlex
 import stat
 import subprocess
 import sys
@@ -12,6 +13,28 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "server"))
 
 from prepare_model_gate_run import GateRunConfig, prepare_gate_run, safe_slug  # noqa: E402
+
+
+def assert_executable_when_supported(testcase: unittest.TestCase, path: Path) -> None:
+    testcase.assertTrue(path.exists())
+    if os.name != "nt":
+        testcase.assertTrue(path.stat().st_mode & stat.S_IXUSR)
+
+
+def assert_bash_syntax_when_supported(path: Path) -> None:
+    if os.name != "nt":
+        subprocess.run(["bash", "-n", str(path)], check=True)
+
+
+def read_export_values(path: Path, names: list[str]) -> list[str]:
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("export ") or "=" not in line:
+            continue
+        key, raw_value = line[len("export ") :].split("=", 1)
+        parsed = shlex.split(raw_value)
+        values[key] = parsed[0] if parsed else ""
+    return [values.get(name, "") for name in names]
 
 
 def assert_checkpoint_script_stages_ignored_run_dir(
@@ -27,8 +50,11 @@ def assert_checkpoint_script_stages_ignored_run_dir(
     marker.write_text('{"ok": true}\n', encoding="utf-8")
 
     checkpoint = run_dir / "checkpoint_to_git.sh"
-    testcase.assertTrue(checkpoint.stat().st_mode & stat.S_IXUSR)
-    subprocess.run(["bash", "-n", str(checkpoint)], check=True)
+    assert_executable_when_supported(testcase, checkpoint)
+    assert_bash_syntax_when_supported(checkpoint)
+    if os.name == "nt":
+        testcase.assertIn("git add -f -- \"$RUN_REL\"", checkpoint.read_text(encoding="utf-8"))
+        return
     subprocess.run(["bash", str(checkpoint)], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     staged = subprocess.run(
@@ -80,16 +106,7 @@ class PrepareModelGateRunTests(unittest.TestCase):
             )
             self.assertEqual(manifest_json["gate_limits"], {"gate10": 10, "gate50": 50, "gate150": 150})
 
-            env_values = subprocess.run(
-                [
-                    "bash",
-                    "-lc",
-                    f"source {str(run_dir / 'vllm.env')!r}; printf '%s\\n%s\\n%s\\n' \"$MODEL_ID\" \"$GPU_GROUPS\" \"$SERVED_MODEL_NAME\"",
-                ],
-                check=True,
-                text=True,
-                stdout=subprocess.PIPE,
-            ).stdout.splitlines()
+            env_values = read_export_values(run_dir / "vllm.env", ["MODEL_ID", "GPU_GROUPS", "SERVED_MODEL_NAME"])
             self.assertEqual(env_values, [str(model_dir), "0,1;2,3", "deepseek-r1-qwen32b-local"])
 
             gate10 = run_dir / "run_gate10.sh"
@@ -130,8 +147,8 @@ class PrepareModelGateRunTests(unittest.TestCase):
                 "stop_services.sh",
             ):
                 script_path = run_dir / script_name
-                self.assertTrue(script_path.stat().st_mode & stat.S_IXUSR)
-                subprocess.run(["bash", "-n", str(script_path)], check=True)
+                assert_executable_when_supported(self, script_path)
+                assert_bash_syntax_when_supported(script_path)
 
             readme = (run_dir / "README.md").read_text(encoding="utf-8")
             self.assertIn("Do not commit API keys", readme)
@@ -288,8 +305,8 @@ class PrepareModelGateRunTests(unittest.TestCase):
                 "stop_services.sh",
             ):
                 script_path = run_dir / script_name
-                self.assertTrue(script_path.stat().st_mode & stat.S_IXUSR)
-                subprocess.run(["bash", "-n", str(script_path)], check=True)
+                assert_executable_when_supported(self, script_path)
+                assert_bash_syntax_when_supported(script_path)
 
             all_text = "\n".join(
                 path.read_text(encoding="utf-8")
