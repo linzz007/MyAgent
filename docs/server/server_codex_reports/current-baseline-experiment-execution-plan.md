@@ -289,3 +289,84 @@ Not allowed unless new evidence is produced:
 - "MACT paper-reported numbers are directly comparable to our same-sample table."
 - "Every recent table-QA paper has been reproduced."
 
+## 12. Codex Preparation Checkpoint
+
+Last preparation update: 2026-08-12 15:12 CST.
+
+Current server condition:
+
+- GPU is occupied, so no online model or experiment run was started in this preparation step.
+- MyAgent branch is `codex/selective-risk-collaboration`.
+- MyAgent preparation commit base before this update: `56a9d6344618`.
+- MACT preparation commit base before this update: `60dff4a28d3d`.
+
+Runner audit result:
+
+| Item | Status | Evidence / action |
+|---|---|---|
+| MyAgent runner | existing | `scripts/server/run_sharded_tqa.py`; supports WTQ/TabFact/CRT, same evaluator, token/time/failure fields |
+| MACT runner | existing | `scripts/server/run_mact_one_by_one.py`; preserves one output row per input row, including failure rows |
+| Direct-CoT runner | implemented in preparation | `scripts/server/run_baseline_tqa.py --baseline direct_cot` |
+| Single-Agent Pandas runner | implemented in preparation | `scripts/server/run_baseline_tqa.py --baseline single_agent_pandas` |
+| Final summary table generator | implemented in preparation | `scripts/server/summarize_baseline_experiment.py` |
+| Existing ablation switches | partially available | `--collaboration-mode legacy`, `--disable-strong-verification`, `--disable-deterministic-shortcuts` |
+| Missing ablation switches | still pending | no explicit no-question-routing switch; no explicit no-table-compression/evidence-retention switch |
+
+Prepared MACT run package:
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505/
+```
+
+Prepared fixed inputs:
+
+| Slice | WTQ | TabFact | CRT |
+|---|---:|---:|---:|
+| smoke5 | 5 rows | 5 rows | 5 rows |
+| formal200 | 200 rows, `nu-0` to `nu-199` | 200 rows, `tabfact-test-0` to `tabfact-test-199` | 200 rows, `crt-0` to `crt-199` |
+| ablation50 | 50 rows | 50 rows | 50 rows |
+
+Generated scripts in the MACT run package:
+
+| Script | Purpose |
+|---|---|
+| `healthcheck_services.sh` | Check configured Qwen3 endpoint(s) before any run |
+| `run_smoke_direct_cot.sh` | 5-row Direct-CoT smoke for all three datasets |
+| `run_smoke_single_agent_pandas.sh` | 5-row Single-Agent Pandas smoke for all three datasets |
+| `run_formal_myagent.sh` | Formal-200 MyAgent run on fixed inputs |
+| `run_formal_direct_cot.sh` | Formal-200 Direct-CoT run on fixed inputs |
+| `run_formal_single_agent_pandas.sh` | Formal-200 Single-Agent Pandas run on fixed inputs |
+| `run_mact_wtq_formal200.sh` | Formal-200 MACT WTQ run |
+| `run_mact_tabfact_formal200.sh` | Formal-200 MACT TabFact run using MACT `scitab` task |
+| `run_mact_crt_formal200.sh` | Formal-200 MACT CRT run |
+| `run_ablation_legacy50.sh` | 50-row MyAgent legacy/no-selective-risk ablation |
+| `run_ablation_no_strong50.sh` | 50-row MyAgent no-strong-verification ablation |
+| `run_ablation_no_deterministic_shortcuts50.sh` | 50-row MyAgent no-deterministic-shortcut ablation |
+| `run_eval_and_summary.sh` | Evaluate MACT outputs and generate `summary/main_baseline_summary.md` |
+| `checkpoint_to_git.sh` | Force-add this ignored MACT output directory, commit, and push |
+
+Validation already completed without GPU:
+
+- `python -m py_compile scripts/server/run_baseline_tqa.py scripts/server/summarize_baseline_experiment.py scripts/server/prepare_baseline_experiment_run.py`
+- `python -m unittest tests.test_run_baseline_tqa tests.test_server_runner tests.test_run_mact_one_by_one -v`
+- `bash -n` passed for all generated scripts in the MACT run package.
+- Input row counts verified: formal `200 * 3`, ablation `50 * 3`, smoke `5 * 3`.
+- Dry-run command generation verified for both Direct-CoT and Single-Agent Pandas style runners.
+
+Next action when GPU becomes available:
+
+```bash
+cd /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505
+export LOCAL_VLLM_API_KEY=local-vllm-key-change-me
+# Adjust BASELINE_ENDPOINTS if the Qwen3 service uses different ports.
+bash healthcheck_services.sh
+bash run_smoke_direct_cot.sh
+bash run_smoke_single_agent_pandas.sh
+```
+
+Continue only if each smoke run produces exactly 5 merged rows per dataset and valid eval JSON. Then run the Formal-200 scripts and finally:
+
+```bash
+bash run_eval_and_summary.sh
+bash checkpoint_to_git.sh "results: checkpoint qwen3 baseline formal200"
+```
