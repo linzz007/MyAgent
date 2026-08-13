@@ -429,12 +429,24 @@ bash run_formal_single_agent_pandas.sh
 
 `single_agent_pandas` completion note: CRT shard01 first hit a pandas `Timedelta` JSON serialization boundary. The runner was fixed at MyAgent `1f577ae`; `--resume` completed only the missing CRT rows. This is an output-format robustness fix, not a baseline strategy change.
 
-Continue P0 in this order:
+Current in-flight run:
 
-1. `bash run_formal_myagent.sh` - complete; pushed at MACT `fb7fa89`
-2. `bash run_mact_wtq_formal200.sh` - next
-3. `bash run_mact_tabfact_formal200.sh`
-4. `bash run_mact_crt_formal200.sh`
-5. `bash run_eval_and_summary.sh`
-6. `bash checkpoint_to_git.sh "results: checkpoint qwen3 baseline formal200 summary"`
-7. Run the three prepared ablation-50 scripts and checkpoint again.
+| Method | Dataset | Script | Endpoint | Current state |
+|---|---|---|---|---|
+| MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | running; output is written one row at a time |
+| MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | running; output is written one row at a time |
+
+Operational notes for the next Codex page:
+
+- Do not stop the two Qwen3-32B vLLM services unless switching models or the user explicitly allows releasing the GPUs.
+- MACT is running through `scripts/server/run_mact_one_by_one.py`, which is resumable and writes one JSONL row only after each sample finishes.
+- The MACT wrapper does not have a per-sample timeout. A temporarily unchanged output file is not enough to call the run stuck; check GPU utilization, temp sample output size, and `logs/mact_*_formal200.log`.
+- If one endpoint finishes early, keep its model resident and use that endpoint for the next MACT dataset or remaining MACT work.
+
+Continue P0 from the current state:
+
+1. Let `run_mact_wtq_formal200.sh` and `run_mact_tabfact_formal200.sh` continue, with MACT result checkpoints around 50/100/150/200 rows when practical.
+2. Start `bash run_mact_crt_formal200.sh` when an endpoint becomes available, or create a documented shard plan if MACT WTQ remains the bottleneck.
+3. Run `bash run_eval_and_summary.sh` after all three MACT Formal-200 datasets finish.
+4. Run `bash checkpoint_to_git.sh "results: checkpoint qwen3 baseline formal200 summary"`.
+5. Run the three prepared ablation-50 scripts and checkpoint again.
