@@ -451,7 +451,7 @@ Current in-flight run:
 |---|---|---|---|---|
 | MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | complete; synced checkpoint `2a7e75e` has 200/200 rows and eval |
 | MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | complete; synced checkpoint `2a7e75e` has 200/200 rows and eval |
-| MACT | CRT | manual `run_mact_sharded_one_by_one.py` invocation | `http://127.0.0.1:8000/v1` and `http://127.0.0.1:8001/v1`, GPUs `4,5,6,7` | formal result running in fresh non-sandbox directory `mact_shards_4567_final_nonsandbox`; early validation passed with non-empty answers and `api_metrics.request_count > 0` |
+| MACT | CRT | manual `run_mact_sharded_one_by_one.py` invocation | `http://127.0.0.1:8000/v1` and `http://127.0.0.1:8001/v1`, GPUs `4,5,6,7` | formal result running in fresh non-sandbox directory `mact_shards_4567_final_nonsandbox`; latest checkpoint is shard00 `82/100`, shard01 `79/100`, total `161/200` rows |
 
 Operational notes for the next Codex page:
 
@@ -470,6 +470,7 @@ Operational notes for the next Codex page:
 - Partial checkpoint at 2026-08-13 23:41:30 CST: fresh non-sandbox CRT reached shard00 `17/100` rows and shard01 `23/100` rows. No local-network connection errors were detected in the fresh logs.
 - Partial checkpoint at 2026-08-14 00:32:48 CST: fresh non-sandbox CRT reached shard00 `39/100` rows and shard01 `41/100` rows. No local-network connection errors were detected in the fresh logs.
 - Partial checkpoint at 2026-08-14 01:28:41 CST: fresh non-sandbox CRT reached shard00 `60/100` rows and shard01 `60/100` rows. No local-network connection errors were detected in the fresh logs.
+- Partial checkpoint at 2026-08-14 02:17:00 CST: fresh non-sandbox CRT reached shard00 `82/100` rows and shard01 `79/100` rows, total `161/200`. No local-network connection errors were detected in the fresh logs. GPUs `0,1,2,3` show `0 MiB` and no compute process; active services remain only on GPUs `4,5,6,7`.
 
 New helper scripts added to the MACT run package:
 
