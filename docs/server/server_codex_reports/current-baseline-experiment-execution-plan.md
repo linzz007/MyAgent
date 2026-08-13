@@ -402,6 +402,7 @@ Git checkpoints already pushed:
 | MACT | `092d853` | MyAgent WTQ Formal-200 raw, merged, eval, logs; partial TabFact checkpoint |
 | MACT | `bc6cca7` | MyAgent TabFact Formal-200 partial raw/log checkpoint |
 | MACT | `71c54d9` | MyAgent TabFact Formal-200 raw, merged, eval, logs; partial CRT checkpoint |
+| MACT | `f32b4ba` | MyAgent CRT Formal-200 partial raw/log checkpoint |
 
 Completed Formal-200 baseline:
 
@@ -428,7 +429,7 @@ bash run_formal_single_agent_pandas.sh
 
 Continue P0 in this order:
 
-1. `bash run_formal_myagent.sh` - WTQ and TabFact complete; currently running CRT shards on `8000/8001`; TabFact checkpoint pushed at MACT `71c54d9`
+1. `bash run_formal_myagent.sh` - WTQ and TabFact complete; currently running CRT shards on `8000/8001`; CRT partial checkpoint pushed at MACT `f32b4ba`
 2. `bash run_mact_wtq_formal200.sh`
 3. `bash run_mact_tabfact_formal200.sh`
 4. `bash run_mact_crt_formal200.sh`
