@@ -418,6 +418,8 @@ Git checkpoints already pushed:
 | MACT | `1da4e89` | MACT Formal-200 partial checkpoint on GPUs `4,5,6,7` only: WTQ 172/200, TabFact 170/200; CRT final still pending |
 | MACT | `c171650` | MACT Formal-200 partial checkpoint on GPUs `4,5,6,7` only: WTQ 180/200, TabFact 180/200; CRT final still pending |
 | MACT | `2a7e75e` | Completed MACT WTQ and TabFact Formal-200 raw, logs, and eval; WTQ 200/200, TabFact 200/200; CRT final still pending |
+| MyAgent | `e9a3349` | PRD checkpoint: fresh non-sandbox MACT CRT reached 161/200 rows; GPUs `0,1,2,3` confirmed free |
+| MACT | `f8c8bcc` | MACT CRT fresh non-sandbox checkpoint: 161/200 shard rows and logs |
 
 Completed Formal-200 baseline:
 
@@ -451,7 +453,7 @@ Current in-flight run:
 |---|---|---|---|---|
 | MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | complete; synced checkpoint `2a7e75e` has 200/200 rows and eval |
 | MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | complete; synced checkpoint `2a7e75e` has 200/200 rows and eval |
-| MACT | CRT | manual `run_mact_sharded_one_by_one.py` invocation | `http://127.0.0.1:8000/v1` and `http://127.0.0.1:8001/v1`, GPUs `4,5,6,7` | formal result running in fresh non-sandbox directory `mact_shards_4567_final_nonsandbox`; latest checkpoint is shard00 `82/100`, shard01 `79/100`, total `161/200` rows |
+| MACT | CRT | manual `run_mact_sharded_one_by_one.py` invocation | `http://127.0.0.1:8000/v1` and `http://127.0.0.1:8001/v1`, GPUs `4,5,6,7` | formal result running in fresh non-sandbox directory `mact_shards_4567_final_nonsandbox`; latest checkpoint is shard00 `93/100`, shard01 `87/100`, total `180/200` rows |
 
 Operational notes for the next Codex page:
 
@@ -471,6 +473,7 @@ Operational notes for the next Codex page:
 - Partial checkpoint at 2026-08-14 00:32:48 CST: fresh non-sandbox CRT reached shard00 `39/100` rows and shard01 `41/100` rows. No local-network connection errors were detected in the fresh logs.
 - Partial checkpoint at 2026-08-14 01:28:41 CST: fresh non-sandbox CRT reached shard00 `60/100` rows and shard01 `60/100` rows. No local-network connection errors were detected in the fresh logs.
 - Partial checkpoint at 2026-08-14 02:17:00 CST: fresh non-sandbox CRT reached shard00 `82/100` rows and shard01 `79/100` rows, total `161/200`. No local-network connection errors were detected in the fresh logs. GPUs `0,1,2,3` show `0 MiB` and no compute process; active services remain only on GPUs `4,5,6,7`.
+- Partial checkpoint at 2026-08-14 02:35:53 CST: fresh non-sandbox CRT reached shard00 `93/100` rows and shard01 `87/100` rows, total `180/200`. No local-network connection errors were detected in the fresh logs. GPUs `0,1,2,3` remain unused; active services remain only on GPUs `4,5,6,7`.
 
 New helper scripts added to the MACT run package:
 
