@@ -126,6 +126,7 @@ def main() -> None:
     parser.add_argument("--api-max-retries", type=int, default=5)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-tokens", type=int, default=2048)
+    parser.add_argument("--thinking", choices=("disabled", "enabled"), default="disabled")
     parser.add_argument("--mact-avg-tokens", type=float, default=47439.2633)
     parser.add_argument("--max-replan", type=int, default=3)
     parser.add_argument("--collaboration-mode", choices=("legacy", "selective", "calibration"), default="selective")
@@ -198,6 +199,8 @@ def main() -> None:
                 str(args.temperature),
                 "--max_tokens",
                 str(args.max_tokens),
+                "--thinking",
+                args.thinking,
                 "--mact_avg_tokens",
                 str(args.mact_avg_tokens),
                 "--max_replan",
