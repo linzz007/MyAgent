@@ -417,6 +417,7 @@ Git checkpoints already pushed:
 | MACT | `4812733` | MACT Formal-200 partial checkpoint on GPUs `4,5,6,7` only: WTQ 153/200, TabFact 150/200; CRT final still pending |
 | MACT | `1da4e89` | MACT Formal-200 partial checkpoint on GPUs `4,5,6,7` only: WTQ 172/200, TabFact 170/200; CRT final still pending |
 | MACT | `c171650` | MACT Formal-200 partial checkpoint on GPUs `4,5,6,7` only: WTQ 180/200, TabFact 180/200; CRT final still pending |
+| MACT | `2a7e75e` | Completed MACT WTQ and TabFact Formal-200 raw, logs, and eval; WTQ 200/200, TabFact 200/200; CRT final still pending |
 
 Completed Formal-200 baseline:
 
@@ -431,6 +432,8 @@ Completed Formal-200 baseline:
 | MyAgent | WTQ | 200 | 0.705 | 6326.39 | 16.663s | 0/0 |
 | MyAgent | TabFact | 200 | 0.810 | 2796.52 | 13.400s | 0/0 |
 | MyAgent | CRT | 200 | 0.665 | 10430.63 | 23.134s | 0/0 |
+| MACT | WTQ | 200 | 0.780 | 10484.65 | 115.088s | 4/4 |
+| MACT | TabFact | 200 | 0.925 | 11232.74 | 114.443s | 0/0 |
 
 Last completed baseline run:
 
@@ -446,9 +449,9 @@ Current in-flight run:
 
 | Method | Dataset | Script | Endpoint | Current state |
 |---|---|---|---|---|
-| MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | running; latest synced checkpoint `c171650` has 180/200 rows |
-| MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | running; latest synced checkpoint `c171650` has 180/200 rows |
-| MACT | CRT | `run_mact_crt_formal200_sharded.sh` | stopped; previously used `http://127.0.0.1:8002/v1` and `http://127.0.0.1:8003/v1` | stopped at user request; 79/200 shard rows are retained as traces only and must not be used as final Formal-200 CRT |
+| MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | complete; synced checkpoint `2a7e75e` has 200/200 rows and eval |
+| MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | complete; synced checkpoint `2a7e75e` has 200/200 rows and eval |
+| MACT | CRT | manual `run_mact_sharded_one_by_one.py` invocation | `http://127.0.0.1:8000/v1` and `http://127.0.0.1:8001/v1`, GPUs `4,5,6,7` | running from scratch in `mact_shards_4567_final`; started two shards, rows `0-100` and `100-200`; final output path is `mact/crt_mact_formal200.jsonl` |
 
 Operational notes for the next Codex page:
 
@@ -458,6 +461,7 @@ Operational notes for the next Codex page:
 - MACT can now also be run through `scripts/server/run_mact_sharded_one_by_one.py` for faster execution across multiple endpoints. This changes only experiment scheduling: each shard still calls the same one-sample MACT runner with the same MACT parameters, then merges rows back in original order.
 - The MACT wrapper does not have a per-sample timeout. A temporarily unchanged output file is not enough to call the run stuck; check GPU utilization, temp sample output size, and `logs/mact_*_formal200.log`.
 - If one endpoint finishes early, keep its model resident and use that endpoint for the next MACT dataset or remaining MACT work.
+- Previous CRT shard traces under `mact_shards/crt_crt_mact_formal200_00000_00200` were produced on GPUs `0,1,2,3` before the user stopped those GPUs. They are diagnostic history only. The final CRT run uses the fresh path `mact_shards_4567_final/crt_crt_mact_formal200_00000_00200`.
 
 New helper scripts added to the MACT run package:
 
@@ -468,8 +472,7 @@ New helper scripts added to the MACT run package:
 
 Continue P0 from the current state:
 
-1. Let `run_mact_wtq_formal200.sh` and `run_mact_tabfact_formal200.sh` continue on GPUs `4,5` and `6,7`, with MACT result checkpoints around 150/200 rows when practical.
-2. After WTQ and/or TabFact frees a 4567 endpoint, run the final MACT CRT Formal-200 on 4567 only. The stopped 0123 CRT shard traces are diagnostic artifacts, not final comparison data.
-3. Run `bash run_eval_and_summary.sh` after all three MACT Formal-200 datasets finish.
-4. Run `bash checkpoint_to_git.sh "results: checkpoint qwen3 baseline formal200 summary"`.
-5. Run the three prepared ablation-50 scripts and checkpoint again.
+1. Let the active CRT sharded run finish on GPUs `4,5,6,7`.
+2. Run `bash run_eval_and_summary.sh` after CRT produces 200 merged rows.
+3. Run `bash checkpoint_to_git.sh "results: checkpoint qwen3 baseline formal200 summary"`.
+4. Run the three prepared ablation-50 scripts and checkpoint again.
