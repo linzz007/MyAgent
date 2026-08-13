@@ -414,6 +414,7 @@ Git checkpoints already pushed:
 | MACT | `28613d9` | MACT Formal-200 partial checkpoint on GPUs `4,5,6,7` only: WTQ 120/200, TabFact 119/200; CRT final still pending |
 | MACT | `b795b33` | MACT Formal-200 partial checkpoint on GPUs `4,5,6,7` only: WTQ 140/200, TabFact 135/200; CRT final still pending |
 | MACT | `baf73f0` | MACT Formal-200 partial checkpoint on GPUs `4,5,6,7` only: WTQ 150/200, TabFact 143/200; CRT final still pending |
+| MACT | `4812733` | MACT Formal-200 partial checkpoint on GPUs `4,5,6,7` only: WTQ 153/200, TabFact 150/200; CRT final still pending |
 
 Completed Formal-200 baseline:
 
@@ -443,8 +444,8 @@ Current in-flight run:
 
 | Method | Dataset | Script | Endpoint | Current state |
 |---|---|---|---|---|
-| MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | running; latest synced checkpoint `baf73f0` has 150/200 rows |
-| MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | running; latest synced checkpoint `baf73f0` has 143/200 rows |
+| MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | running; latest synced checkpoint `4812733` has 153/200 rows |
+| MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | running; latest synced checkpoint `4812733` has 150/200 rows |
 | MACT | CRT | `run_mact_crt_formal200_sharded.sh` | stopped; previously used `http://127.0.0.1:8002/v1` and `http://127.0.0.1:8003/v1` | stopped at user request; 79/200 shard rows are retained as traces only and must not be used as final Formal-200 CRT |
 
 Operational notes for the next Codex page:
