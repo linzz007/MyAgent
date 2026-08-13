@@ -378,9 +378,7 @@ Current execution state:
 - Qwen3-32B local service is running on two vLLM endpoints and should be kept resident unless switching models:
   - `http://127.0.0.1:8000/v1`, GPUs `4,5`
   - `http://127.0.0.1:8001/v1`, GPUs `6,7`
-- Additional Qwen3-32B local service was started after GPUs `0,1,2,3` became free:
-  - `http://127.0.0.1:8002/v1`, GPUs `0,1`
-  - `http://127.0.0.1:8003/v1`, GPUs `2,3`
+- GPU `0,1,2,3` services were stopped at the user's request. Do not use GPUs `0,1,2,3` for the current experiment unless the user explicitly changes this constraint.
 - Served model name: `qwen3-32b-local`.
 - API key env: `LOCAL_VLLM_API_KEY=local-vllm-key-change-me`.
 - Main result package remains:
@@ -412,6 +410,7 @@ Git checkpoints already pushed:
 | MACT | `3f92f05` | MACT Formal-200 partial checkpoint: WTQ 9/200, TabFact 15/200, logs and temp sample traces |
 | MACT | `e118532` | MACT Formal-200 partial checkpoint plus sharded helper scripts: WTQ 17/200, TabFact 25/200 |
 | MACT | `4a8a874` | MACT Formal-200 partial checkpoint: WTQ 51/200, TabFact 50/200, CRT shard outputs 6/200 |
+| MACT | `03964eb` | MACT Formal-200 partial checkpoint after stopping GPUs `0,1,2,3`: WTQ 103/200, TabFact 96/200, CRT stopped shard traces 79/200 |
 
 Completed Formal-200 baseline:
 
@@ -441,13 +440,14 @@ Current in-flight run:
 
 | Method | Dataset | Script | Endpoint | Current state |
 |---|---|---|---|---|
-| MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | running; last synced checkpoint had 51/200 rows |
-| MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | running; last synced checkpoint had 50/200 rows |
-| MACT | CRT | `run_mact_crt_formal200_sharded.sh` | `http://127.0.0.1:8002/v1`, GPUs `0,1`; `http://127.0.0.1:8003/v1`, GPUs `2,3` | running in two 100-row shards; last synced shard outputs had 6/200 rows; final merged output is written after both shards complete |
+| MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | running; last synced checkpoint had 103/200 rows |
+| MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | running; last synced checkpoint had 96/200 rows |
+| MACT | CRT | `run_mact_crt_formal200_sharded.sh` | stopped; previously used `http://127.0.0.1:8002/v1` and `http://127.0.0.1:8003/v1` | stopped at user request; 79/200 shard rows are retained as traces only and must not be used as final Formal-200 CRT |
 
 Operational notes for the next Codex page:
 
-- Do not stop the two Qwen3-32B vLLM services unless switching models or the user explicitly allows releasing the GPUs.
+- Do not stop the two Qwen3-32B vLLM services on GPUs `4,5` and `6,7` unless switching models or the user explicitly allows releasing those GPUs.
+- Do not use GPUs `0,1,2,3` for the current experiment. They were intentionally released.
 - MACT is running through `scripts/server/run_mact_one_by_one.py`, which is resumable and writes one JSONL row only after each sample finishes.
 - MACT can now also be run through `scripts/server/run_mact_sharded_one_by_one.py` for faster execution across multiple endpoints. This changes only experiment scheduling: each shard still calls the same one-sample MACT runner with the same MACT parameters, then merges rows back in original order.
 - The MACT wrapper does not have a per-sample timeout. A temporarily unchanged output file is not enough to call the run stuck; check GPU utilization, temp sample output size, and `logs/mact_*_formal200.log`.
@@ -457,13 +457,13 @@ New helper scripts added to the MACT run package:
 
 | Script | Use |
 |---|---|
-| `run_mact_crt_formal200_sharded.sh` | Run MACT CRT Formal-200 through the sharded one-by-one wrapper; use one or both endpoints by setting `BASELINE_ENDPOINTS` |
+| `run_mact_crt_formal200_sharded.sh` | Run MACT CRT Formal-200 through the sharded one-by-one wrapper; for the current constraint use only 4567 endpoints by setting `BASELINE_ENDPOINTS` to `http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1` after WTQ/TabFact release them |
 | `run_mact_wtq_formal200_sharded_resume.sh` | Resume MACT WTQ Formal-200 through the sharded wrapper after the original WTQ runner has stopped; do not run concurrently against the same WTQ output file |
 
 Continue P0 from the current state:
 
-1. Let `run_mact_wtq_formal200.sh` and `run_mact_tabfact_formal200.sh` continue, with MACT result checkpoints around 50/100/150/200 rows when practical.
-2. Start `bash run_mact_crt_formal200.sh` when an endpoint becomes available, or create a documented shard plan if MACT WTQ remains the bottleneck.
+1. Let `run_mact_wtq_formal200.sh` and `run_mact_tabfact_formal200.sh` continue on GPUs `4,5` and `6,7`, with MACT result checkpoints around 150/200 rows when practical.
+2. After WTQ and/or TabFact frees a 4567 endpoint, run the final MACT CRT Formal-200 on 4567 only. The stopped 0123 CRT shard traces are diagnostic artifacts, not final comparison data.
 3. Run `bash run_eval_and_summary.sh` after all three MACT Formal-200 datasets finish.
 4. Run `bash checkpoint_to_git.sh "results: checkpoint qwen3 baseline formal200 summary"`.
 5. Run the three prepared ablation-50 scripts and checkpoint again.
