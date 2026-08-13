@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-13 CST
+Last updated: 2026-08-14 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -33,6 +33,15 @@ Interpretation:
 - This already supports the claim that Qwen3-32B + MyAgent can exceed MACT on current staged paired samples while using fewer tokens.
 - Do not continue single-dataset Qwen3 tuning unless a concrete defect blocks the final tables.
 - The next necessary work is baseline packaging, not more Qwen3 score chasing.
+
+Formal-200 full baseline evidence is now mixed and supersedes the staged result for the main report:
+
+- MyAgent overall: `436/600 = 0.7267`.
+- MACT overall: `465/600 = 0.7750`.
+- MyAgent does not yet exceed MACT on the formal-200 aggregate.
+- Dataset-level comparison: MyAgent beats MACT on CRT (`0.6650` vs `0.6200`), but is behind on WTQ (`0.7050` vs `0.7800`) and TabFact (`0.8100` vs `0.9250`).
+- Efficiency claim remains strong: MyAgent average token is `6517.84` vs MACT `11318.89`, token ratio `0.5758`; MyAgent average time is `17.73s` vs MACT `126.86s`.
+- Next work should be P0 ablation plus mechanism-level diagnosis/optimization for WTQ and TabFact, not blind score tuning. Changes must remain patent-describable: routing, risk scoring, selective collaboration, evidence retention, verification, or deterministic answer normalization.
 
 ## 2. Priority Levels
 
@@ -420,6 +429,8 @@ Git checkpoints already pushed:
 | MACT | `2a7e75e` | Completed MACT WTQ and TabFact Formal-200 raw, logs, and eval; WTQ 200/200, TabFact 200/200; CRT final still pending |
 | MyAgent | `e9a3349` | PRD checkpoint: fresh non-sandbox MACT CRT reached 161/200 rows; GPUs `0,1,2,3` confirmed free |
 | MACT | `f8c8bcc` | MACT CRT fresh non-sandbox checkpoint: 161/200 shard rows and logs |
+| MyAgent | `1d6b26b` | PRD checkpoint: fresh non-sandbox MACT CRT reached 180/200 rows |
+| MACT | `1a79423` | MACT CRT fresh non-sandbox checkpoint: 180/200 shard rows and logs |
 
 Completed Formal-200 baseline:
 
@@ -436,6 +447,16 @@ Completed Formal-200 baseline:
 | MyAgent | CRT | 200 | 0.665 | 10430.63 | 23.134s | 0/0 |
 | MACT | WTQ | 200 | 0.780 | 10484.65 | 115.088s | 4/4 |
 | MACT | TabFact | 200 | 0.925 | 11232.74 | 114.443s | 0/0 |
+| MACT | CRT | 200 | 0.620 | 12239.29 | 151.051s | 0/0 |
+
+Formal-200 aggregate:
+
+| Method | Overall Acc | Avg token | Avg time | Fail/Missing | Token ratio to MACT |
+|---|---:|---:|---:|---:|---:|
+| MyAgent | 436/600 = 0.7267 | 6517.84 | 17.73s | 0/0 | 0.5758 |
+| MACT | 465/600 = 0.7750 | 11318.89 | 126.86s | 4/4 | 1.0000 |
+| Direct-CoT | 386/600 = 0.6433 | 712.67 | 2.55s | 1/1 | 0.0630 |
+| Single-Agent Pandas | 421/600 = 0.7017 | 1074.24 | 7.60s | 22/28 | 0.0949 |
 
 Last completed baseline run:
 
@@ -453,7 +474,7 @@ Current in-flight run:
 |---|---|---|---|---|
 | MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | complete; synced checkpoint `2a7e75e` has 200/200 rows and eval |
 | MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | complete; synced checkpoint `2a7e75e` has 200/200 rows and eval |
-| MACT | CRT | manual `run_mact_sharded_one_by_one.py` invocation | `http://127.0.0.1:8000/v1` and `http://127.0.0.1:8001/v1`, GPUs `4,5,6,7` | formal result running in fresh non-sandbox directory `mact_shards_4567_final_nonsandbox`; latest checkpoint is shard00 `93/100`, shard01 `87/100`, total `180/200` rows |
+| MACT | CRT | manual `run_mact_sharded_one_by_one.py` invocation | `http://127.0.0.1:8000/v1` and `http://127.0.0.1:8001/v1`, GPUs `4,5,6,7` | complete; merged output has 200/200 rows; eval generated at `eval/crt_mact_formal200_eval.json` |
 
 Operational notes for the next Codex page:
 
@@ -474,6 +495,7 @@ Operational notes for the next Codex page:
 - Partial checkpoint at 2026-08-14 01:28:41 CST: fresh non-sandbox CRT reached shard00 `60/100` rows and shard01 `60/100` rows. No local-network connection errors were detected in the fresh logs.
 - Partial checkpoint at 2026-08-14 02:17:00 CST: fresh non-sandbox CRT reached shard00 `82/100` rows and shard01 `79/100` rows, total `161/200`. No local-network connection errors were detected in the fresh logs. GPUs `0,1,2,3` show `0 MiB` and no compute process; active services remain only on GPUs `4,5,6,7`.
 - Partial checkpoint at 2026-08-14 02:35:53 CST: fresh non-sandbox CRT reached shard00 `93/100` rows and shard01 `87/100` rows, total `180/200`. No local-network connection errors were detected in the fresh logs. GPUs `0,1,2,3` remain unused; active services remain only on GPUs `4,5,6,7`.
+- Final completion at 2026-08-14 03:16 CST: fresh non-sandbox CRT reached shard00 `100/100` rows and shard01 `100/100` rows, merged to `mact/crt_mact_formal200.jsonl` with `200` rows. `run_eval_and_summary.sh` generated `eval/crt_mact_formal200_eval.json` and `summary/main_baseline_summary.md`. No local-network connection errors were detected in the fresh logs. GPUs `0,1,2,3` remained unused.
 
 New helper scripts added to the MACT run package:
 
@@ -484,7 +506,7 @@ New helper scripts added to the MACT run package:
 
 Continue P0 from the current state:
 
-1. Let the active CRT sharded run finish on GPUs `4,5,6,7`.
-2. Run `bash run_eval_and_summary.sh` after CRT produces 200 merged rows.
-3. Run `bash checkpoint_to_git.sh "results: checkpoint qwen3 baseline formal200 summary"`.
-4. Run the three prepared ablation-50 scripts and checkpoint again.
+1. Commit and push the final Formal-200 MACT CRT output/eval/summary, plus this PRD update.
+2. Run the three prepared ablation-50 scripts and checkpoint after each stable result.
+3. Diagnose why Formal-200 WTQ and TabFact trail MACT despite lower token/time. Candidate areas: route confidence thresholds, evidence-retention budget, final-answer normalization, and selective second-pass verification.
+4. Implement only patent-describable improvements, then rerun focused validation before expanding to another Formal-200 comparison.
