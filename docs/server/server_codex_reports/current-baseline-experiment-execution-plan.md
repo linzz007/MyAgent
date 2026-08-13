@@ -506,7 +506,15 @@ New helper scripts added to the MACT run package:
 
 Continue P0 from the current state:
 
-1. Commit and push the final Formal-200 MACT CRT output/eval/summary, plus this PRD update.
-2. Run the three prepared ablation-50 scripts and checkpoint after each stable result.
+1. Commit and push the final Formal-200 MACT CRT output/eval/summary, plus this PRD update. Completed at MyAgent `2e1dd0e` and MACT `294d36a`.
+2. Run the three prepared ablation-50 scripts and checkpoint after each stable result. Current order: `legacy50`, `no_strong50`, `no_deterministic_shortcuts50`.
 3. Diagnose why Formal-200 WTQ and TabFact trail MACT despite lower token/time. Candidate areas: route confidence thresholds, evidence-retention budget, final-answer normalization, and selective second-pass verification.
 4. Implement only patent-describable improvements, then rerun focused validation before expanding to another Formal-200 comparison.
+
+Ablation execution status:
+
+| Variant | Script | Endpoint/GPU policy | Status |
+|---|---|---|---|
+| Legacy collaboration | `run_ablation_legacy50.sh` | `http://127.0.0.1:8000/v1` on GPUs `4,5`; `http://127.0.0.1:8001/v1` on GPUs `6,7` | starting at 2026-08-14 03:18 CST |
+| No strong verification | `run_ablation_no_strong50.sh` | same 4567 endpoint policy | pending |
+| No deterministic shortcuts | `run_ablation_no_deterministic_shortcuts50.sh` | same 4567 endpoint policy | pending |
