@@ -393,6 +393,7 @@ Git checkpoints already pushed:
 | MyAgent | `120b04e` | Stabilized `single_agent_pandas` runner with one code-repair round and tests |
 | MyAgent | `1f577ae` | Fixed baseline JSON output serialization for pandas `Timedelta`/`Timestamp` scalar values |
 | MyAgent | `ccb23eb` | Passed `--thinking disabled/enabled` through `run_sharded_tqa.py` to `code/tqa.py` |
+| MyAgent | `244a26f` | Added `scripts/server/run_mact_sharded_one_by_one.py` to shard MACT one-by-one execution across endpoints without changing MACT reasoning parameters |
 | MACT | `5358fc0` | Smoke outputs for Direct-CoT and Single-Agent Pandas |
 | MACT | `56cf7d5` | Direct-CoT Formal-200 raw, merged, eval, logs |
 | MACT | `cbffd44` | Single-Agent Pandas WTQ Formal-200 raw, merged, eval; partial TabFact checkpoint |
@@ -441,8 +442,16 @@ Operational notes for the next Codex page:
 
 - Do not stop the two Qwen3-32B vLLM services unless switching models or the user explicitly allows releasing the GPUs.
 - MACT is running through `scripts/server/run_mact_one_by_one.py`, which is resumable and writes one JSONL row only after each sample finishes.
+- MACT can now also be run through `scripts/server/run_mact_sharded_one_by_one.py` for faster execution across multiple endpoints. This changes only experiment scheduling: each shard still calls the same one-sample MACT runner with the same MACT parameters, then merges rows back in original order.
 - The MACT wrapper does not have a per-sample timeout. A temporarily unchanged output file is not enough to call the run stuck; check GPU utilization, temp sample output size, and `logs/mact_*_formal200.log`.
 - If one endpoint finishes early, keep its model resident and use that endpoint for the next MACT dataset or remaining MACT work.
+
+New helper scripts added to the MACT run package:
+
+| Script | Use |
+|---|---|
+| `run_mact_crt_formal200_sharded.sh` | Run MACT CRT Formal-200 through the sharded one-by-one wrapper; use one or both endpoints by setting `BASELINE_ENDPOINTS` |
+| `run_mact_wtq_formal200_sharded_resume.sh` | Resume MACT WTQ Formal-200 through the sharded wrapper after the original WTQ runner has stopped; do not run concurrently against the same WTQ output file |
 
 Continue P0 from the current state:
 
