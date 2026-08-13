@@ -465,6 +465,7 @@ Operational notes for the next Codex page:
 - The first fresh 4567 CRT attempt under `mact_shards_4567_final/crt_crt_mact_formal200_00000_00200` ran inside a network-restricted Codex sandbox. It produced 200 invalid rows with `api_metrics.request_count=0`, empty `pred_answer`, and `openai.APIConnectionError` / `httpcore.ConnectError: [Errno 1] Operation not permitted` in the logs. The merged invalid file was moved from `mact/crt_mact_formal200.jsonl` to `diagnostics/crt_mact_formal200_sandbox_network_invalid_20260813.jsonl`.
 - The valid final CRT run was restarted outside the Codex network sandbox in `mact_shards_4567_final_nonsandbox/crt_crt_mact_formal200_00000_00200`, with clean merged output target `mact/crt_mact_formal200.jsonl`.
 - Early validation for this restart: shard00 wrote valid `crt-0` with `pred_answer="Yes."`, `api_metrics.request_count=3`, and `total_tokens=6869`; shard01 wrote valid `crt-100` with a non-empty final answer. No `APIConnectionError`, `ConnectError`, or `Operation not permitted` strings were found in the fresh non-sandbox logs at startup.
+- Partial checkpoint at 2026-08-13 23:03:58 CST: fresh non-sandbox CRT reached shard00 `5/100` rows and shard01 `5/100` rows. This partial state is suitable only for recovery/resume, not final reporting.
 
 New helper scripts added to the MACT run package:
 
