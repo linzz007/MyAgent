@@ -392,6 +392,7 @@ Git checkpoints already pushed:
 |---|---|---|
 | MyAgent | `120b04e` | Stabilized `single_agent_pandas` runner with one code-repair round and tests |
 | MyAgent | `1f577ae` | Fixed baseline JSON output serialization for pandas `Timedelta`/`Timestamp` scalar values |
+| MyAgent | `ccb23eb` | Passed `--thinking disabled/enabled` through `run_sharded_tqa.py` to `code/tqa.py` |
 | MACT | `5358fc0` | Smoke outputs for Direct-CoT and Single-Agent Pandas |
 | MACT | `56cf7d5` | Direct-CoT Formal-200 raw, merged, eval, logs |
 | MACT | `cbffd44` | Single-Agent Pandas WTQ Formal-200 raw, merged, eval; partial TabFact checkpoint |
@@ -409,7 +410,7 @@ Completed Formal-200 baseline:
 | Single-Agent Pandas | TabFact | 200 | 0.795 | 938.19 | 7.512s | 4/4 |
 | Single-Agent Pandas | CRT | 200 | 0.620 | 1099.42 | 9.166s | 12/13 |
 
-Last completed run:
+Last completed baseline run:
 
 ```bash
 cd /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505
@@ -421,7 +422,7 @@ bash run_formal_single_agent_pandas.sh
 
 Continue P0 in this order:
 
-1. `bash run_formal_myagent.sh`
+1. `bash run_formal_myagent.sh` - currently running WTQ shards on `8000/8001`
 2. `bash run_mact_wtq_formal200.sh`
 3. `bash run_mact_tabfact_formal200.sh`
 4. `bash run_mact_crt_formal200.sh`
