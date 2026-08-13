@@ -406,6 +406,7 @@ Git checkpoints already pushed:
 | MACT | `f32b4ba` | MyAgent CRT Formal-200 partial raw/log checkpoint |
 | MACT | `fb7fa89` | Complete MyAgent Formal-200 raw, merged, eval, logs |
 | MACT | `3f92f05` | MACT Formal-200 partial checkpoint: WTQ 9/200, TabFact 15/200, logs and temp sample traces |
+| MACT | `e118532` | MACT Formal-200 partial checkpoint plus sharded helper scripts: WTQ 17/200, TabFact 25/200 |
 
 Completed Formal-200 baseline:
 
@@ -435,8 +436,8 @@ Current in-flight run:
 
 | Method | Dataset | Script | Endpoint | Current state |
 |---|---|---|---|---|
-| MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | running; last synced checkpoint had 9/200 rows |
-| MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | running; last synced checkpoint had 15/200 rows |
+| MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | running; last synced checkpoint had 17/200 rows |
+| MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | running; last synced checkpoint had 25/200 rows |
 
 Operational notes for the next Codex page:
 
