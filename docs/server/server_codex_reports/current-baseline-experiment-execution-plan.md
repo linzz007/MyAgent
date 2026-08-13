@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-12 CST
+Last updated: 2026-08-13 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -370,3 +370,58 @@ Continue only if each smoke run produces exactly 5 merged rows per dataset and v
 bash run_eval_and_summary.sh
 bash checkpoint_to_git.sh "results: checkpoint qwen3 baseline formal200"
 ```
+
+## 13. 2026-08-13 Execution Checkpoint
+
+Current execution state:
+
+- Qwen3-32B local service is running on two vLLM endpoints and should be kept resident unless switching models:
+  - `http://127.0.0.1:8000/v1`, GPUs `4,5`
+  - `http://127.0.0.1:8001/v1`, GPUs `6,7`
+- Served model name: `qwen3-32b-local`.
+- API key env: `LOCAL_VLLM_API_KEY=local-vllm-key-change-me`.
+- Main result package remains:
+
+```text
+/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505/
+```
+
+Git checkpoints already pushed:
+
+| Repo | Commit | Content |
+|---|---|---|
+| MyAgent | `120b04e` | Stabilized `single_agent_pandas` runner with one code-repair round and tests |
+| MACT | `5358fc0` | Smoke outputs for Direct-CoT and Single-Agent Pandas |
+| MACT | `56cf7d5` | Direct-CoT Formal-200 raw, merged, eval, logs |
+
+Completed Formal-200 baseline:
+
+| Method | Dataset | Merged rows | Accuracy | Avg token | Avg time | Fail/Missing |
+|---|---|---:|---:|---:|---:|---:|
+| Direct-CoT | WTQ | 200 | 0.630 | 852.47 | 2.286s | 1/1 |
+| Direct-CoT | TabFact | 200 | 0.745 | 645.63 | 2.739s | 0/0 |
+| Direct-CoT | CRT | 200 | 0.555 | 639.91 | 2.629s | 0/0 |
+
+Run currently in progress:
+
+```bash
+cd /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505
+export LOCAL_VLLM_API_KEY=local-vllm-key-change-me
+bash run_formal_single_agent_pandas.sh
+```
+
+After the current run finishes, immediately verify rows/eval and checkpoint:
+
+```bash
+bash checkpoint_to_git.sh "results: checkpoint single agent pandas formal200"
+```
+
+Then continue P0 in this order:
+
+1. `bash run_formal_myagent.sh`
+2. `bash run_mact_wtq_formal200.sh`
+3. `bash run_mact_tabfact_formal200.sh`
+4. `bash run_mact_crt_formal200.sh`
+5. `bash run_eval_and_summary.sh`
+6. `bash checkpoint_to_git.sh "results: checkpoint qwen3 baseline formal200 summary"`
+7. Run the three prepared ablation-50 scripts and checkpoint again.
