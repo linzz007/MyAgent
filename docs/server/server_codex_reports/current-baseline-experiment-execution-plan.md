@@ -467,6 +467,7 @@ Operational notes for the next Codex page:
 - Early validation for this restart: shard00 wrote valid `crt-0` with `pred_answer="Yes."`, `api_metrics.request_count=3`, and `total_tokens=6869`; shard01 wrote valid `crt-100` with a non-empty final answer. No `APIConnectionError`, `ConnectError`, or `Operation not permitted` strings were found in the fresh non-sandbox logs at startup.
 - Partial checkpoint at 2026-08-13 23:03:58 CST: fresh non-sandbox CRT reached shard00 `5/100` rows and shard01 `5/100` rows. This partial state is suitable only for recovery/resume, not final reporting.
 - Partial checkpoint at 2026-08-13 23:18:47 CST: fresh non-sandbox CRT reached shard00 `9/100` rows and shard01 `11/100` rows. No local-network connection errors were detected in the fresh logs.
+- Partial checkpoint at 2026-08-13 23:41:30 CST: fresh non-sandbox CRT reached shard00 `17/100` rows and shard01 `23/100` rows. No local-network connection errors were detected in the fresh logs.
 
 New helper scripts added to the MACT run package:
 
