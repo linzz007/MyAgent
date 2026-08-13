@@ -469,6 +469,7 @@ Operational notes for the next Codex page:
 - Partial checkpoint at 2026-08-13 23:18:47 CST: fresh non-sandbox CRT reached shard00 `9/100` rows and shard01 `11/100` rows. No local-network connection errors were detected in the fresh logs.
 - Partial checkpoint at 2026-08-13 23:41:30 CST: fresh non-sandbox CRT reached shard00 `17/100` rows and shard01 `23/100` rows. No local-network connection errors were detected in the fresh logs.
 - Partial checkpoint at 2026-08-14 00:32:48 CST: fresh non-sandbox CRT reached shard00 `39/100` rows and shard01 `41/100` rows. No local-network connection errors were detected in the fresh logs.
+- Partial checkpoint at 2026-08-14 01:28:41 CST: fresh non-sandbox CRT reached shard00 `60/100` rows and shard01 `60/100` rows. No local-network connection errors were detected in the fresh logs.
 
 New helper scripts added to the MACT run package:
 
