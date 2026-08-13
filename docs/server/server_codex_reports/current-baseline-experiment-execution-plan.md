@@ -391,10 +391,12 @@ Git checkpoints already pushed:
 | Repo | Commit | Content |
 |---|---|---|
 | MyAgent | `120b04e` | Stabilized `single_agent_pandas` runner with one code-repair round and tests |
+| MyAgent | `1f577ae` | Fixed baseline JSON output serialization for pandas `Timedelta`/`Timestamp` scalar values |
 | MACT | `5358fc0` | Smoke outputs for Direct-CoT and Single-Agent Pandas |
 | MACT | `56cf7d5` | Direct-CoT Formal-200 raw, merged, eval, logs |
 | MACT | `cbffd44` | Single-Agent Pandas WTQ Formal-200 raw, merged, eval; partial TabFact checkpoint |
 | MACT | `67f0075` | Single-Agent Pandas TabFact Formal-200 raw, merged, eval; partial CRT checkpoint |
+| MACT | `a6f6dd0` | Complete Single-Agent Pandas Formal-200 raw, merged, eval, logs |
 
 Completed Formal-200 baseline:
 
@@ -405,22 +407,19 @@ Completed Formal-200 baseline:
 | Direct-CoT | CRT | 200 | 0.555 | 639.91 | 2.629s | 0/0 |
 | Single-Agent Pandas | WTQ | 200 | 0.690 | 1185.12 | 6.126s | 6/11 |
 | Single-Agent Pandas | TabFact | 200 | 0.795 | 938.19 | 7.512s | 4/4 |
+| Single-Agent Pandas | CRT | 200 | 0.620 | 1099.42 | 9.166s | 12/13 |
 
-Run currently in progress:
+Last completed run:
 
 ```bash
 cd /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505
 export LOCAL_VLLM_API_KEY=local-vllm-key-change-me
-bash run_formal_single_agent_pandas.sh  # WTQ and TabFact complete; CRT currently running
+bash run_formal_single_agent_pandas.sh
 ```
 
-After the current run finishes, immediately verify rows/eval and checkpoint:
+`single_agent_pandas` completion note: CRT shard01 first hit a pandas `Timedelta` JSON serialization boundary. The runner was fixed at MyAgent `1f577ae`; `--resume` completed only the missing CRT rows. This is an output-format robustness fix, not a baseline strategy change.
 
-```bash
-bash checkpoint_to_git.sh "results: checkpoint single agent pandas formal200"
-```
-
-Then continue P0 in this order:
+Continue P0 in this order:
 
 1. `bash run_formal_myagent.sh`
 2. `bash run_mact_wtq_formal200.sh`
