@@ -451,7 +451,7 @@ Current in-flight run:
 |---|---|---|---|---|
 | MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | complete; synced checkpoint `2a7e75e` has 200/200 rows and eval |
 | MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | complete; synced checkpoint `2a7e75e` has 200/200 rows and eval |
-| MACT | CRT | manual `run_mact_sharded_one_by_one.py` invocation | `http://127.0.0.1:8000/v1` and `http://127.0.0.1:8001/v1`, GPUs `4,5,6,7` | formal result still pending; the first 4567 attempt accidentally ran inside the Codex network sandbox and produced invalid empty-answer rows, so it must not be used |
+| MACT | CRT | manual `run_mact_sharded_one_by_one.py` invocation | `http://127.0.0.1:8000/v1` and `http://127.0.0.1:8001/v1`, GPUs `4,5,6,7` | formal result running in fresh non-sandbox directory `mact_shards_4567_final_nonsandbox`; early validation passed with non-empty answers and `api_metrics.request_count > 0` |
 
 Operational notes for the next Codex page:
 
@@ -463,7 +463,8 @@ Operational notes for the next Codex page:
 - If one endpoint finishes early, keep its model resident and use that endpoint for the next MACT dataset or remaining MACT work.
 - Previous CRT shard traces under `mact_shards/crt_crt_mact_formal200_00000_00200` were produced on GPUs `0,1,2,3` before the user stopped those GPUs. They are diagnostic history only.
 - The first fresh 4567 CRT attempt under `mact_shards_4567_final/crt_crt_mact_formal200_00000_00200` ran inside a network-restricted Codex sandbox. It produced 200 invalid rows with `api_metrics.request_count=0`, empty `pred_answer`, and `openai.APIConnectionError` / `httpcore.ConnectError: [Errno 1] Operation not permitted` in the logs. The merged invalid file was moved from `mact/crt_mact_formal200.jsonl` to `diagnostics/crt_mact_formal200_sandbox_network_invalid_20260813.jsonl`.
-- The valid final CRT run must use a fresh non-sandbox shard directory, currently planned as `mact_shards_4567_final_nonsandbox/crt_crt_mact_formal200_00000_00200`, and write the clean merged output back to `mact/crt_mact_formal200.jsonl`.
+- The valid final CRT run was restarted outside the Codex network sandbox in `mact_shards_4567_final_nonsandbox/crt_crt_mact_formal200_00000_00200`, with clean merged output target `mact/crt_mact_formal200.jsonl`.
+- Early validation for this restart: shard00 wrote valid `crt-0` with `pred_answer="Yes."`, `api_metrics.request_count=3`, and `total_tokens=6869`; shard01 wrote valid `crt-100` with a non-empty final answer. No `APIConnectionError`, `ConnectError`, or `Operation not permitted` strings were found in the fresh non-sandbox logs at startup.
 
 New helper scripts added to the MACT run package:
 
