@@ -15,13 +15,14 @@ from run_baseline_tqa import extract_direct_answer, run_row, run_worker  # noqa:
 
 
 class FakeLLM:
-    def __init__(self, response: str):
-        self.response = response
+    def __init__(self, response):
+        self.responses = response if isinstance(response, list) else [response]
         self.calls = 0
 
     def __call__(self, prompt: str) -> str:
         self.calls += 1
-        return self.response
+        index = min(self.calls - 1, len(self.responses) - 1)
+        return self.responses[index]
 
     def snapshot(self):
         return {
@@ -73,6 +74,25 @@ class RunBaselineTqaTests(unittest.TestCase):
         self.assertEqual(row["baseline_method"], "single_agent_pandas")
         self.assertEqual(row["final_value"], "Italy")
         self.assertTrue(row["exec_success"])
+        self.assertEqual(summary["primary_accuracy"], 1.0)
+
+    def test_single_agent_pandas_repairs_failed_code_once(self):
+        row = run_row(
+            sample_row(),
+            baseline="single_agent_pandas",
+            llm_fn=FakeLLM(
+                [
+                    "```python\nfinal_answer_value = missing_name\n```",
+                    "```python\nfinal_answer_value = df.iloc[0]['country']\n```",
+                ]
+            ),
+            max_code_retries=1,
+        )
+        summary, _ = summarize_rows([row])
+
+        self.assertEqual(row["final_value"], "Italy")
+        self.assertEqual(row["api_metrics"]["request_count"], 2)
+        self.assertEqual(len(row["pandas_attempts"]), 1)
         self.assertEqual(summary["primary_accuracy"], 1.0)
 
     def test_failure_row_is_counted_as_failed_and_missing(self):

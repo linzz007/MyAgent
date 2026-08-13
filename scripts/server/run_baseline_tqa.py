@@ -42,6 +42,21 @@ from run_sharded_tqa import (  # noqa: E402
 BASELINES = ("direct_cot", "single_agent_pandas")
 
 
+class BaselineExecutionError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        raw_output: str = "",
+        code: str = "",
+        attempts: List[Dict[str, str]] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.raw_output = raw_output
+        self.code = code
+        self.attempts = attempts or []
+
+
 def _json_default(value: Any) -> Any:
     if hasattr(value, "to_dict"):
         return value.to_dict()
@@ -109,10 +124,40 @@ def pandas_prompt(row: Dict[str, Any], df: pd.DataFrame) -> str:
 Use one pandas code path only. A pandas DataFrame named df already exists.
 Store the final answer in a variable named final_answer_value.
 Return only one Python code block. Do not print. Do not import anything except pandas, numpy, math, or re.
+Write defensive pandas code:
+- Inspect df.columns instead of assuming exact column names.
+- Treat table values as strings first; convert numeric text with pandas.to_numeric only after removing units or punctuation.
+- Guard empty filters before using iloc, values[0], max, min, idxmax, or idxmin.
+- If an exact computation is not possible, assign the best directly supported table answer rather than raising an exception.
 {label_hint}
 
 Context: {table_context_for_row(row)}
 Question: {question}
+DataFrame preview:
+{compact_table_text(df)}
+"""
+
+
+def pandas_repair_prompt(
+    row: Dict[str, Any],
+    df: pd.DataFrame,
+    *,
+    previous_code: str,
+    error_message: str,
+) -> str:
+    question = row.get("question") or row.get("statement") or row.get("utterance") or ""
+    return f"""You are still the same Single-Agent Pandas baseline.
+Your previous pandas code failed. Rewrite one safer pandas code block.
+A pandas DataFrame named df already exists. Store the final answer in final_answer_value.
+Return only one Python code block. Do not print.
+
+Question: {question}
+Context: {table_context_for_row(row)}
+Error: {error_message}
+Previous code:
+{previous_code}
+
+DataFrame columns: {list(df.columns)}
 DataFrame preview:
 {compact_table_text(df)}
 """
@@ -199,11 +244,39 @@ def run_direct_cot(row: Dict[str, Any], df: pd.DataFrame, llm_fn: Any) -> Dict[s
     }
 
 
-def run_single_agent_pandas(row: Dict[str, Any], df: pd.DataFrame, llm_fn: Any) -> Dict[str, Any]:
+def run_single_agent_pandas(
+    row: Dict[str, Any],
+    df: pd.DataFrame,
+    llm_fn: Any,
+    *,
+    max_code_retries: int = 1,
+) -> Dict[str, Any]:
     prompt = pandas_prompt(row, df)
     raw_output = llm_fn(prompt)
     code = extract_python_code(raw_output)
-    local_env = Calculator._safe_execute(code, df)
+    attempts: List[Dict[str, str]] = []
+    for attempt in range(max(0, max_code_retries) + 1):
+        try:
+            local_env = Calculator._safe_execute(code, df)
+            break
+        except Exception as exc:  # noqa: BLE001
+            message = f"{exc.__class__.__name__}: {exc}"
+            attempts.append({"code": code, "error": message, "raw_output": raw_output})
+            if attempt >= max(0, max_code_retries):
+                raise BaselineExecutionError(
+                    message,
+                    raw_output=raw_output,
+                    code=code,
+                    attempts=attempts,
+                ) from exc
+            repair = pandas_repair_prompt(
+                row,
+                df,
+                previous_code=code,
+                error_message=message,
+            )
+            raw_output = llm_fn(repair)
+            code = extract_python_code(raw_output)
     answer = local_env.get("final_answer_value", local_env.get("result"))
     return {
         "final_answer": answer,
@@ -211,6 +284,7 @@ def run_single_agent_pandas(row: Dict[str, Any], df: pd.DataFrame, llm_fn: Any) 
         "pred_answer": answer,
         "llm_raw_output": raw_output,
         "planner_code": code,
+        "pandas_attempts": attempts,
         "prompt_chars": len(prompt),
         "exec_success": True,
         "exec_error": None,
@@ -245,10 +319,20 @@ def failure_payload(
             },
         }
     )
+    if isinstance(error, BaselineExecutionError):
+        payload["llm_raw_output"] = error.raw_output
+        payload["planner_code"] = error.code
+        payload["pandas_attempts"] = error.attempts
     return payload
 
 
-def run_row(row: Dict[str, Any], *, baseline: str, llm_fn: Any) -> Dict[str, Any]:
+def run_row(
+    row: Dict[str, Any],
+    *,
+    baseline: str,
+    llm_fn: Any,
+    max_code_retries: int = 1,
+) -> Dict[str, Any]:
     started = time.perf_counter()
     before = snapshot(llm_fn)
     try:
@@ -256,7 +340,12 @@ def run_row(row: Dict[str, Any], *, baseline: str, llm_fn: Any) -> Dict[str, Any
         if baseline == "direct_cot":
             result = run_direct_cot(row, df, llm_fn)
         elif baseline == "single_agent_pandas":
-            result = run_single_agent_pandas(row, df, llm_fn)
+            result = run_single_agent_pandas(
+                row,
+                df,
+                llm_fn,
+                max_code_retries=max_code_retries,
+            )
         else:
             raise ValueError(f"unsupported baseline: {baseline}")
         after = snapshot(llm_fn)
@@ -294,7 +383,12 @@ def run_worker(args: argparse.Namespace) -> None:
 
     llm_fn = build_llm_fn(args)
     for index, row in enumerate(rows[start_index:], start=start_index):
-        payload = run_row(row, baseline=args.baseline, llm_fn=llm_fn)
+        payload = run_row(
+            row,
+            baseline=args.baseline,
+            llm_fn=llm_fn,
+            max_code_retries=getattr(args, "max_code_retries", 1),
+        )
         append_jsonl(output_path, payload)
         status = "failed" if payload.get("exec_error") else "ok"
         print(f"[baseline] {args.baseline} {args.task} {index + 1}/{len(rows)} {status}", flush=True)
@@ -369,6 +463,8 @@ def worker_command(
         str(args.api_timeout),
         "--api_max_retries",
         str(args.api_max_retries),
+        "--max-code-retries",
+        str(args.max_code_retries),
     ]
     if args.resume:
         command.append("--resume")
@@ -467,6 +563,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--api_base", default="")
     parser.add_argument("--limit-per-task", type=int, default=0)
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--max-code-retries", type=int, default=1)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser
