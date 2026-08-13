@@ -378,6 +378,9 @@ Current execution state:
 - Qwen3-32B local service is running on two vLLM endpoints and should be kept resident unless switching models:
   - `http://127.0.0.1:8000/v1`, GPUs `4,5`
   - `http://127.0.0.1:8001/v1`, GPUs `6,7`
+- Additional Qwen3-32B local service was started after GPUs `0,1,2,3` became free:
+  - `http://127.0.0.1:8002/v1`, GPUs `0,1`
+  - `http://127.0.0.1:8003/v1`, GPUs `2,3`
 - Served model name: `qwen3-32b-local`.
 - API key env: `LOCAL_VLLM_API_KEY=local-vllm-key-change-me`.
 - Main result package remains:
@@ -394,6 +397,7 @@ Git checkpoints already pushed:
 | MyAgent | `1f577ae` | Fixed baseline JSON output serialization for pandas `Timedelta`/`Timestamp` scalar values |
 | MyAgent | `ccb23eb` | Passed `--thinking disabled/enabled` through `run_sharded_tqa.py` to `code/tqa.py` |
 | MyAgent | `244a26f` | Added `scripts/server/run_mact_sharded_one_by_one.py` to shard MACT one-by-one execution across endpoints without changing MACT reasoning parameters |
+| MyAgent | `009fc8e` | Added `configs/server/qwen3_32b_2x2gpu_0123_local.env` for Qwen3 endpoints on GPUs `0,1` and `2,3` |
 | MACT | `5358fc0` | Smoke outputs for Direct-CoT and Single-Agent Pandas |
 | MACT | `56cf7d5` | Direct-CoT Formal-200 raw, merged, eval, logs |
 | MACT | `cbffd44` | Single-Agent Pandas WTQ Formal-200 raw, merged, eval; partial TabFact checkpoint |
@@ -436,8 +440,9 @@ Current in-flight run:
 
 | Method | Dataset | Script | Endpoint | Current state |
 |---|---|---|---|---|
-| MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | running; last synced checkpoint had 17/200 rows |
-| MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | running; last synced checkpoint had 25/200 rows |
+| MACT | WTQ | `run_mact_wtq_formal200.sh` | `http://127.0.0.1:8000/v1`, GPUs `4,5` | running; latest observed 46/200 rows, last synced checkpoint had 17/200 rows |
+| MACT | TabFact | `run_mact_tabfact_formal200.sh` | `http://127.0.0.1:8001/v1`, GPUs `6,7` | running; latest observed 47/200 rows, last synced checkpoint had 25/200 rows |
+| MACT | CRT | `run_mact_crt_formal200_sharded.sh` | `http://127.0.0.1:8002/v1`, GPUs `0,1`; `http://127.0.0.1:8003/v1`, GPUs `2,3` | running in two 100-row shards; final merged output is written after both shards complete |
 
 Operational notes for the next Codex page:
 
