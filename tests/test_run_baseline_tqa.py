@@ -5,13 +5,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "code"))
 sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "server"))
 
 from evaluate_results import summarize_rows  # noqa: E402
-from run_baseline_tqa import extract_direct_answer, run_row, run_worker  # noqa: E402
+from run_baseline_tqa import _json_default, extract_direct_answer, run_row, run_worker  # noqa: E402
 
 
 class FakeLLM:
@@ -107,6 +109,14 @@ class RunBaselineTqaTests(unittest.TestCase):
         self.assertIn("NameError", row["exec_error"])
         self.assertEqual(summary["num_failed_exec"], 1)
         self.assertEqual(summary["num_missing_answer"], 1)
+
+    def test_pandas_timedelta_is_json_serializable_at_output_boundary(self):
+        encoded = json.dumps(
+            {"answer": pd.Timedelta("2 days 03:04:05")},
+            default=_json_default,
+        )
+
+        self.assertEqual(json.loads(encoded), {"answer": "2 days 03:04:05"})
 
     def test_worker_respects_resume_count(self):
         with tempfile.TemporaryDirectory() as tmp_name:

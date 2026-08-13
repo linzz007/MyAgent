@@ -58,6 +58,10 @@ class BaselineExecutionError(RuntimeError):
 
 
 def _json_default(value: Any) -> Any:
+    if value is pd.NaT or value is pd.NA:
+        return None
+    if isinstance(value, (pd.Timestamp, pd.Timedelta)):
+        return str(value)
     if hasattr(value, "to_dict"):
         return value.to_dict()
     if hasattr(value, "tolist"):
