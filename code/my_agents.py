@@ -7260,6 +7260,54 @@ class TableQAPipeline:
         return best if best > 0 else None
 
     @staticmethod
+    def _wtq_date_cutoff_row_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bhow\s+many\s+.+?\s+(?:aired|played|were\s+played|was\s+played|took\s+place|occurred|happened)\s+"
+            r"(before|after)\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        direction, cutoff_phrase = match.groups()
+        cutoff = TableQAPipeline._month_day_from_text(cutoff_phrase)
+        if cutoff is None:
+            return None
+        rows = TableQAPipeline._wtq_non_summary_rows(df).reset_index(drop=True)
+        row_dates: List[Tuple[int, int, int]] = []
+        for row_index, row in rows.iterrows():
+            parsed = None
+            for col in rows.columns:
+                parsed = TableQAPipeline._month_day_from_text(row[col])
+                if parsed is not None:
+                    break
+            if parsed is not None:
+                row_dates.append((row_index, parsed[0], parsed[1]))
+        if len(row_dates) < 2:
+            return None
+
+        def after_cutoff(item: Tuple[int, int, int]) -> bool:
+            _, month, day = item
+            return (month, day) > cutoff
+
+        def before_cutoff(item: Tuple[int, int, int]) -> bool:
+            _, month, day = item
+            return (month, day) < cutoff
+
+        if direction.lower() == "after":
+            for offset, item in enumerate(row_dates):
+                if after_cutoff(item):
+                    return len(row_dates) - offset
+            return 0
+        count = 0
+        for item in row_dates:
+            if before_cutoff(item):
+                count += 1
+                continue
+            break
+        return count
+
+    @staticmethod
     def _wtq_after_month_row_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
         months = {
             "january": 1,
@@ -7313,6 +7361,35 @@ class TableQAPipeline:
         if best_col is None or len(best_dates) < 2:
             return None
         return sum(1 for month, _ in best_dates if month > target_month)
+
+    @staticmethod
+    def _wtq_first_metric_threshold_date_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bon\s+what\s+date\s+did\s+(?:the\s+)?(.+?)\s+first\s+go\s+"
+            r"(above|over|greater\s+than|below|under|less\s+than)\s+([\d,]+(?:\.\d+)?)\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        metric_phrase, operator, threshold_text = match.groups()
+        metric_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
+        )
+        date_cols = [col for col in df.columns if re.search(r"\bdate\b", str(col), flags=re.I)]
+        threshold = _numeric_measure_value(threshold_text)
+        if metric_col is None or not date_cols or threshold is None:
+            return None
+        wants_greater = operator.lower() in {"above", "over", "greater than"}
+        for _, row in TableQAPipeline._wtq_non_summary_rows(df).iterrows():
+            number = _numeric_measure_value(row[metric_col])
+            if number is None:
+                continue
+            matched = number > threshold if wants_greater else number < threshold
+            if matched and not _is_missing_marker(row[date_cols[0]]):
+                return row[date_cols[0]]
+        return None
 
     @staticmethod
     def _wtq_score_pair_low_score_entity_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
@@ -7746,14 +7823,25 @@ class TableQAPipeline:
 
     @staticmethod
     def _wtq_only_metric_value_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
-        match = re.search(
+        with_match = re.search(
             r"^\s*(?:the\s+)?only\s+(.+?)\s+with\s+(.+?)[?.]?$",
             question or "",
             flags=re.I,
         )
-        if not match or re.search(r"\b(?:above|below|over|under|more|less)\b", match.group(2), flags=re.I):
+        to_have_match = re.search(
+            r"^\s*what\s+is\s+the\s+only\s+(.+?)\s+to\s+(?:have|has|had)\s+"
+            r"([\d,]+(?:\.\d+)?)\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if to_have_match:
+            _, value_phrase, metric_phrase = to_have_match.groups()
+        elif with_match:
+            metric_phrase, value_phrase = with_match.groups()
+        else:
             return None
-        metric_phrase, value_phrase = match.groups()
+        if re.search(r"\b(?:above|below|over|under|more|less)\b", value_phrase, flags=re.I):
+            return None
         metric_col = (
             TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
             or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
@@ -7784,6 +7872,153 @@ class TableQAPipeline:
             return None
         value = matched_rows[0][entity_col]
         return None if _is_missing_marker(value) else value
+
+    @staticmethod
+    def _wtq_entity_filter_variants(phrase: str) -> List[str]:
+        demonyms = {
+            "belgian": "belgium",
+            "brazilian": "brazil",
+            "italian": "italy",
+            "french": "france",
+            "german": "germany",
+            "spanish": "spain",
+            "dutch": "netherlands",
+            "american": "united states",
+            "korean": "south korea",
+        }
+        ignored = {
+            "affiliate",
+            "affiliates",
+            "candidate",
+            "candidates",
+            "contestant",
+            "contestants",
+            "listing",
+            "listings",
+            "player",
+            "players",
+            "rider",
+            "riders",
+            "team",
+            "teams",
+        }
+        key = _loose_text_key(phrase)
+        variants = [key] if key else []
+        tokens = [token for token in _loose_tokens(phrase) if token not in ignored]
+        mapped_tokens = [demonyms.get(token, token) for token in tokens]
+        if mapped_tokens:
+            variants.append(" ".join(mapped_tokens))
+            if len(mapped_tokens) == 1:
+                variants.extend(mapped_tokens)
+        seen = set()
+        deduped = []
+        for variant in variants:
+            if variant and variant not in seen:
+                seen.add(variant)
+                deduped.append(variant)
+        return deduped
+
+    @staticmethod
+    def _wtq_row_matches_entity_filter(row: pd.Series, variants: List[str], cols: List[Any]) -> bool:
+        for col in cols:
+            value = row[col]
+            for variant in variants:
+                if _value_matches_phrase(value, variant):
+                    return True
+        return False
+
+    @staticmethod
+    def _wtq_metric_sum_by_entity_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        total_match = re.search(
+            r"^\s*total\s+(.+?)\s+by\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        together_match = re.search(
+            r"\bhow\s+many\s+(.+?)\s+does\s+(.+?)\s+have\s+all\s+together[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if total_match:
+            metric_phrase, entity_phrase = total_match.groups()
+        elif together_match:
+            metric_phrase, entity_phrase = together_match.groups()
+        else:
+            return None
+        metric_col = (
+            _select_numeric_measure_column_by_phrase(df, metric_phrase)
+            or TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
+        )
+        if metric_col is None:
+            return None
+        variants = TableQAPipeline._wtq_entity_filter_variants(entity_phrase)
+        if not variants:
+            return None
+        search_cols = [col for col in df.columns if col != metric_col]
+        values: List[float] = []
+        for _, row in TableQAPipeline._wtq_non_summary_rows(df).iterrows():
+            if not TableQAPipeline._wtq_row_matches_entity_filter(row, variants, search_cols):
+                continue
+            number = _numeric_measure_value(row[metric_col])
+            if number is not None:
+                values.append(number)
+        if not values:
+            return None
+        total = sum(values)
+        return int(total) if float(total).is_integer() else total
+
+    @staticmethod
+    def _wtq_combined_entity_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bnumber\s+of\s+(.+?)\s+from\s+(.+?)\s+combined[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        _, option_text = match.groups()
+        options = [
+            part.strip(" \t\r\n\"'")
+            for part in re.split(r"\s*,\s*|\s+\band\s+", option_text, flags=re.I)
+            if part.strip(" \t\r\n\"'")
+        ]
+        if len(options) < 2:
+            return None
+        variants_by_option = [TableQAPipeline._wtq_entity_filter_variants(option) for option in options]
+        best_count = 0
+        for col in df.columns:
+            count = 0
+            for value in TableQAPipeline._wtq_non_summary_rows(df)[col].tolist():
+                if any(any(_value_matches_phrase(value, variant) for variant in variants) for variants in variants_by_option):
+                    count += 1
+            best_count = max(best_count, count)
+        return best_count if best_count > 0 else None
+
+    @staticmethod
+    def _wtq_column_value_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\bhow\s+many\s+(.+?)\s+(.+?)s?\s+(?:are|were)\s+there[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        value_phrase, column_phrase = match.groups()
+        if re.search(r"\b(?:points?|goals?|wins?|losses?)\b", column_phrase, flags=re.I):
+            return None
+        target_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, column_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, column_phrase)
+        )
+        if target_col is None:
+            return None
+        count = sum(
+            1
+            for value in TableQAPipeline._wtq_non_summary_rows(df)[target_col].tolist()
+            if _value_matches_phrase(value, value_phrase)
+        )
+        return count if count > 0 else None
 
     @staticmethod
     def _wtq_multi_condition_lookup_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
@@ -8969,6 +9204,14 @@ class TableQAPipeline:
                 self._wtq_only_metric_value_answer(question, df),
             ),
             (
+                "WTQ metric values summed after entity filtering.",
+                self._wtq_metric_sum_by_entity_answer(question, df),
+            ),
+            (
+                "WTQ rows for listed entities counted and combined.",
+                self._wtq_combined_entity_count_answer(question, df),
+            ),
+            (
                 "WTQ target column selected from multiple row conditions deterministically.",
                 self._wtq_multi_condition_lookup_answer(question, df),
             ),
@@ -9057,8 +9300,16 @@ class TableQAPipeline:
                 self._wtq_consecutive_month_count_answer(question, df),
             ),
             (
+                "WTQ rows before or after a specific date counted deterministically.",
+                self._wtq_date_cutoff_row_count_answer(question, df),
+            ),
+            (
                 "WTQ rows after requested month counted deterministically.",
                 self._wtq_after_month_row_count_answer(question, df),
+            ),
+            (
+                "WTQ first date crossing a metric threshold selected deterministically.",
+                self._wtq_first_metric_threshold_date_answer(question, df),
             ),
             (
                 "WTQ last requested table-column value selected deterministically.",
@@ -9107,6 +9358,10 @@ class TableQAPipeline:
             (
                 "WTQ threshold-qualified rows counted deterministically.",
                 self._wtq_threshold_count_answer(question, df),
+            ),
+            (
+                "WTQ column values matching a requested phrase counted deterministically.",
+                self._wtq_column_value_count_answer(question, df),
             ),
             (
                 "WTQ at-least metric rows counted deterministically.",

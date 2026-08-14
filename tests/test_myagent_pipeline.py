@@ -2042,6 +2042,52 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertIsNone(value)
 
+    def test_wtq_date_cutoff_shortcut_counts_rows_after_specific_date_by_table_order(self):
+        df = pd.DataFrame(
+            {
+                "Date": ["September 20", "October 4", "October 25", "February 13"],
+                "Team": ["A", "B", "C", "D"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_date_cutoff_row_count_answer(
+            "how many games were played after october 1st?",
+            df,
+        )
+
+        self.assertEqual(value, 3)
+
+    def test_wtq_date_cutoff_shortcut_counts_rows_before_specific_date(self):
+        df = pd.DataFrame(
+            {
+                "Original air date": ["Writer Name", "November 17, 1965", "December 1, 1965", "December 8, 1965"],
+                "Prod. code": ["September 15, 1965 101", "110", "111", "112"],
+                "Episode": ["A", "B", "C", "D"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_date_cutoff_row_count_answer(
+            "how many episodes aired before december 1st, 1965?",
+            df,
+        )
+
+        self.assertEqual(value, 2)
+
+    def test_wtq_first_metric_threshold_date_shortcut_returns_first_crossing_date(self):
+        df = pd.DataFrame(
+            {
+                "Date introduced": ["16 August 2004", "14 June 2005"],
+                "Class 1 (e.g. Motorbike)": ["£2.00", "£2.50"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_first_metric_threshold_date_answer(
+            "on what date did the toll for class 1 first go above 2.00?",
+            df,
+        )
+
+        self.assertEqual(value, "14 June 2005")
+
     def test_wtq_combined_numbers_shortcut_sums_requested_metric(self):
         df = pd.DataFrame(
             {
@@ -2480,6 +2526,83 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, 1)
+
+    def test_wtq_only_metric_value_shortcut_handles_to_have_phrase(self):
+        df = pd.DataFrame(
+            {
+                "Name": ["Annie Penn Hospital", "Vidant Bertie Hospital"],
+                "Hospital beds": ["110", "6"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_only_metric_value_answer(
+            "what is the only hospital to have 6 hospital beds?",
+            df,
+        )
+
+        self.assertEqual(value, "Vidant Bertie Hospital")
+
+    def test_wtq_metric_sum_by_entity_shortcut_sums_country_rows(self):
+        df = pd.DataFrame(
+            {
+                "Rider": ["Sylvain Geboers", "Roger De Coster", "Adolf Weil"],
+                "Country": ["Belgium", "Belgium", "Germany"],
+                "Wins": ["3", "3", "2"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_metric_sum_by_entity_answer(
+            "total wins by belgian riders",
+            df,
+        )
+
+        self.assertEqual(value, 6)
+
+    def test_wtq_metric_sum_by_entity_shortcut_sums_owner_rows(self):
+        df = pd.DataFrame(
+            {
+                "Network name": ["Azteca 7", "TV 10 Chiapas", "Azteca 13", "Canal 5"],
+                "Owner": ["TV Azteca", "Gobierno del Estado de Chiapas", "TV Azteca", "Televisa"],
+                "Affiliates": ["5", "7", "4", "4"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_metric_sum_by_entity_answer(
+            "how many affiliates does tv azteca have all together?",
+            df,
+        )
+
+        self.assertEqual(value, 9)
+
+    def test_wtq_combined_entity_count_shortcut_counts_listed_entities(self):
+        df = pd.DataFrame(
+            {
+                "Name": ["A", "B", "C", "D", "E"],
+                "City or town": ["Barrington", "Farmington", "Rochester", "Rochester", "Dover"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_combined_entity_count_answer(
+            "what is the number of listings from barrington, farmington, and rochester combined?",
+            df,
+        )
+
+        self.assertEqual(value, 4)
+
+    def test_wtq_column_value_count_shortcut_counts_phrase_matches(self):
+        df = pd.DataFrame(
+            {
+                "Surface": ["Clay", "Hard", "Hard (i)", "Hard"],
+                "Tournament": ["A", "B", "C", "D"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_column_value_count_answer(
+            "how many hard surface courts are there?",
+            df,
+        )
+
+        self.assertEqual(value, 3)
 
     def test_wtq_at_least_metric_shortcut_counts_rows_meeting_threshold(self):
         df = pd.DataFrame(
