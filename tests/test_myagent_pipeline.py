@@ -1797,6 +1797,53 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(value, "Andrey Tereshin")
 
+    def test_wtq_after_reference_shortcut_handles_next_listed_entity_phrase(self):
+        df = pd.DataFrame(
+            {
+                "Pos": [1, 2, 3],
+                "Driver": ["Will Power", "Scott Dixon", "Mike Conway"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_after_reference_answer(
+            "who is the next driver listed after scott dixon?",
+            df,
+        )
+
+        self.assertEqual(value, "Mike Conway")
+
+    def test_wtq_after_reference_shortcut_defaults_to_same_entity_column(self):
+        df = pd.DataFrame(
+            {
+                "Atomic no.": [88, 89],
+                "Name": ["Radium", "Actinium"],
+                "Symbol": ["Ra", "Ac"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_after_reference_answer(
+            "what element is after radium?",
+            df,
+        )
+
+        self.assertEqual(value, "Actinium")
+
+    def test_wtq_after_reference_shortcut_skips_blank_metadata_rows(self):
+        df = pd.DataFrame(
+            {
+                "#": ["10", "", "11"],
+                "Title": ["Like That", "", "Call It What You Want"],
+                "Sample": ["Just Rhymin", "West Up", "Knucklehead"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_after_reference_answer(
+            'which track comes after "like that"?',
+            df,
+        )
+
+        self.assertEqual(value, "Call It What You Want")
+
     def test_wtq_route_after_stop_shortcut_uses_destination_order(self):
         df = pd.DataFrame(
             {
@@ -1861,6 +1908,21 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, "Danger In The Depths")
+
+    def test_wtq_same_number_as_reference_excludes_reference_entity(self):
+        df = pd.DataFrame(
+            {
+                "Player": ["Greg Foster", "Kyrylo Fesenko", "John Wallace"],
+                "No.": [42, 42, 44],
+            }
+        )
+
+        value = TableQAPipeline._wtq_same_number_entity_answer(
+            "who has the same number as greg foster?",
+            df,
+        )
+
+        self.assertEqual(value, "Kyrylo Fesenko")
 
     def test_wtq_contributor_shortcut_allows_single_edit_name_typo(self):
         df = pd.DataFrame(
@@ -2517,6 +2579,21 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, 21.00)
+
+    def test_wtq_who_in_last_period_returns_requested_target_column(self):
+        df = pd.DataFrame(
+            {
+                "Season": ["2010-11", "2011-12"],
+                "League Top scorer": ["Player A", "Simon Makienok Christoffersen"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_last_requested_column_answer(
+            "who was the top scorer in the last season?",
+            df,
+        )
+
+        self.assertEqual(value, "Simon Makienok Christoffersen")
 
     def test_wtq_last_listed_owner_returns_requested_column(self):
         df = pd.DataFrame(

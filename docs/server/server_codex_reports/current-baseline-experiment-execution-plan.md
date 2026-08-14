@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 12:05 CST
+Last updated: 2026-08-14 12:18 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -581,3 +581,10 @@ TabFact focused patch started:
 - No-strong trigger-71 control started at MACT `diagnostics/tabfact_compound71_no_strong_control_ed6ceca/`; checkpoint reached `20/71` rows by 2026-08-14 11:47 CST.
 - No-strong trigger-71 control complete: no-strong `51/71 = 0.7183`, strong-trigger `51/71 = 0.7183`; strong recovers `7` no-strong wrong rows but regresses `7` no-strong correct rows; no-strong avg token `3482.51` and avg time `18.128s`, strong-trigger avg token `16961.89` and avg time `33.425s`.
 - Decision: reverted the TabFact compound strong-trigger code path. It is useful negative evidence for the patent report, but it is not a production/formal200 optimization because it has no net accuracy gain over no-strong and costs far more tokens. Post-revert verification passed: `test_myagent_pipeline.py` (`216` tests), `test_evaluate_results.py` (`15` tests), and py_compile for `code/my_agents.py`, `code/tqa.py`, `code/evaluate_results.py`, `scripts/server/run_sharded_tqa.py`.
+
+WTQ deterministic shortcut patch started:
+
+- Code change: extend existing WTQ deterministic shortcuts for three low-token structural cases: `same number as <entity>` excluding the reference entity, next/listed-after adjacent entity lookup with blank metadata rows skipped, and `who was the <target> in the last <period>` returning the target column rather than the period column.
+- Local verification passed: `python -m unittest discover -s tests -p 'test_myagent_pipeline.py'` (`221` tests) and `python -m py_compile code/my_agents.py code/tqa.py`.
+- Offline Formal-200 WTQ scan: shortcut path fires on `21/200` rows and is correct on `18/21`; compared with old MyAgent formal200, estimated delta is `+6` correct and `0` regressions. Changed rows: `nu-27`, `nu-66`, `nu-78`, `nu-100`, `nu-146`, `nu-180`.
+- Next validation: run patched MyAgent focused on those 6 changed WTQ rows through the real runner on GPUs `4,5,6,7`, then decide whether to run the full WTQ Formal-200 rerun.

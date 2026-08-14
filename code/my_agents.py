@@ -7017,9 +7017,19 @@ class TableQAPipeline:
             text,
             flags=re.I,
         )
-        if not count_match and not next_match:
+        next_entity_match = re.search(
+            r"\b(?:who|what|which)\s+(?:(?:is|was|were|are)\s+)?(?:the\s+)?(?:next\s+)?"
+            r"(.+?)\s+(?:listed\s+)?(?:(?:come|comes|came|is|are)\s+)?after\s+(.+?)[?.]?$",
+            text,
+            flags=re.I,
+        )
+        if not count_match and not next_match and not next_entity_match:
             return None
-        reference = (count_match or next_match).group(1).strip(" \t\r\n\"'")
+        if next_entity_match:
+            target_phrase, reference = next_entity_match.groups()
+        else:
+            target_phrase, reference = "", (count_match or next_match).group(1)
+        reference = reference.strip(" \t\r\n\"'")
         cell = TableQAPipeline._wtq_reference_cell(df, reference)
         if cell is None:
             return None
@@ -7030,7 +7040,18 @@ class TableQAPipeline:
         next_index = row_index + 1
         if next_index >= len(rows):
             return None
-        value = rows.loc[next_index, column]
+        target_col = None
+        if next_entity_match:
+            target_col = TableQAPipeline._wtq_adjacent_target_column(df, target_phrase)
+        if target_col is None:
+            target_col = column
+        if next_entity_match:
+            for candidate_index in range(next_index, len(rows)):
+                value = rows.loc[candidate_index, target_col]
+                if not _is_missing_marker(value):
+                    return value
+            return None
+        value = rows.loc[next_index, target_col]
         return None if _is_missing_marker(value) else value
 
     @staticmethod
@@ -7073,6 +7094,66 @@ class TableQAPipeline:
 
     @staticmethod
     def _wtq_same_number_entity_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        same_as_match = re.search(
+            r"\b(?:who|which|what)\s+(?:has|have|had)\s+the\s+same\s+"
+            r"(?:number|no\.?|#)\s+as\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if same_as_match:
+            reference = same_as_match.group(1).strip(" \t\r\n\"'")
+            reference_key = _loose_text_key(reference)
+            rows = TableQAPipeline._wtq_non_summary_rows(df).reset_index(drop=True)
+            reference_row_index = None
+            reference_col = None
+            for row_index, row in rows.iterrows():
+                for column in rows.columns:
+                    cell_key = _loose_text_key(row[column])
+                    if cell_key and reference_key and (
+                        cell_key == reference_key
+                        or reference_key in cell_key
+                        or cell_key in reference_key
+                    ):
+                        reference_row_index = row_index
+                        reference_col = column
+                        break
+                if reference_row_index is not None:
+                    break
+            if reference_row_index is None or reference_col is None:
+                return None
+            number_columns = [
+                col
+                for col in rows.columns
+                if col != reference_col
+                and _numeric_measure_value(rows.loc[reference_row_index, col]) is not None
+            ]
+            if not number_columns:
+                return None
+            number_columns.sort(
+                key=lambda col: (
+                    0
+                    if re.search(r"^(?:#|no\.?|number)$", str(col).strip(), flags=re.I)
+                    else 1,
+                    str(col),
+                )
+            )
+            number_col = number_columns[0]
+            target_number = _numeric_measure_value(rows.loc[reference_row_index, number_col])
+            if target_number is None:
+                return None
+            entity_col = reference_col
+            matches: List[Any] = []
+            for row_index, row in rows.iterrows():
+                if row_index == reference_row_index:
+                    continue
+                value_number = _numeric_measure_value(row[number_col])
+                if value_number is None or abs(value_number - target_number) > 1e-6:
+                    continue
+                value = row[entity_col]
+                if not _is_missing_marker(value):
+                    matches.append(value)
+            return matches[0] if len(matches) == 1 else None
+
         match = re.search(
             r"\bwhich\s+(.+?)\s+has\s+the\s+same\s+(.+?)\s+and\s+(.+?)\s+numbers?\b",
             question or "",
@@ -7983,6 +8064,40 @@ class TableQAPipeline:
 
     @staticmethod
     def _wtq_last_requested_column_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        who_last_match = re.search(
+            r"\bwho\s+(?:was|is)\s+(?:the\s+)?(.+?)\s+in\s+the\s+last\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if who_last_match:
+            target_phrase, order_phrase = who_last_match.groups()
+            target_col = (
+                TableQAPipeline._select_column_by_semantic_tokens(df, target_phrase)
+                or TableQAPipeline._select_column_by_tokens(df, target_phrase)
+            )
+            order_col = (
+                TableQAPipeline._select_column_by_semantic_tokens(df, order_phrase)
+                or TableQAPipeline._select_column_by_tokens(df, order_phrase)
+            )
+            if target_col is not None and order_col is not None and target_col != order_col:
+                ranked_rows: List[Tuple[float, int, pd.Series]] = []
+                fallback_rows: List[Tuple[int, pd.Series]] = []
+                for order, (_, row) in enumerate(TableQAPipeline._wtq_non_summary_rows(df).iterrows()):
+                    if _is_missing_marker(row[target_col]):
+                        continue
+                    fallback_rows.append((order, row))
+                    order_number = _numeric_measure_value(row[order_col])
+                    if order_number is not None:
+                        ranked_rows.append((order_number, order, row))
+                selected_row = None
+                if ranked_rows:
+                    selected_row = sorted(ranked_rows, key=lambda item: (item[0], item[1]))[-1][2]
+                elif fallback_rows:
+                    selected_row = fallback_rows[-1][1]
+                if selected_row is not None:
+                    value = selected_row[target_col]
+                    return None if _is_missing_marker(value) else value
+
         listed_match = re.search(
             r"\bwhat\s+is\s+the\s+(.+?)\s+listed\s+for\s+the\s+last\s+(.+?)[?.]?$",
             question or "",
