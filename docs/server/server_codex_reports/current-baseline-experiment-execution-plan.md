@@ -515,6 +515,15 @@ Ablation execution status:
 
 | Variant | Script | Endpoint/GPU policy | Status |
 |---|---|---|---|
-| Legacy collaboration | `run_ablation_legacy50.sh` | `http://127.0.0.1:8000/v1` on GPUs `4,5`; `http://127.0.0.1:8001/v1` on GPUs `6,7` | running; WTQ `50/50` and TabFact `50/50` complete, CRT started at `12/50` by 2026-08-14 03:30 CST |
+| Legacy collaboration | `run_ablation_legacy50.sh` | `http://127.0.0.1:8000/v1` on GPUs `4,5`; `http://127.0.0.1:8001/v1` on GPUs `6,7` | complete; WTQ `0.66`, TabFact `0.86`, CRT `0.80`, overall `116/150 = 0.7733`, failed/missing `0/0` |
 | No strong verification | `run_ablation_no_strong50.sh` | same 4567 endpoint policy | pending |
 | No deterministic shortcuts | `run_ablation_no_deterministic_shortcuts50.sh` | same 4567 endpoint policy | pending |
+
+Legacy collaboration ablation result:
+
+| Dataset | Rows | Accuracy | Avg token | Avg time | Fail/Missing |
+|---|---:|---:|---:|---:|---:|
+| WTQ | 50 | 0.660 | 2704.26 | 12.827s | 0/0 |
+| TabFact | 50 | 0.860 | 2445.90 | 14.304s | 0/0 |
+| CRT | 50 | 0.800 | 2399.30 | 14.741s | 0/0 |
+| Overall | 150 | 116/150 = 0.7733 | 2516.49 | 13.957s | 0/0 |
