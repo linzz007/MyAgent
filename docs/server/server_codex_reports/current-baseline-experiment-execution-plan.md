@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 CST
+Last updated: 2026-08-14 10:39 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -508,7 +508,7 @@ New helper scripts added to the MACT run package:
 Continue P0 from the current state:
 
 1. Commit and push the final Formal-200 MACT CRT output/eval/summary, plus this PRD update. Completed at MyAgent `2e1dd0e` and MACT `294d36a`.
-2. Run the three prepared ablation-50 scripts and checkpoint after each stable result. Current order: `legacy50`, `no_strong50`, `no_deterministic_shortcuts50`.
+2. Run the three prepared ablation-50 scripts and checkpoint after each stable result. Completed for `legacy50`, `no_strong50`, and `no_deterministic_shortcuts50`.
 3. Diagnose why Formal-200 WTQ and TabFact trail MACT despite lower token/time. Candidate areas: route confidence thresholds, evidence-retention budget, final-answer normalization, and selective second-pass verification.
 4. Implement only patent-describable improvements, then rerun focused validation before expanding to another Formal-200 comparison.
 
@@ -518,7 +518,7 @@ Ablation execution status:
 |---|---|---|---|
 | Legacy collaboration | `run_ablation_legacy50.sh` | `http://127.0.0.1:8000/v1` on GPUs `4,5`; `http://127.0.0.1:8001/v1` on GPUs `6,7` | complete; WTQ `0.66`, TabFact `0.86`, CRT `0.80`, overall `116/150 = 0.7733`, failed/missing `0/0` |
 | No strong verification | `run_ablation_no_strong50.sh` | same 4567 endpoint policy | complete; WTQ `0.66`, TabFact `0.86`, CRT `0.80`, overall `116/150 = 0.7733`, failed/missing `0/0` |
-| No deterministic shortcuts | `run_ablation_no_deterministic_shortcuts50.sh` | same 4567 endpoint policy | running; WTQ `50/50` and TabFact `50/50` complete, CRT reached `40/50` by 2026-08-14 10:33 CST |
+| No deterministic shortcuts | `run_ablation_no_deterministic_shortcuts50.sh` | same 4567 endpoint policy | complete; WTQ/TabFact/CRT merged rows all `50/50`, failed/missing `0/0` |
 
 Legacy collaboration ablation result:
 
@@ -538,4 +538,13 @@ No-strong-verification ablation result:
 | CRT | 50 | 0.800 | 2399.30 | 14.744s | 0/0 |
 | Overall | 150 | 116/150 = 0.7733 | 2516.47 | 13.973s | 0/0 |
 
-Preliminary ablation interpretation: `legacy50` and `no_strong50` have identical accuracy on the current gate50 split and near-identical token/time. This means the current gate50 split does not yet isolate the value of strong verification; the next diagnostic should inspect whether strong verification was triggered on these rows, or select high-risk rows where it is expected to activate.
+No-deterministic-shortcuts ablation result:
+
+| Dataset | Rows | Primary accuracy | Exact match | Avg token | Avg time | Fail/Missing |
+|---|---:|---:|---:|---:|---:|---:|
+| WTQ | 50 | 0.680 | 0.660 | 6450.88 | 17.900s | 0/0 |
+| TabFact | 50 | 0.720 | 0.720 | 3274.76 | 19.162s | 0/0 |
+| CRT | 50 | 0.720 | 0.720 | 12667.86 | 29.620s | 0/0 |
+| Overall | 150 | 106/150 = 0.7067 | 105/150 = 0.7000 | 7464.50 | 22.227s | 0/0 |
+
+Ablation interpretation: `legacy50` and `no_strong50` have identical accuracy on the current gate50 split and near-identical token/time. This split does not yet isolate the value of strong verification; the next diagnostic should inspect whether strong verification was triggered on these rows, or select high-risk rows where it is expected to activate. In contrast, disabling deterministic shortcuts is strongly negative on the same 150 rows: primary overall drops from `116/150 = 0.7733` to `106/150 = 0.7067`, TabFact drops from `0.86` to `0.72`, CRT drops from `0.80` to `0.72`, and average token rises from about `2516` to about `7465`. This is currently the strongest P0 mechanism evidence for patent writing: deterministic shortcuts / answer normalization reduce unnecessary LLM work and protect accuracy on TabFact and CRT.
