@@ -7260,6 +7260,61 @@ class TableQAPipeline:
         return best if best > 0 else None
 
     @staticmethod
+    def _wtq_after_month_row_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        months = {
+            "january": 1,
+            "jan": 1,
+            "february": 2,
+            "feb": 2,
+            "march": 3,
+            "mar": 3,
+            "april": 4,
+            "apr": 4,
+            "may": 5,
+            "june": 6,
+            "jun": 6,
+            "july": 7,
+            "jul": 7,
+            "august": 8,
+            "aug": 8,
+            "september": 9,
+            "sept": 9,
+            "sep": 9,
+            "october": 10,
+            "oct": 10,
+            "november": 11,
+            "nov": 11,
+            "december": 12,
+            "dec": 12,
+        }
+        month_pattern = "|".join(sorted((re.escape(month) for month in months), key=len, reverse=True))
+        match = re.search(
+            rf"\bhow\s+many\s+.+?\s+(?:took\s+place|occurred|happened|played|were\s+held|were)\s+after\s+({month_pattern})\b",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        if re.match(r"\s+\d{1,2}(?:st|nd|rd|th)?\b", (question or "")[match.end() :], flags=re.I):
+            return None
+        target_month = months[match.group(1).lower()]
+        rows = TableQAPipeline._wtq_non_summary_rows(df)
+        best_col = None
+        best_dates: List[Tuple[int, int]] = []
+        for col in rows.columns:
+            dates = [
+                parsed
+                for value in rows[col].tolist()
+                if (parsed := TableQAPipeline._month_day_from_text(value)) is not None
+            ]
+            if len(dates) > len(best_dates):
+                best_col = col
+                best_dates = dates
+        if best_col is None or len(best_dates) < 2:
+            return None
+        return sum(1 for month, _ in best_dates if month > target_month)
+
+    @staticmethod
     def _wtq_score_pair_low_score_entity_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
         match = re.search(
             r"\bwhich\s+(?:player|team|competitor)\s+scored\s+(?:only\s+)?(.+?)\s+points?\b",
@@ -7447,6 +7502,31 @@ class TableQAPipeline:
             if number is None:
                 continue
             if number < threshold if wants_below else number > threshold:
+                count += 1
+        return count
+
+    @staticmethod
+    def _wtq_at_least_metric_count_answer(question: str, df: pd.DataFrame) -> Optional[Any]:
+        match = re.search(
+            r"\b(?:how\s+many|number\s+of|count\s+of)\s+(.+?)\s+who\s+"
+            r"(?:scored|had|have|has|recorded)\s+at\s+least\s+([\d,]+(?:\.\d+)?)\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        _, threshold_text, metric_phrase = match.groups()
+        metric_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
+        )
+        threshold = _numeric_measure_value(threshold_text)
+        if metric_col is None or threshold is None:
+            return None
+        count = 0
+        for value in TableQAPipeline._wtq_non_summary_rows(df)[metric_col].tolist():
+            number = _numeric_measure_value(value)
+            if number is not None and number >= threshold:
                 count += 1
         return count
 
@@ -8977,6 +9057,10 @@ class TableQAPipeline:
                 self._wtq_consecutive_month_count_answer(question, df),
             ),
             (
+                "WTQ rows after requested month counted deterministically.",
+                self._wtq_after_month_row_count_answer(question, df),
+            ),
+            (
                 "WTQ last requested table-column value selected deterministically.",
                 self._wtq_last_requested_column_answer(question, df),
             ),
@@ -9023,6 +9107,10 @@ class TableQAPipeline:
             (
                 "WTQ threshold-qualified rows counted deterministically.",
                 self._wtq_threshold_count_answer(question, df),
+            ),
+            (
+                "WTQ at-least metric rows counted deterministically.",
+                self._wtq_at_least_metric_count_answer(question, df),
             ),
             (
                 "WTQ at-least chart question counted unique values in the requested column.",

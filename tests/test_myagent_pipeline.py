@@ -2003,6 +2003,45 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(value, 4)
 
+    def test_wtq_after_month_shortcut_counts_rows_after_requested_month(self):
+        df = pd.DataFrame(
+            {
+                "Date": ["10", "11", "12", "13", "14", "15", "16"],
+                "Rnd": [
+                    "August 5",
+                    "August 26",
+                    "September 2",
+                    "September 16",
+                    "September 23",
+                    "October 7",
+                    "October 21",
+                ],
+                "Race Name": ["A", "B", "C", "D", "E", "F", "G"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_after_month_row_count_answer(
+            "how many races took place after august?",
+            df,
+        )
+
+        self.assertEqual(value, 5)
+
+    def test_wtq_after_month_shortcut_ignores_specific_day_cutoff(self):
+        df = pd.DataFrame(
+            {
+                "Date": ["October 1", "October 2", "November 1"],
+                "Game": ["A", "B", "C"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_after_month_row_count_answer(
+            "how many games were played after october 1st?",
+            df,
+        )
+
+        self.assertIsNone(value)
+
     def test_wtq_combined_numbers_shortcut_sums_requested_metric(self):
         df = pd.DataFrame(
             {
@@ -2441,6 +2480,22 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, 1)
+
+    def test_wtq_at_least_metric_shortcut_counts_rows_meeting_threshold(self):
+        df = pd.DataFrame(
+            {
+                "Player": ["Aloisi", "Emerton", "Milicic", "Cahill"],
+                "Friendlies": ["1", "-", "2", "-"],
+                "Total Goals": ["5", "2", "2", "1"],
+            }
+        )
+
+        value = TableQAPipeline._wtq_at_least_metric_count_answer(
+            "number of players who scored at least 1 friendly",
+            df,
+        )
+
+        self.assertEqual(value, 2)
 
     def test_wtq_inferred_blank_rank_shortcut_uses_row_order(self):
         df = pd.DataFrame(
