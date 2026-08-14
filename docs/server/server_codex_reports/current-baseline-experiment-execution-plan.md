@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 10:52 CST
+Last updated: 2026-08-14 11:10 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -573,4 +573,5 @@ TabFact focused patch started:
 - Patent mechanism description: selective high-risk collaboration for compound binary table claims, controlled by problem tags and risk level instead of blanket second-pass verification.
 - Estimated Formal-200 trigger scope before rerun: `71/200` TabFact rows, covering `17/31` TabFact MACT-only diagnostic errors.
 - Local verification passed: `python -m unittest discover -s tests -p 'test_myagent_pipeline.py'` (`216` tests), `python -m py_compile code/my_agents.py code/tqa.py code/evaluate_results.py scripts/server/run_sharded_tqa.py`, and `python -m unittest discover -s tests -p 'test_evaluate_results.py'` (`15` tests). `test_run_sharded_tqa.py` discovery returned `0` tests in this workspace.
-- Next validation: run the patched MyAgent only on the `17` TabFact MACT-only rows predicted to trigger the new policy, using GPUs `4,5,6,7` endpoints only.
+- Focused-17 validation complete at MACT `diagnostics/tabfact_compound17_patch_ed6ceca/`: old MyAgent was `0/17` on these MACT-only rows; patched MyAgent reached `9/17 = 0.5294`, with `17/17` strong-verification triggers, avg token `18999.24`, avg time `37.224s`, failed/missing `0/0`.
+- Interpretation: the trigger recovers real old errors, but token/time cost is high. Before expanding to full200, run all `71` Formal-200 TabFact rows that match the trigger predicate to measure regressions among previously correct samples.
