@@ -388,6 +388,7 @@ Current execution state:
   - `http://127.0.0.1:8000/v1`, GPUs `4,5`
   - `http://127.0.0.1:8001/v1`, GPUs `6,7`
 - GPU `0,1,2,3` services were stopped at the user's request. Do not use GPUs `0,1,2,3` for the current experiment unless the user explicitly changes this constraint. Recheck after stopping showed no compute processes on GPUs `0,1,2,3`; only the four VLLM workers on GPUs `4,5,6,7` remained visible in `nvidia-smi --query-compute-apps`.
+- 2026-08-14 10:33 CST recheck: GPUs `0,1,2,3` each show `0 MiB` used and `0%` utilization. Continue all active experiments on GPUs `4,5,6,7` through endpoints `8000` and `8001`.
 - Served model name: `qwen3-32b-local`.
 - API key env: `LOCAL_VLLM_API_KEY=local-vllm-key-change-me`.
 - Main result package remains:
@@ -517,7 +518,7 @@ Ablation execution status:
 |---|---|---|---|
 | Legacy collaboration | `run_ablation_legacy50.sh` | `http://127.0.0.1:8000/v1` on GPUs `4,5`; `http://127.0.0.1:8001/v1` on GPUs `6,7` | complete; WTQ `0.66`, TabFact `0.86`, CRT `0.80`, overall `116/150 = 0.7733`, failed/missing `0/0` |
 | No strong verification | `run_ablation_no_strong50.sh` | same 4567 endpoint policy | complete; WTQ `0.66`, TabFact `0.86`, CRT `0.80`, overall `116/150 = 0.7733`, failed/missing `0/0` |
-| No deterministic shortcuts | `run_ablation_no_deterministic_shortcuts50.sh` | same 4567 endpoint policy | running; WTQ `50/50` and TabFact `50/50` complete, CRT started at `1/50` by 2026-08-14 10:26 CST |
+| No deterministic shortcuts | `run_ablation_no_deterministic_shortcuts50.sh` | same 4567 endpoint policy | running; WTQ `50/50` and TabFact `50/50` complete, CRT reached `40/50` by 2026-08-14 10:33 CST |
 
 Legacy collaboration ablation result:
 
