@@ -6461,6 +6461,353 @@ class TableQAPipeline:
         return "true" if any(_value_matches_phrase(label, entity_phrase) for label in second_labels) else "false"
 
     @staticmethod
+    def _month_number(month_phrase: str) -> Optional[int]:
+        months = {
+            "january": 1,
+            "february": 2,
+            "march": 3,
+            "april": 4,
+            "may": 5,
+            "june": 6,
+            "july": 7,
+            "august": 8,
+            "september": 9,
+            "october": 10,
+            "november": 11,
+            "december": 12,
+        }
+        return months.get(_loose_text_key(month_phrase))
+
+    @staticmethod
+    def _score_pair(value: Any) -> Optional[Tuple[int, int]]:
+        match = re.search(r"\b(\d+)\s*[-:]\s*(\d+)\b", str(value or ""))
+        if not match:
+            return None
+        return int(match.group(1)), int(match.group(2))
+
+    @staticmethod
+    def _tenure_spans(value: Any) -> List[Tuple[int, int]]:
+        spans: List[Tuple[int, int]] = []
+        for part in re.split(r"\s*,\s*", str(value or "")):
+            years = [int(year) for year in re.findall(r"\b(\d{2,4})\b", part)]
+            if not years:
+                continue
+            start = years[0] + 1900 if years[0] < 100 else years[0]
+            end = years[-1]
+            if end < 100:
+                end += (start // 100) * 100
+            if end < start:
+                end += 100
+            spans.append((start, end))
+        return spans
+
+    @staticmethod
+    def _tabfact_entity_max_metric_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(r"^the\s+(.+?)\s+(?:episode\s+)?have\s+the\s+most\s+(.+?)[?.]?$", question or "", flags=re.I)
+        if not match:
+            return None
+        entity_phrase, metric_phrase = match.groups()
+        metric_col = _select_numeric_measure_column_by_phrase(df, metric_phrase)
+        if metric_col is None:
+            return None
+        series = _numeric_measure_series(df, metric_col)
+        if series.dropna().empty:
+            return None
+        max_value = float(series.max())
+        entity_cols = [col for col in df.columns if col != metric_col]
+        winners = [
+            row
+            for idx, row in df.iterrows()
+            if not pd.isna(series.loc[idx]) and abs(float(series.loc[idx]) - max_value) <= 1e-6
+        ]
+        return "true" if any(_row_contains_entity_phrase(row, entity_phrase, entity_cols) for row in winners) else "false"
+
+    @staticmethod
+    def _tabfact_only_year_more_than_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(\d{4})\s+be\s+the\s+only\s+year\s+.+?\s+score\s+more\s+than\s+(\d+)\s+goal",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        target_year, threshold_text = match.groups()
+        date_cols = [col for col in df.columns if re.search(r"\bdate\b", str(col), flags=re.I)]
+        if not date_cols:
+            return None
+        counts: Dict[str, int] = {}
+        for value in df[date_cols[0]].tolist():
+            year_match = re.search(r"\b(1[7-9]\d{2}|20\d{2})\b", str(value or ""))
+            if year_match:
+                counts[year_match.group(1)] = counts.get(year_match.group(1), 0) + 1
+        years = [year for year, count in counts.items() if count > int(threshold_text)]
+        return "true" if years == [target_year] else "false"
+
+    @staticmethod
+    def _tabfact_record_equal_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^there\s+be\s+only\s+(\d+)\s+day\s+during\s+(.+?)\s+.+?\s+have\s+a\s+50\s*/\s*50\s+win\s*/\s*loss\s+record[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected_text, month_phrase = match.groups()
+        month = TableQAPipeline._month_number(month_phrase)
+        date_cols = [col for col in df.columns if re.search(r"\bdate\b", str(col), flags=re.I)]
+        record_cols = [col for col in df.columns if re.search(r"\brecord\b", str(col), flags=re.I)]
+        if month is None or not date_cols or not record_cols:
+            return None
+        count = 0
+        for _, row in df.iterrows():
+            parsed = TableQAPipeline._month_day_from_text(row[date_cols[0]])
+            pair = TableQAPipeline._score_pair(row[record_cols[0]])
+            if parsed is not None and parsed[0] == month and pair is not None and pair[0] == pair[1]:
+                count += 1
+        return "true" if count == int(expected_text) else "false"
+
+    @staticmethod
+    def _tabfact_month_no_game_days_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^there\s+be\s+only\s+(\d+)\s+day\s+in\s+(.+?)\s+on\s+which\s+.+?\s+do\s+not\s+have\s+to\s+play\s+a\s+game[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected_text, month_phrase = match.groups()
+        month = TableQAPipeline._month_number(month_phrase)
+        date_cols = [col for col in df.columns if re.search(r"\bdate\b", str(col), flags=re.I)]
+        if month is None or not date_cols:
+            return None
+        days_by_month = {1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31}
+        played_days = {
+            parsed[1]
+            for parsed in (TableQAPipeline._month_day_from_text(value) for value in df[date_cols[0]].tolist())
+            if parsed is not None and parsed[0] == month
+        }
+        if not played_days:
+            return None
+        missing_count = len(set(range(1, days_by_month[month] + 1)) - played_days)
+        return "true" if missing_count == int(expected_text) else "false"
+
+    @staticmethod
+    def _tabfact_lowest_attendance_result_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(r"\b(win|lose)\s+the\s+game\s+which\s+have\s+the\s+lowest\s+attendance\s+of\s+the\s+month[?.]?$", question or "", flags=re.I)
+        if not match:
+            return None
+        expected_result = match.group(1).lower()
+        attendance_cols = [col for col in df.columns if re.search(r"\battendance\b", str(col), flags=re.I)]
+        score_cols = [col for col in df.columns if re.search(r"\bscore\b", str(col), flags=re.I)]
+        if not attendance_cols or not score_cols:
+            return None
+        attendance = _numeric_measure_series(df, attendance_cols[0])
+        if attendance.dropna().empty:
+            return None
+        min_idx = attendance.idxmin()
+        pair = TableQAPipeline._score_pair(df.loc[min_idx, score_cols[0]])
+        if pair is None or pair[0] == pair[1]:
+            return None
+        actual = "win" if pair[0] > pair[1] else "lose"
+        return "true" if actual == expected_result else "false"
+
+    @staticmethod
+    def _tabfact_beer_award_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        simple = re.search(
+            r"^.+?'s\s+(.+?)\s+beer\s+have\s+(\d+)\s+award\s+between\s+(\d{4})\s+and\s+(\d{4})[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        competition = re.search(
+            r"^.+?'s\s+(.+?)\s+(\d+)\s+time\s+win\s+an\s+award\s+at\s+the\s+(.+?)\s+between\s+(\d{4})\s+and\s+(\d{4})[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not simple and not competition:
+            return None
+        if simple:
+            entity_phrase, expected_text, start_text, end_text = simple.groups()
+            competition_phrase = None
+        else:
+            entity_phrase, expected_text, competition_phrase, start_text, end_text = competition.groups()
+        year_cols = [col for col in df.columns if re.search(r"\byear\b", str(col), flags=re.I)]
+        beer_cols = [col for col in df.columns if re.search(r"\bbeer\s+name\b|\bname\b", str(col), flags=re.I)]
+        competition_cols = [col for col in df.columns if re.search(r"\bcompetition\b", str(col), flags=re.I)]
+        if not year_cols or not beer_cols:
+            return None
+        count = 0
+        for _, row in df.iterrows():
+            year = _numeric_measure_value(row[year_cols[0]])
+            if year is None or not (int(start_text) <= int(year) <= int(end_text)):
+                continue
+            if not _value_matches_phrase(row[beer_cols[0]], entity_phrase):
+                continue
+            if competition_phrase is not None:
+                if not competition_cols or not _value_matches_phrase(row[competition_cols[0]], competition_phrase):
+                    continue
+            count += 1
+        return "true" if count == int(expected_text) else "false"
+
+    @staticmethod
+    def _tabfact_surface_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(r"^(.+?)\s+play\s+a\s+total\s+of\s+(\d+)\s+game\s+on\s+a\s+(.+?)\s+tennis\s+court[?.]?$", question or "", flags=re.I)
+        if not match:
+            return None
+        _, expected_text, surface_phrase = match.groups()
+        surface_cols = [col for col in df.columns if re.search(r"\bsurface\b|\bcourt\b", str(col), flags=re.I)]
+        if not surface_cols:
+            return None
+        count = sum(1 for value in df[surface_cols[0]].tolist() if _value_matches_phrase(value, surface_phrase))
+        return "true" if count == int(expected_text) else "false"
+
+    @staticmethod
+    def _tabfact_not_champion_loss_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(r"^(.+?)\s+be\s+not\s+the\s+female\s+lose\s+the\s+.+?\s+championship[?.]?$", question or "", flags=re.I)
+        if not match:
+            return None
+        rank_cols = [col for col in df.columns if re.fullmatch(r"(?i)rank", str(col).strip())]
+        name_cols = [col for col in df.columns if re.search(r"\b(name|player)\b", str(col), flags=re.I)]
+        if not rank_cols or not name_cols:
+            return None
+        rows = _find_rows_for_entity_across_row(df, match.group(1), name_cols)
+        if len(rows) != 1:
+            return None
+        rank = _numeric_measure_value(rows[0][rank_cols[0]])
+        if rank is None:
+            return None
+        return "true" if int(rank) == 1 else "false"
+
+    @staticmethod
+    def _tabfact_top_n_country_no_medal_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(.+?)\s+have\s+(\d+)\s+of\s+the\s+top\s+(\d+)\s+but\s+do\s+not\s+have\s+anyone\s+win\s+a\s+medal[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        country_phrase, expected_text, top_text = match.groups()
+        rank_cols = [col for col in df.columns if re.fullmatch(r"(?i)rank", str(col).strip())]
+        country_cols = [col for col in df.columns if re.search(r"\b(country|nation|nationality)\b", str(col), flags=re.I)]
+        if not rank_cols or not country_cols:
+            return None
+        top_country = 0
+        medal_country = 0
+        for _, row in df.iterrows():
+            rank = _numeric_measure_value(row[rank_cols[0]])
+            if rank is None or not _value_matches_phrase(row[country_cols[0]], country_phrase):
+                continue
+            if rank <= int(top_text):
+                top_country += 1
+            if rank <= 3:
+                medal_country += 1
+        return "true" if top_country == int(expected_text) and medal_country == 0 else "false"
+
+    @staticmethod
+    def _tabfact_tenure_gap_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(r"^(.+?)\s+play\s+for\s+the\s+jazz\s+(\d+)\s+year\s+before\s+(.+?)[?.]?$", question or "", flags=re.I)
+        if not match:
+            return None
+        left_entity, gap_text, right_entity = match.groups()
+        player_cols = [col for col in df.columns if re.search(r"\bplayer\b|\bname\b", str(col), flags=re.I)]
+        year_cols = [col for col in df.columns if re.search(r"\byears?\s+for\s+jazz\b|\byears?\b", str(col), flags=re.I)]
+        if not player_cols or not year_cols:
+            return None
+        left_rows = _find_rows_for_entity_across_row(df, left_entity, player_cols)
+        right_rows = _find_rows_for_entity_across_row(df, right_entity, player_cols)
+        if len(left_rows) != 1 or len(right_rows) != 1:
+            return None
+        left_spans = TableQAPipeline._tenure_spans(left_rows[0][year_cols[0]])
+        right_spans = TableQAPipeline._tenure_spans(right_rows[0][year_cols[0]])
+        if not left_spans or not right_spans:
+            return None
+        observed_gap = min(start for start, _ in right_spans) - max(end for _, end in left_spans)
+        return "true" if observed_gap == int(gap_text) else "false"
+
+    @staticmethod
+    def _tabfact_stint_duration_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(r"^(.+?)\s+have\s+(\d+)\s+stint\s+.+?\s+total\s+(\d+)\s+year\s+in\s+total[?.]?$", question or "", flags=re.I)
+        if not match:
+            return None
+        entity_phrase, stint_text, total_text = match.groups()
+        player_cols = [col for col in df.columns if re.search(r"\bplayer\b|\bname\b", str(col), flags=re.I)]
+        year_cols = [col for col in df.columns if re.search(r"\byears?\s+for\s+jazz\b|\byears?\b", str(col), flags=re.I)]
+        if not player_cols or not year_cols:
+            return None
+        rows = _find_rows_for_entity_across_row(df, entity_phrase, player_cols)
+        if len(rows) != 1:
+            return None
+        spans = TableQAPipeline._tenure_spans(rows[0][year_cols[0]])
+        if not spans:
+            return None
+        total_years = sum(end - start + 1 for start, end in spans)
+        return "true" if len(spans) == int(stint_text) and total_years == int(total_text) else "false"
+
+    @staticmethod
+    def _tabfact_race_column_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        single = re.search(r"^(.+?)\s+be\s+the\s+(.+?)\s+for\s+(\d+)\s+race\s+in\s+the\s+.+?[?.]?$", question or "", flags=re.I)
+        compound = re.search(
+            r"^(.+?)\s+win\s+(\d+)\s+race\s+.+?,\s+but\s+he\s+be\s+the\s+(.+?)\s+for\s+(\d+)\s+race[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not single and not compound:
+            return None
+        if single:
+            entity_phrase, column_phrase, expected_text = single.groups()
+            checks = [(column_phrase, int(expected_text))]
+        else:
+            entity_phrase, win_text, leader_phrase, leader_text = compound.groups()
+            checks = [("winner", int(win_text)), (leader_phrase, int(leader_text))]
+        for column_phrase, expected in checks:
+            target_col = (
+                TableQAPipeline._select_column_by_semantic_tokens(df, column_phrase)
+                or TableQAPipeline._select_column_by_tokens(df, column_phrase)
+            )
+            if target_col is None:
+                return None
+            count = 0
+            for _, row in df.iterrows():
+                row_text = _loose_text_key(" ".join(str(row[col]) for col in df.columns))
+                if "rest day" in row_text or row_text.startswith("total "):
+                    continue
+                if _value_matches_phrase(row[target_col], entity_phrase):
+                    count += 1
+            if count != expected:
+                return "false"
+        return "true"
+
+    @staticmethod
+    def _tabfact_consecutive_date_wins_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(r"^(.+?)\s+win\s+(\d+)\s+race\s+in\s+a\s+row\s*,\s+on\s+(.+?)\s*,\s+during\s+.+?[?.]?$", question or "", flags=re.I)
+        if not match:
+            return None
+        entity_phrase, expected_text, dates_phrase = match.groups()
+        month_match = re.search(
+            r"\b(january|february|march|april|may|june|july|august|september|october|november|december)\b",
+            dates_phrase,
+            flags=re.I,
+        )
+        if not month_match:
+            return None
+        month = TableQAPipeline._month_number(month_match.group(1))
+        days = [int(day) for day in re.findall(r"\b(\d{1,2})(?:st|nd|rd|th)?\b", dates_phrase)]
+        date_cols = [col for col in df.columns if re.search(r"\bdate\b", str(col), flags=re.I)]
+        winner_cols = [col for col in df.columns if re.search(r"\bwinner\b", str(col), flags=re.I)]
+        if month is None or len(days) != int(expected_text) or not date_cols or not winner_cols:
+            return None
+        if sorted(days) != list(range(min(days), max(days) + 1)):
+            return "false"
+        matched_days = set()
+        for _, row in df.iterrows():
+            parsed = TableQAPipeline._month_day_from_text(row[date_cols[0]])
+            if parsed is None or parsed[0] != month or parsed[1] not in days:
+                continue
+            if _value_matches_phrase(row[winner_cols[0]], entity_phrase):
+                matched_days.add(parsed[1])
+        return "true" if matched_days == set(days) else "false"
+
+    @staticmethod
     def _tabfact_entity_attribute_answer(question: str, df: pd.DataFrame) -> Optional[str]:
         match = re.search(
             r"^(?:the\s+)?(.+?)\s+(?:have|has|had|be|is|are|was|were)\s+(?:an?\s+)?(.+?)[?.]?$",
@@ -6869,9 +7216,17 @@ class TableQAPipeline:
             + r")\s+(\d{1,2})(?:st|nd|rd|th)?\b",
             text,
         )
-        if not match:
+        if match:
+            return months[match.group(1)], int(match.group(2))
+        reverse_match = re.search(
+            r"\b(\d{1,2})(?:st|nd|rd|th)?\s+("
+            + "|".join(re.escape(month) for month in months)
+            + r")\b",
+            text,
+        )
+        if not reverse_match:
             return None
-        return months[match.group(1)], int(match.group(2))
+        return months[reverse_match.group(2)], int(reverse_match.group(1))
 
     @staticmethod
     def _tabfact_every_before_date_result_answer(question: str, df: pd.DataFrame) -> Optional[str]:
@@ -9421,6 +9776,58 @@ class TableQAPipeline:
             (
                 "TabFact second-highest metric entity checked deterministically.",
                 self._tabfact_second_highest_metric_entity_answer(question, df),
+            ),
+            (
+                "TabFact entity maximum metric ownership checked deterministically.",
+                self._tabfact_entity_max_metric_answer(question, df),
+            ),
+            (
+                "TabFact only-year repeated-goal count checked deterministically.",
+                self._tabfact_only_year_more_than_count_answer(question, df),
+            ),
+            (
+                "TabFact equal win/loss record count checked deterministically.",
+                self._tabfact_record_equal_count_answer(question, df),
+            ),
+            (
+                "TabFact monthly no-game days checked deterministically.",
+                self._tabfact_month_no_game_days_answer(question, df),
+            ),
+            (
+                "TabFact lowest-attendance game result checked deterministically.",
+                self._tabfact_lowest_attendance_result_answer(question, df),
+            ),
+            (
+                "TabFact beer award count checked deterministically.",
+                self._tabfact_beer_award_count_answer(question, df),
+            ),
+            (
+                "TabFact tennis surface count checked deterministically.",
+                self._tabfact_surface_count_answer(question, df),
+            ),
+            (
+                "TabFact championship loss claim checked deterministically.",
+                self._tabfact_not_champion_loss_answer(question, df),
+            ),
+            (
+                "TabFact top-rank country medal absence checked deterministically.",
+                self._tabfact_top_n_country_no_medal_answer(question, df),
+            ),
+            (
+                "TabFact tenure gap checked deterministically.",
+                self._tabfact_tenure_gap_answer(question, df),
+            ),
+            (
+                "TabFact stint duration checked deterministically.",
+                self._tabfact_stint_duration_answer(question, df),
+            ),
+            (
+                "TabFact race column count checked deterministically.",
+                self._tabfact_race_column_count_answer(question, df),
+            ),
+            (
+                "TabFact consecutive dated race wins checked deterministically.",
+                self._tabfact_consecutive_date_wins_answer(question, df),
             ),
             (
                 "TabFact same-row cell mentions checked deterministically.",

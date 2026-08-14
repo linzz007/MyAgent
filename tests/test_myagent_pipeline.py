@@ -5334,6 +5334,157 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             "false",
         )
 
+    def test_tabfact_max_year_record_and_calendar_shortcuts(self):
+        episodes = pd.DataFrame(
+            {
+                "title": ["the early road", "the lady of the lake", "the finale"],
+                "uk viewers (million)": ["5.7", "6.3", "6.1"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_entity_max_metric_answer(
+                "the lady of the lake episode have the most uk viewer",
+                episodes,
+            ),
+            "true",
+        )
+
+        goals = pd.DataFrame({"date": ["1 may 1999", "2 may 2000", "3 june 2000", "4 may 2001"]})
+        self.assertEqual(
+            TableQAPipeline._tabfact_only_year_more_than_count_answer(
+                "2000 be the only year rafael marquez score more than 1 goal in international competition",
+                goals,
+            ),
+            "true",
+        )
+
+        schedule = pd.DataFrame(
+            {
+                "date": ["august 2", "august 3", "august 5"],
+                "record": ["52 - 55", "55 - 55", "56 - 56"],
+                "score": ["8 - 9", "6 - 4", "7 - 3"],
+                "attendance": ["200", "300", "100"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_record_equal_count_answer(
+                "there be only 2 day during august 2005 milwaukee brewers season on which the 2005 milwaukee brewers season have a 50 / 50 win / loss record",
+                schedule,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_month_no_game_days_answer(
+                "there be only 28 day in august on which the 2005 milwaukee brewers season do not have to play a game",
+                schedule,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_lowest_attendance_result_answer(
+                "the 2005 milwaukee brewers season win the game which have the lowest attendance of the month",
+                schedule,
+            ),
+            "true",
+        )
+
+    def test_tabfact_award_surface_rank_and_tenure_shortcuts(self):
+        awards = pd.DataFrame(
+            {
+                "year": ["1995", "2002", "2005", "2009", "2006"],
+                "beer name": ["good old boy", "good old boy", "good old boy", "good old boy", "maggs magnificent mild"],
+                "competition": [
+                    "festival",
+                    "siba south east region beer competition",
+                    "siba south east region beer competition",
+                    "camra london and south east regional competition",
+                    "siba national beer competition",
+                ],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_beer_award_count_answer(
+                "west berkshire brewery 's good old boy beer have 4 award between 1995 and 2009",
+                awards,
+            ),
+            "true",
+        )
+
+        tennis = pd.DataFrame({"surface": ["hard (i)", "clay", "hard"]})
+        self.assertEqual(
+            TableQAPipeline._tabfact_surface_count_answer(
+                "galina voskoboeva play a total of 2 game on a hard tennis court",
+                tennis,
+            ),
+            "true",
+        )
+
+        ranking = pd.DataFrame(
+            {
+                "rank": ["1", "4", "6"],
+                "name": ["winner", "norbert schramm", "stephan bril"],
+                "nation": ["united states", "west germany", "west germany"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_not_champion_loss_answer(
+                "norbert schramm be not the female lose the skating championship",
+                ranking,
+            ),
+            "false",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_top_n_country_no_medal_answer(
+                "west germany have 2 of the top 6 but do not have anyone win a medal",
+                ranking,
+            ),
+            "true",
+        )
+
+        roster = pd.DataFrame(
+            {
+                "player": ["darryl dawkins", "paul dawkins", "james donaldson"],
+                "years for jazz": ["1987 - 88", "1979 - 80", "1993 , 1994 - 95"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_tenure_gap_answer(
+                "paul dawkins play for the jazz 7 year before darryl dawkins",
+                roster,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_stint_duration_answer(
+                "james donaldson have 2 stint on the jazz 's utah jazz all - time roster , total 5 year in total",
+                roster,
+            ),
+            "false",
+        )
+
+    def test_tabfact_race_count_and_consecutive_win_shortcuts(self):
+        races = pd.DataFrame(
+            {
+                "date": ["24 may", "25 may", "26 may", "total"],
+                "winner": ["ettore meini ( ita )", "ettore meini ( ita )", "gerard loncke ( bel )", "-"],
+                "race leader": ["alfredo binda ( ita )", "alfredo binda ( ita )", "alfredo binda ( ita )", "km (mi)"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_race_column_count_answer(
+                "alfredo binda be the race leader for 3 race in the 1933 giro d'italia",
+                races,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_consecutive_date_wins_answer(
+                "ettore meini win 2 race in a row , on may 24 and 25th , during the 1933 giro d'italia",
+                races,
+            ),
+            "true",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
