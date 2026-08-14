@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 12:58 CST
+Last updated: 2026-08-14 13:12 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -595,3 +595,7 @@ WTQ deterministic shortcut patch started:
 - Full WTQ result: patched MyAgent `147/200 = 0.7350` primary accuracy, strict exact `145/200 = 0.7250`, avg token `6228.74`, avg time `16.140s`, failed/missing `0/0`. Old MyAgent WTQ was `141/200 = 0.7050`; MACT WTQ was `156/200 = 0.7800`, avg token `10698.62`, avg time `115.088s`, failed/missing `4/4`.
 - Actual full-run delta: net `+6` primary-correct rows, made of `8` old-wrong to patched-right rows (`nu-27`, `nu-66`, `nu-78`, `nu-100`, `nu-129`, `nu-146`, `nu-180`, `nu-188`) and `2` old-right to patched-wrong rows (`nu-152`, `nu-160`). The two regressions did not use the new deterministic shortcut path, so they are non-shortcut runner/model-path variance rather than direct shortcut failures.
 - Current status after WTQ patch: keep the patch, but the patent-data goal is still incomplete. Expected total formal200 becomes approximately `442/600 = 0.7367` versus MACT `465/600 = 0.7750`; WTQ gap is now `9` rows (`147` vs `156`). Next work should target remaining WTQ MACT-only rows and the TabFact gap, starting with `nu-152`/`nu-160` regressions and high-frequency count, temporal, negation/exclusion, comparison/superlative categories.
+- WTQ count/date filter patch pushed: MyAgent `7e18c84` (`feat: add wtq deterministic count filters`). It adds deterministic coverage for `at least <number> <metric>` row counts and bare-month `after <month>` row counts, with a guard that rejects specific day cutoffs such as `after october 1st`.
+- Local verification passed after `7e18c84`: `test_myagent_pipeline.py` (`224` tests) and py_compile for `code/my_agents.py`, `code/tqa.py`.
+- Offline WTQ formal200 scan after `7e18c84`: new rules only hit `nu-152` and `nu-160`, both correct. Focused-2 runner validation complete on GPUs `4,5,6,7`; input MACT `input/diagnostic/wtq_count_filter_regression2.jsonl`; output root MACT `diagnostics/wtq_count_filter_regression2_patch_7e18c84`; summary MACT `summary/wtq_count_filter_patch_7e18c84.md`.
+- Focused-2 result: primary accuracy `2/2 = 1.0000`, strict exact `2/2 = 1.0000`, avg token `3607.00`, avg time `6.339s`, failed/missing `0/0`. Expected WTQ if applied to the previous full run is `149/200 = 0.7450`, but avoid rerunning full WTQ200 after every two-row patch; batch the next full rerun with additional deterministic fixes to reduce server time and rerun variance.
