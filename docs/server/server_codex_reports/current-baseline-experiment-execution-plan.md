@@ -515,6 +515,6 @@ Ablation execution status:
 
 | Variant | Script | Endpoint/GPU policy | Status |
 |---|---|---|---|
-| Legacy collaboration | `run_ablation_legacy50.sh` | `http://127.0.0.1:8000/v1` on GPUs `4,5`; `http://127.0.0.1:8001/v1` on GPUs `6,7` | running; WTQ `50/50` complete, TabFact started at `8/50` by 2026-08-14 03:23 CST |
+| Legacy collaboration | `run_ablation_legacy50.sh` | `http://127.0.0.1:8000/v1` on GPUs `4,5`; `http://127.0.0.1:8001/v1` on GPUs `6,7` | running; WTQ `50/50` and TabFact `50/50` complete, CRT started at `12/50` by 2026-08-14 03:30 CST |
 | No strong verification | `run_ablation_no_strong50.sh` | same 4567 endpoint policy | pending |
 | No deterministic shortcuts | `run_ablation_no_deterministic_shortcuts50.sh` | same 4567 endpoint policy | pending |
