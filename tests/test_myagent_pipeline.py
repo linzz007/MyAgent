@@ -5209,6 +5209,131 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             "China",
         )
 
+    def test_tabfact_rank_country_count_shortcut(self):
+        df = pd.DataFrame(
+            {
+                "place": ["t9", "t9", "t9", "t9"],
+                "player": ["a", "b", "c", "d"],
+                "country": ["united states", "united states", "united states", "spain"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_rank_country_count_answer(
+                "3 of the people tie for ninth place be from the united state",
+                df,
+            ),
+            "true",
+        )
+
+    def test_tabfact_country_majority_and_unique_count_shortcuts(self):
+        df = pd.DataFrame(
+            {
+                "country": ["united states", "wales", "japan", "spain"],
+                "to par": ["+ 1", "+ 2", "- 1", "+ 3"],
+            }
+        )
+
+        self.assertEqual(
+            TableQAPipeline._tabfact_unique_country_count_answer(
+                "there be a total of 4 country represent by the player",
+                df,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_majority_over_par_country_answer(
+                "a majority of the people who score over par be from the united state",
+                df,
+            ),
+            "false",
+        )
+
+    def test_tabfact_frequency_and_only_not_country_shortcuts(self):
+        rounds = pd.DataFrame({"round": ["3", "4", "4", "5", "5"]})
+        self.assertEqual(
+            TableQAPipeline._tabfact_only_column_value_not_count_answer(
+                "only round 3 be not list 2 time",
+                rounds,
+            ),
+            "true",
+        )
+
+        countries = pd.DataFrame(
+            {
+                "player": ["a", "b", "c"],
+                "nationality": ["united states", "canada", "slovakia"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_only_not_from_countries_answer(
+                "the only player not from the united state or canada be from norway",
+                countries,
+            ),
+            "false",
+        )
+
+    def test_tabfact_source_and_attendance_shortcuts(self):
+        sources = pd.DataFrame(
+            {
+                "player": ["a", "b"],
+                "college / junior / club team (league)": ["new england jr coyotes (ejhl)", "centennial high school"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_every_player_source_answer(
+                "every player come from either a college program or a junior / club team",
+                sources,
+            ),
+            "true",
+        )
+
+        games = pd.DataFrame(
+            {
+                "team": ["new orleans", "minnesota"],
+                "location attendance": ["new orleans arena 17781", "target center 18478"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_opponent_attendance_comparison_answer(
+                "the game against minnesota have a higher attendance than the game against new orleans",
+                games,
+            ),
+            "true",
+        )
+
+    def test_tabfact_extreme_difference_and_metric_order_shortcuts(self):
+        scores = pd.DataFrame({"points": ["186.92", "112.28", "150.00"]})
+        self.assertEqual(
+            TableQAPipeline._tabfact_extreme_score_difference_answer(
+                "there be a 74.64 point difference between the highest score (186.92) and the lowest score (112.28)",
+                scores,
+            ),
+            "true",
+        )
+
+        tournaments = pd.DataFrame(
+            {
+                "tournament": ["us open", "the open championship", "pga championship"],
+                "events": ["2", "7", "6"],
+                "cuts made": ["1", "4", "4"],
+            }
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_entity_metric_more_than_answer(
+                "the pga championship have 3 more cut made than the us open",
+                tournaments,
+            ),
+            "true",
+        )
+        self.assertEqual(
+            TableQAPipeline._tabfact_second_highest_metric_entity_answer(
+                "for brian watts , the open championship be the tournament with his second highest number of event",
+                tournaments,
+            ),
+            "false",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6195,6 +6195,272 @@ class TableQAPipeline:
         return "true" if abs(abs(right_value - left_value) - float(expected)) <= 1e-6 else "false"
 
     @staticmethod
+    def _tabfact_rank_country_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^(\d+)\s+of\s+the\s+people\s+tie\s+for\s+(.+?)\s+place\s+be\s+from\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected_text, rank_text, country_phrase = match.groups()
+        expected = int(expected_text)
+        rank = _small_number_from_text(rank_text)
+        if rank is None:
+            ordinal_words = {
+                "first": 1,
+                "second": 2,
+                "third": 3,
+                "fourth": 4,
+                "fifth": 5,
+                "sixth": 6,
+                "seventh": 7,
+                "eighth": 8,
+                "ninth": 9,
+                "tenth": 10,
+            }
+            rank = ordinal_words.get(_loose_text_key(rank_text))
+        rank_cols = [col for col in df.columns if re.search(r"\b(place|rank|position)\b", str(col), flags=re.I)]
+        country_cols = [col for col in df.columns if re.search(r"\b(country|nation|nationality)\b", str(col), flags=re.I)]
+        if rank is None or not rank_cols or not country_cols:
+            return None
+        count = 0
+        for _, row in df.iterrows():
+            rank_match = re.search(r"\b(?:t)?(\d+)\b", str(row[rank_cols[0]]), flags=re.I)
+            if not rank_match or int(rank_match.group(1)) != rank:
+                continue
+            if _value_matches_phrase(row[country_cols[0]], country_phrase):
+                count += 1
+        return "true" if count == expected else "false"
+
+    @staticmethod
+    def _tabfact_unique_country_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^there\s+be\s+a\s+total\s+of\s+(\d+)\s+country\s+represent\s+by\s+the\s+player[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected = int(match.group(1))
+        country_cols = [col for col in df.columns if re.search(r"\b(country|nation|nationality)\b", str(col), flags=re.I)]
+        if not country_cols:
+            return None
+        values = {
+            _loose_text_key(value)
+            for value in df[country_cols[0]].tolist()
+            if not _is_missing_marker(value) and _loose_text_key(value)
+        }
+        return "true" if len(values) == expected else "false"
+
+    @staticmethod
+    def _tabfact_majority_over_par_country_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^a\s+majority\s+of\s+the\s+people\s+who\s+score\s+over\s+par\s+be\s+from\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        country_phrase = match.group(1)
+        par_cols = [col for col in df.columns if re.search(r"\bto\s*par\b|\bpar\b", str(col), flags=re.I)]
+        country_cols = [col for col in df.columns if re.search(r"\b(country|nation|nationality)\b", str(col), flags=re.I)]
+        if not par_cols or not country_cols:
+            return None
+        over_rows = []
+        for _, row in df.iterrows():
+            value = _numeric_measure_value(row[par_cols[0]])
+            if value is not None and value > 0:
+                over_rows.append(row)
+        if not over_rows:
+            return None
+        country_count = sum(1 for row in over_rows if _value_matches_phrase(row[country_cols[0]], country_phrase))
+        return "true" if country_count > len(over_rows) / 2 else "false"
+
+    @staticmethod
+    def _tabfact_only_column_value_not_count_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^only\s+(.+?)\s+(\d+)\s+be\s+not\s+list\s+(\d+)\s+time[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        column_phrase, target_text, count_text = match.groups()
+        target_value = target_text
+        expected_count = int(count_text)
+        target_col = (
+            TableQAPipeline._select_column_by_semantic_tokens(df, column_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, column_phrase)
+        )
+        if target_col is None:
+            return None
+        counts: Dict[str, int] = {}
+        originals: Dict[str, str] = {}
+        for value in df[target_col].tolist():
+            key = _loose_text_key(value)
+            if not key:
+                continue
+            counts[key] = counts.get(key, 0) + 1
+            originals[key] = str(value)
+        exceptions = [key for key, count in counts.items() if count != expected_count]
+        if len(exceptions) != 1:
+            return "false"
+        return "true" if _value_matches_phrase(originals[exceptions[0]], target_value) else "false"
+
+    @staticmethod
+    def _tabfact_only_not_from_countries_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+only\s+player\s+not\s+from\s+(.+?)\s+or\s+(.+?)\s+be\s+from\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_country, right_country, expected_country = match.groups()
+        country_cols = [col for col in df.columns if re.search(r"\b(country|nation|nationality)\b", str(col), flags=re.I)]
+        if not country_cols:
+            return None
+        country_col = country_cols[0]
+        remaining = [
+            row
+            for _, row in df.iterrows()
+            if not _value_matches_phrase(row[country_col], left_country)
+            and not _value_matches_phrase(row[country_col], right_country)
+        ]
+        if len(remaining) != 1:
+            return "false"
+        return "true" if _value_matches_phrase(remaining[0][country_col], expected_country) else "false"
+
+    @staticmethod
+    def _tabfact_every_player_source_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        if not re.search(r"^every\s+player\s+come\s+from\s+either\s+a\s+college\s+program\s+or\s+a\s+junior\s*/\s*club\s+team[?.]?$", question or "", flags=re.I):
+            return None
+        source_cols = [col for col in df.columns if re.search(r"\bcollege\b.*\bjunior\b.*\bclub\b|\bteam\b.*\bleague\b", str(col), flags=re.I)]
+        if not source_cols:
+            return None
+        values = TableQAPipeline._wtq_non_summary_rows(df)[source_cols[0]].tolist()
+        return "true" if values and all(not _is_missing_marker(value) and _loose_text_key(value) for value in values) else "false"
+
+    @staticmethod
+    def _tabfact_opponent_attendance_comparison_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+game\s+against\s+(.+?)\s+have\s+a\s+higher\s+attendance\s+than\s+the\s+game\s+against\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_opponent, right_opponent = match.groups()
+        team_cols = [col for col in df.columns if re.search(r"\b(team|opponent)\b", str(col), flags=re.I)]
+        attendance_cols = [col for col in df.columns if re.search(r"\battendance\b", str(col), flags=re.I)]
+        if not team_cols or not attendance_cols:
+            return None
+
+        def attendance_for(opponent: str) -> Optional[float]:
+            rows = _find_rows_for_entity_across_row(df, opponent, team_cols)
+            if len(rows) != 1:
+                return None
+            return _numeric_measure_value(rows[0][attendance_cols[0]])
+
+        left_value = attendance_for(left_opponent)
+        right_value = attendance_for(right_opponent)
+        if left_value is None or right_value is None:
+            return None
+        return "true" if left_value > right_value else "false"
+
+    @staticmethod
+    def _tabfact_extreme_score_difference_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^there\s+be\s+a\s+([\d.]+)\s+point\s+difference\s+between\s+the\s+highest\s+score\s+"
+            r"\(([\d.]+)\)\s+and\s+the\s+lowest\s+score\s+\(([\d.]+)\)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        expected_text, high_text, low_text = match.groups()
+        points_col = _select_numeric_measure_column_by_phrase(df, "points score")
+        if points_col is None:
+            return None
+        series = _numeric_measure_series(df, points_col).dropna()
+        if series.empty:
+            return None
+        expected = float(expected_text)
+        stated_high = float(high_text)
+        stated_low = float(low_text)
+        observed_high = float(series.max())
+        observed_low = float(series.min())
+        return "true" if (
+            abs(observed_high - stated_high) <= 1e-6
+            and abs(observed_low - stated_low) <= 1e-6
+            and abs((observed_high - observed_low) - expected) <= 1e-6
+        ) else "false"
+
+    @staticmethod
+    def _tabfact_entity_metric_more_than_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^the\s+(.+?)\s+have\s+(\d+)\s+more\s+(.+?)\s+than\s+the\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        left_entity, diff_text, metric_phrase, right_entity = match.groups()
+        metric_col = (
+            _select_numeric_measure_column_by_phrase(df, metric_phrase)
+            or TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
+        )
+        if metric_col is None:
+            return None
+        entity_cols = [col for col in df.columns if col != metric_col]
+        left_rows = _find_rows_for_entity_across_row(df, left_entity, entity_cols)
+        right_rows = _find_rows_for_entity_across_row(df, right_entity, entity_cols)
+        if len(left_rows) != 1 or len(right_rows) != 1:
+            return None
+        left_value = _numeric_measure_value(left_rows[0][metric_col])
+        right_value = _numeric_measure_value(right_rows[0][metric_col])
+        if left_value is None or right_value is None:
+            return None
+        return "true" if abs((left_value - right_value) - int(diff_text)) <= 1e-6 else "false"
+
+    @staticmethod
+    def _tabfact_second_highest_metric_entity_answer(question: str, df: pd.DataFrame) -> Optional[str]:
+        match = re.search(
+            r"^for\s+(.+?)\s*,\s*(.+?)\s+be\s+the\s+tournament\s+with\s+his\s+second\s+highest\s+number\s+of\s+(.+?)[?.]?$",
+            question or "",
+            flags=re.I,
+        )
+        if not match:
+            return None
+        _, entity_phrase, metric_phrase = match.groups()
+        metric_col = (
+            _select_numeric_measure_column_by_phrase(df, metric_phrase)
+            or TableQAPipeline._select_column_by_semantic_tokens(df, metric_phrase)
+            or TableQAPipeline._select_column_by_tokens(df, metric_phrase)
+        )
+        if metric_col is None:
+            return None
+        entity_cols = [col for col in df.columns if col != metric_col]
+        if not entity_cols:
+            return None
+        rows = []
+        for _, row in TableQAPipeline._wtq_non_summary_rows(df).iterrows():
+            value = _numeric_measure_value(row[metric_col])
+            if value is None:
+                continue
+            label = next((row[col] for col in entity_cols if not _is_missing_marker(row[col]) and _loose_text_key(row[col])), None)
+            if label is not None:
+                rows.append((value, label))
+        if len(rows) < 2:
+            return None
+        rows.sort(key=lambda item: item[0], reverse=True)
+        second_value = sorted({value for value, _ in rows}, reverse=True)[1]
+        second_labels = [label for value, label in rows if abs(value - second_value) <= 1e-6]
+        return "true" if any(_value_matches_phrase(label, entity_phrase) for label in second_labels) else "false"
+
+    @staticmethod
     def _tabfact_entity_attribute_answer(question: str, df: pd.DataFrame) -> Optional[str]:
         match = re.search(
             r"^(?:the\s+)?(.+?)\s+(?:have|has|had|be|is|are|was|were)\s+(?:an?\s+)?(.+?)[?.]?$",
@@ -9115,6 +9381,46 @@ class TableQAPipeline:
             (
                 "TabFact min/max numeric difference checked deterministically.",
                 self._tabfact_minmax_numeric_difference_answer(question, df),
+            ),
+            (
+                "TabFact tied-rank country count checked deterministically.",
+                self._tabfact_rank_country_count_answer(question, df),
+            ),
+            (
+                "TabFact unique represented-country count checked deterministically.",
+                self._tabfact_unique_country_count_answer(question, df),
+            ),
+            (
+                "TabFact over-par country majority checked deterministically.",
+                self._tabfact_majority_over_par_country_answer(question, df),
+            ),
+            (
+                "TabFact only column value with non-target frequency checked deterministically.",
+                self._tabfact_only_column_value_not_count_answer(question, df),
+            ),
+            (
+                "TabFact only-not-from-country pair checked deterministically.",
+                self._tabfact_only_not_from_countries_answer(question, df),
+            ),
+            (
+                "TabFact every-player source column checked deterministically.",
+                self._tabfact_every_player_source_answer(question, df),
+            ),
+            (
+                "TabFact opponent attendance comparison checked deterministically.",
+                self._tabfact_opponent_attendance_comparison_answer(question, df),
+            ),
+            (
+                "TabFact extreme score difference checked deterministically.",
+                self._tabfact_extreme_score_difference_answer(question, df),
+            ),
+            (
+                "TabFact entity metric difference checked deterministically.",
+                self._tabfact_entity_metric_more_than_answer(question, df),
+            ),
+            (
+                "TabFact second-highest metric entity checked deterministically.",
+                self._tabfact_second_highest_metric_entity_answer(question, df),
             ),
             (
                 "TabFact same-row cell mentions checked deterministically.",
