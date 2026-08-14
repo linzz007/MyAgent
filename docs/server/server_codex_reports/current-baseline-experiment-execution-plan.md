@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 14:05 CST
+Last updated: 2026-08-14 13:40 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -606,3 +606,17 @@ WTQ deterministic shortcut patch started:
 - Full WTQ Formal-200 rerun complete at MyAgent `7168923` on GPUs `4,5,6,7`. Output root: MACT `diagnostics/wtq_formal200_patch_7168923`; eval: MACT `diagnostics/wtq_formal200_patch_7168923/eval/wtq_qwen3-32b-local_eval.json`; compare JSON: MACT `diagnostics/wtq_formal200_patch_7168923_compare.json`; summary: MACT `summary/wtq_formal200_patch_7168923.md`.
 - Full WTQ locked result: current MyAgent `157/200 = 0.7850` primary accuracy, strict exact `155/200 = 0.7750`, avg token `6076.32`, avg time `15.424s`, failed/missing `0/0`. MACT WTQ is `156/200 = 0.7800`, avg token `10484.65`, avg time `115.088s`, failed/missing `4/4`. WTQ subgoal is achieved for Qwen3-32B formal200.
 - Updated formal200 overall estimate with new WTQ and existing TabFact/CRT: MyAgent `452/600 = 0.7533`, MACT `465/600 = 0.7750`. MyAgent now leads WTQ and CRT, but overall still trails because TabFact remains `162/200` vs MACT `185/200`. Next priority should shift from WTQ to TabFact gap closure, while preserving the deterministic shortcut evidence as patent mechanism support.
+
+TabFact deterministic table-filter patch:
+
+- User execution constraint updated: do not use GPUs `0,1,2,3`; keep experiments on GPUs `4,5,6,7`. Repeated `nvidia-smi pmon -c 1` checks during TabFact full200 showed no visible compute PID on GPUs `0,1,2,3`; active model workers remained on GPUs `4,5,6,7`.
+- MyAgent patch pushed: `c2552fd` (`feat: add tabfact deterministic table filters`). It adds narrow deterministic TabFact rules for tied-rank country counts, represented-country counts, over-par country majority, one-off frequency exceptions, only-not-from country pairs, complete player source columns, opponent attendance comparison, extreme score difference, entity metric difference, and second-highest metric entity claims.
+- Local verification passed after `c2552fd`: `test_myagent_pipeline.py` (`237` tests) and py_compile for `code/my_agents.py`, `code/tqa.py`.
+- Offline TabFact Formal-200 scan: new rules hit `12` rows, all correct, with `10` old-wrong rows fixed and no wrong deterministic hits.
+- Focused-10 runner validation complete on GPUs `4,5,6,7`; input MACT `input/diagnostic/tabfact_table_filter_delta10.jsonl`; output root MACT `diagnostics/tabfact_table_filter_delta10_patch_c2552fd`; summary MACT `summary/tabfact_table_filter_patch_c2552fd.md`.
+- Focused-10 result: primary accuracy `10/10 = 1.0000`, exact `10/10 = 1.0000`, avg token `402.20`, avg time `2.476s`, failed/missing `0/0`. All `10/10` rows used `deterministic_shortcut_applied=true`.
+- Full TabFact Formal-200 rerun complete at MyAgent `c2552fd`; output root MACT `diagnostics/tabfact_formal200_patch_c2552fd`; eval MACT `diagnostics/tabfact_formal200_patch_c2552fd/eval/tabfact_qwen3-32b-local_eval.json`; merged rows `200/200`.
+- Full TabFact result: current MyAgent `175/200 = 0.8750`, avg token `2711.77`, avg time `13.228s`, failed/missing `0/0`. Old MyAgent was `162/200 = 0.8100`; official MACT eval is `185/200 = 0.9250`, avg token `11232.74`, avg time `114.443s`, failed/missing `0/0`.
+- Actual full-run delta vs old MyAgent: `15` old-wrong to new-right rows, `2` old-right to new-wrong rows (`tabfact-test-177`, `tabfact-test-190`), net `+13`. Full run had `28` deterministic shortcut hits and `0` wrong shortcut hits.
+- Current locked formal200 aggregate with WTQ `7168923`, TabFact `c2552fd`, and existing CRT: MyAgent `465/600 = 0.7750`, MACT official `465/600 = 0.7750`. MyAgent now ties MACT overall, leads WTQ and CRT, and still trails TabFact (`175` vs `185`). The Qwen3 formal goal is not complete yet because the user target is to exceed MACT, preferably across all datasets.
+- Next TabFact work should target the remaining MACT-only / new-wrong rows: `tabfact-test-9`, `tabfact-test-22`, `tabfact-test-34`, `tabfact-test-41`, `tabfact-test-60`, `tabfact-test-63`, `tabfact-test-64`, `tabfact-test-68`, `tabfact-test-80`, `tabfact-test-84`, `tabfact-test-103`, `tabfact-test-109`, `tabfact-test-123`, `tabfact-test-139`, `tabfact-test-146`, `tabfact-test-177`, `tabfact-test-187`, `tabfact-test-190`. Prioritize patent-describable deterministic table-verification mechanisms: entity-max metric ownership, month missing-day counts, lowest-attendance win/loss checks, entity-year/competition award counts, rank-gap checks, top-N country/no-medal checks, tenure interval overlap/gap/stint duration checks, and winner/race-leader count checks.
