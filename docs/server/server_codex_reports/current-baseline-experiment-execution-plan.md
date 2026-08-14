@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 12:32 CST
+Last updated: 2026-08-14 12:58 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -591,4 +591,7 @@ WTQ deterministic shortcut patch started:
 - Focused-6 runner validation complete on GPUs `4,5,6,7`, using endpoints `8000` and `8001`. Input: MACT `input/diagnostic/wtq_shortcut_delta6.jsonl`; output root: MACT `diagnostics/wtq_shortcut_delta6_patch_d646885`; summary: MACT `summary/wtq_shortcut_patch_d646885.md`.
 - Focused-6 result: WTQ primary accuracy `6/6 = 1.0000`, strict exact `5/6 = 0.8333`, avg token `3858.33`, avg time `4.480s`, failed/missing `0/0`. Fixed rows: `nu-27`, `nu-66`, `nu-78`, `nu-100`, `nu-146`, `nu-180`.
 - Decision: accept this patch as a valid low-token WTQ mechanism improvement. It raises the expected WTQ formal200 result from `141/200 = 0.7050` to about `147/200 = 0.7350`, and expected total formal200 from `436/600 = 0.7267` to about `442/600 = 0.7367`; this is still below MACT overall `465/600 = 0.7750`, so the patent-data goal is not complete yet.
-- Next validation: run patched MyAgent on full WTQ Formal-200 to confirm the offline `+6 / 0 regression` estimate under the real runner, then continue broader WTQ/TabFact mechanism work.
+- Full WTQ Formal-200 validation complete on GPUs `4,5,6,7`; repeated `nvidia-smi pmon -c 1` checks showed no visible compute PID on GPUs `0,1,2,3`. Output root: MACT `diagnostics/wtq_formal200_patch_f102b96`; eval: MACT `diagnostics/wtq_formal200_patch_f102b96/eval/wtq_qwen3-32b-local_eval.json`; compare JSON: MACT `diagnostics/wtq_formal200_patch_f102b96_compare.json`; summary: MACT `summary/wtq_formal200_patch_f102b96.md`.
+- Full WTQ result: patched MyAgent `147/200 = 0.7350` primary accuracy, strict exact `145/200 = 0.7250`, avg token `6228.74`, avg time `16.140s`, failed/missing `0/0`. Old MyAgent WTQ was `141/200 = 0.7050`; MACT WTQ was `156/200 = 0.7800`, avg token `10698.62`, avg time `115.088s`, failed/missing `4/4`.
+- Actual full-run delta: net `+6` primary-correct rows, made of `8` old-wrong to patched-right rows (`nu-27`, `nu-66`, `nu-78`, `nu-100`, `nu-129`, `nu-146`, `nu-180`, `nu-188`) and `2` old-right to patched-wrong rows (`nu-152`, `nu-160`). The two regressions did not use the new deterministic shortcut path, so they are non-shortcut runner/model-path variance rather than direct shortcut failures.
+- Current status after WTQ patch: keep the patch, but the patent-data goal is still incomplete. Expected total formal200 becomes approximately `442/600 = 0.7367` versus MACT `465/600 = 0.7750`; WTQ gap is now `9` rows (`147` vs `156`). Next work should target remaining WTQ MACT-only rows and the TabFact gap, starting with `nu-152`/`nu-160` regressions and high-frequency count, temporal, negation/exclusion, comparison/superlative categories.
