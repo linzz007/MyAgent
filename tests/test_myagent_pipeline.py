@@ -4451,7 +4451,7 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertEqual(reason, "")
         self.assertFalse(forced)
 
-    def test_tabfact_compound_high_risk_label_runs_strong_verifier(self):
+    def test_tabfact_compound_high_risk_label_does_not_auto_run_strong_verifier(self):
         df = pd.DataFrame({"team": ["A", "B"], "wins": [3, 2], "year": [2019, 2020]})
         fake = FakePipelineLLM(semantic_score=0.9, rows=["A", "B"], cols=["team", "wins", "year"])
         tracker = LLMCallTracker(fake)
@@ -4483,8 +4483,8 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             SimpleNamespace(requires_fallback=False, reason="agreement"),
         )
 
-        self.assertTrue(should_verify)
-        self.assertEqual(reason, "tabfact_compound_closed_choice_verification")
+        self.assertFalse(should_verify)
+        self.assertEqual(reason, "")
         self.assertFalse(forced)
 
     def test_tabfact_candidate_fallback_still_forces_strong_verifier(self):

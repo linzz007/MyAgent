@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 11:47 CST
+Last updated: 2026-08-14 12:05 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -579,3 +579,5 @@ TabFact focused patch started:
 - Trigger-71 validation complete: old MyAgent `50/71 = 0.7042`; patched MyAgent `51/71 = 0.7183`; MACT `65/71 = 0.9155`; old-wrong to new-right `8`, old-right to new-wrong `7`; avg token `16961.89`, avg time `33.425s`, failed/missing `0/0`.
 - Interpretation: this patch is directionally positive but too weak and too expensive as a final Formal-200 optimization. It must not be expanded blindly. Next required control: run the same 71 rows with `--disable-strong-verification` to separate true strong-verification value from rerun variance, then design a safer acceptance gate for TabFact verifier overrides.
 - No-strong trigger-71 control started at MACT `diagnostics/tabfact_compound71_no_strong_control_ed6ceca/`; checkpoint reached `20/71` rows by 2026-08-14 11:47 CST.
+- No-strong trigger-71 control complete: no-strong `51/71 = 0.7183`, strong-trigger `51/71 = 0.7183`; strong recovers `7` no-strong wrong rows but regresses `7` no-strong correct rows; no-strong avg token `3482.51` and avg time `18.128s`, strong-trigger avg token `16961.89` and avg time `33.425s`.
+- Decision: reverted the TabFact compound strong-trigger code path. It is useful negative evidence for the patent report, but it is not a production/formal200 optimization because it has no net accuracy gain over no-strong and costs far more tokens. Post-revert verification passed: `test_myagent_pipeline.py` (`216` tests), `test_evaluate_results.py` (`15` tests), and py_compile for `code/my_agents.py`, `code/tqa.py`, `code/evaluate_results.py`, `scripts/server/run_sharded_tqa.py`.

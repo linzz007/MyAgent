@@ -9398,23 +9398,9 @@ class TableQAPipeline:
                 return True, "wtq_temporal_reasoning", False
         if dataset == "tabfact":
             if state.answer_contract.kind == "label":
-                compound_tags = tags & {
-                    "temporal",
-                    "negation_logic",
-                    "superlative_order",
-                    "comparison",
-                    "arithmetic",
-                    "count",
-                }
-                if (
-                    "closed_choice" in tags
-                    and state.risk_assessment
-                    and state.risk_assessment.level == "high"
-                    and len(compound_tags) >= 2
-                ):
-                    return True, "tabfact_compound_closed_choice_verification", False
-                # TabFact binary labels are otherwise kept on the cheaper verifier path:
-                # broad strong verification is expensive and can destabilize simple labels.
+                # TabFact binary labels stay on the cheaper verifier path unless
+                # fallback/disagreement forced verification above. Trigger-71
+                # diagnostics showed broad unforced overrides add cost without net gain.
                 return False, "", False
         if dataset == "crt":
             if state.answer_contract.kind == "label" and tags & {
