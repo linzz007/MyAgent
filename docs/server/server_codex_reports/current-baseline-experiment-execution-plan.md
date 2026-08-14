@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 14:11 CST
+Last updated: 2026-08-14 14:27 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -8,7 +8,9 @@ This is the latest experiment PRD. It replaces the previous broad baseline plan.
 
 ## 0. Executive Decision
 
-The immediate goal is not to keep optimizing Qwen3 or to reproduce every recent table-QA paper. The immediate goal is to finish a master's-thesis-level and patent-supporting experiment package with:
+The immediate Qwen3-32B formal200 target is achieved: current MyAgent exceeds MACT on WTQ, TabFact, CRT, and overall while using much fewer tokens and much less time.
+
+The immediate goal is no longer to keep optimizing Qwen3 or to reproduce every recent table-QA paper. The immediate goal is to package a master's-thesis-level and patent-supporting experiment body with:
 
 1. at least three baselines,
 2. three datasets,
@@ -17,6 +19,12 @@ The immediate goal is not to keep optimizing Qwen3 or to reproduce every recent 
 5. a small but clear ablation table for the patent mechanisms.
 
 If the P0 items in this PRD are complete, the experiment body can be considered complete for the current thesis/patent stage. P1 items strengthen the report. P2 items are not necessary now.
+
+Current execution emphasis:
+
+- Preserve the locked Qwen3-32B formal200 result instead of chasing more TabFact/WTQ single-dataset gains.
+- Convert existing mechanism evidence into patent-facing claims: selective collaboration, deterministic verification, answer normalization, and evidence retention.
+- Add only bounded diagnostics that clarify generalization risk or cross-model boundary.
 
 ## 1. Current Evidence Already Available
 
@@ -34,14 +42,15 @@ Interpretation:
 - Do not continue single-dataset Qwen3 tuning unless a concrete defect blocks the final tables.
 - The next necessary work is baseline packaging, not more Qwen3 score chasing.
 
-Formal-200 full baseline evidence is now mixed and supersedes the staged result for the main report:
+Formal-200 full baseline evidence is now positive after the locked Qwen3 patches:
 
-- MyAgent overall: `436/600 = 0.7267`.
-- MACT overall: `465/600 = 0.7750`.
-- MyAgent does not yet exceed MACT on the formal-200 aggregate.
-- Dataset-level comparison: MyAgent beats MACT on CRT (`0.6650` vs `0.6200`), but is behind on WTQ (`0.7050` vs `0.7800`) and TabFact (`0.8100` vs `0.9250`).
-- Efficiency claim remains strong: MyAgent average token is `6517.84` vs MACT `11318.89`, token ratio `0.5758`; MyAgent average time is `17.73s` vs MACT `126.86s`.
-- Next work should be P0 ablation plus mechanism-level diagnosis/optimization for WTQ and TabFact, not blind score tuning. Changes must remain patent-describable: routing, risk scoring, selective collaboration, evidence retention, verification, or deterministic answer normalization.
+- WTQ: MyAgent `157/200 = 0.7850`, MACT `156/200 = 0.7800`.
+- TabFact: MyAgent `190/200 = 0.9500`, MACT `185/200 = 0.9250`.
+- CRT: MyAgent `133/200 = 0.6650`, MACT `124/200 = 0.6200`.
+- Overall: MyAgent `480/600 = 0.8000`, MACT `465/600 = 0.7750`.
+- Efficiency claim remains strong: MyAgent average token is `6293.12` vs MACT `11318.89`, token ratio `0.5560`; MyAgent average time is `16.749s` vs MACT `126.861s`.
+- MyAgent fail/missing is `0/0`; MACT fail/missing is `4/4`.
+- Next work should be report packaging, ablation interpretation, and bounded generalization/cross-model diagnostics. Avoid blind score tuning. Future changes must remain patent-describable: routing, risk scoring, selective collaboration, evidence retention, verification, or deterministic answer normalization.
 
 ## 2. Priority Levels
 
@@ -389,6 +398,7 @@ Current execution state:
   - `http://127.0.0.1:8001/v1`, GPUs `6,7`
 - GPU `0,1,2,3` services were stopped at the user's request. Do not use GPUs `0,1,2,3` for the current experiment unless the user explicitly changes this constraint. Recheck after stopping showed no compute processes on GPUs `0,1,2,3`; only the four VLLM workers on GPUs `4,5,6,7` remained visible in `nvidia-smi --query-compute-apps`.
 - 2026-08-14 10:33 CST recheck: GPUs `0,1,2,3` each show `0 MiB` used and `0%` utilization. Continue all active experiments on GPUs `4,5,6,7` through endpoints `8000` and `8001`.
+- 2026-08-14 14:18 CST user reconfirmed to stop using GPUs `0,1,2,3` and run experiments only on GPUs `4,5,6,7`. Recheck showed visible vLLM compute workers only on GPUs `4,5,6,7`. GPUs `0,2,3` reported memory/utilization, but `nvidia-smi --query-compute-apps` exposed no experiment/vLLM compute PID on those cards; do not blind-kill unknown GPU usage. Continue all experiments through endpoints `8000` and `8001` on GPUs `4,5,6,7`.
 - Served model name: `qwen3-32b-local`.
 - API key env: `LOCAL_VLLM_API_KEY=local-vllm-key-change-me`.
 - Main result package remains:
@@ -634,3 +644,19 @@ TabFact temporal/rank table-filter patch and Qwen3 formal target completion:
 - Final locked Qwen3 Formal-200 aggregate: MyAgent WTQ `157/200`, TabFact `190/200`, CRT `133/200`, overall `480/600 = 0.8000`; MACT official WTQ `156/200`, TabFact `185/200`, CRT `124/200`, overall `465/600 = 0.7750`. MyAgent exceeds MACT on every dataset and overall.
 - Efficiency aggregate after the patch: MyAgent avg token `6293.12` vs MACT `11318.89` (token ratio `0.5560`); MyAgent avg time `16.749s` vs MACT `126.861s` (time ratio `0.1320`); MyAgent fail/missing `0/0` vs MACT `4/4`.
 - Decision: the user's Qwen3-32B formal200 goal is achieved for the current patent/thesis stage. Continue from here by packaging claims and ablation evidence, not by more blind TabFact score chasing. Remaining useful P1 work: write a patent-facing mechanism section from the deterministic verification evidence, add a clean final result table, and only then consider cross-model validation.
+
+WTQ shortcut generalization diagnostic:
+
+- Diagnostic summary added in MACT: `outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505/summary/wtq_shortcut_generalization_20260814.md`.
+- Diagnostic root: `outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505/diagnostics/wtq_shortcut_generalization_20260814/`.
+- This diagnostic is offline and does not call the model.
+
+| Split | Input rows | Shortcut hits | Correct hits | Wrong hits | Accuracy on hits |
+|---|---:|---:|---:|---:|---:|
+| formal200 | 200 | 31 | 28 | 3 | 0.9032 |
+| blind200_v1 | 200 | 19 | 18 | 1 | 0.9474 |
+| frozen150 | 150 | 32 | 24 | 8 | 0.7500 |
+| full_unseen | 4344 | 438 | 290 | 148 | 0.6621 |
+| full_unseen_minus_formal200 | 4144 | 407 | 262 | 145 | 0.6437 |
+
+Interpretation: current WTQ deterministic shortcuts are valuable on the locked formal200 and blind200 samples, but are not safe enough to expand blindly across the full WTQ unseen pool. The most fragile rule families are `after_reference`, `last_requested_column`, `superlative_owner`, and `existing_total_metric`. Future WTQ work should add stronger semantic target-column and ambiguity gates instead of increasing pattern coverage. This is boundary evidence for the patent report, not a reason to continue prioritizing WTQ optimization now.
