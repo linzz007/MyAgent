@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 10:39 CST
+Last updated: 2026-08-14 10:45 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -548,3 +548,21 @@ No-deterministic-shortcuts ablation result:
 | Overall | 150 | 106/150 = 0.7067 | 105/150 = 0.7000 | 7464.50 | 22.227s | 0/0 |
 
 Ablation interpretation: `legacy50` and `no_strong50` have identical accuracy on the current gate50 split and near-identical token/time. This split does not yet isolate the value of strong verification; the next diagnostic should inspect whether strong verification was triggered on these rows, or select high-risk rows where it is expected to activate. In contrast, disabling deterministic shortcuts is strongly negative on the same 150 rows: primary overall drops from `116/150 = 0.7733` to `106/150 = 0.7067`, TabFact drops from `0.86` to `0.72`, CRT drops from `0.80` to `0.72`, and average token rises from about `2516` to about `7465`. This is currently the strongest P0 mechanism evidence for patent writing: deterministic shortcuts / answer normalization reduce unnecessary LLM work and protect accuracy on TabFact and CRT.
+
+Formal-200 WTQ/TabFact error diagnosis:
+
+Generated files:
+
+- MACT summary: `outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505/summary/wtq_tabfact_diagnosis.md`
+- MACT JSON: `outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505/diagnostics/formal200_wtq_tabfact_error_diagnosis.json`
+- Paired compare JSON: `outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505/diagnostics/formal200_myagent_vs_mact_paired_compare.json`
+
+Key diagnosis:
+
+| Dataset | MyAgent correct | MACT correct | Both correct | MyAgent-only | MACT-only | Both wrong | Net gap |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| WTQ | 141/200 | 156/200 | 125 | 16 | 31 | 28 | 15 |
+| TabFact | 162/200 | 185/200 | 154 | 8 | 31 | 7 | 23 |
+
+- WTQ gap is broad: most MACT-only rows are high-risk/complex, with top tags `count`, `temporal`, `negation_logic`, `superlative_order`, and `arithmetic`. Strong verification already applied on `27/31` MACT-only rows, so the next WTQ fix should focus on evidence selection, entity canonicalization, tied answers, and temporal/count normalization rather than merely turning on more verification.
+- TabFact gap is concentrated: all `31/31` MACT-only rows are `closed_choice`, all are `COMPLEX`, and all have `strong_verification_applied=false`. This is the clearest next patch target: trigger selective strong verification for high-risk compound TabFact claims, especially temporal / negation / superlative closed-choice statements, then validate first on the diagnostic MACT-only rows.
