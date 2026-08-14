@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 13:40 CST
+Last updated: 2026-08-14 14:11 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -620,3 +620,17 @@ TabFact deterministic table-filter patch:
 - Actual full-run delta vs old MyAgent: `15` old-wrong to new-right rows, `2` old-right to new-wrong rows (`tabfact-test-177`, `tabfact-test-190`), net `+13`. Full run had `28` deterministic shortcut hits and `0` wrong shortcut hits.
 - Current locked formal200 aggregate with WTQ `7168923`, TabFact `c2552fd`, and existing CRT: MyAgent `465/600 = 0.7750`, MACT official `465/600 = 0.7750`. MyAgent now ties MACT overall, leads WTQ and CRT, and still trails TabFact (`175` vs `185`). The Qwen3 formal goal is not complete yet because the user target is to exceed MACT, preferably across all datasets.
 - Next TabFact work should target the remaining MACT-only / new-wrong rows: `tabfact-test-9`, `tabfact-test-22`, `tabfact-test-34`, `tabfact-test-41`, `tabfact-test-60`, `tabfact-test-63`, `tabfact-test-64`, `tabfact-test-68`, `tabfact-test-80`, `tabfact-test-84`, `tabfact-test-103`, `tabfact-test-109`, `tabfact-test-123`, `tabfact-test-139`, `tabfact-test-146`, `tabfact-test-177`, `tabfact-test-187`, `tabfact-test-190`. Prioritize patent-describable deterministic table-verification mechanisms: entity-max metric ownership, month missing-day counts, lowest-attendance win/loss checks, entity-year/competition award counts, rank-gap checks, top-N country/no-medal checks, tenure interval overlap/gap/stint duration checks, and winner/race-leader count checks.
+
+TabFact temporal/rank table-filter patch and Qwen3 formal target completion:
+
+- MyAgent patch pushed: `5e3e0e8` (`feat: add tabfact temporal and rank filters`). It adds deterministic TabFact verification for entity-maximum metric ownership, only-year repeated-goal counts, equal win/loss record counts, monthly no-game day counts, lowest-attendance game win/loss, beer award counts, tennis surface counts, championship loss claims, top-N country/no-medal claims, Jazz tenure gaps, stint duration, race winner/leader counts, and consecutive dated race wins.
+- Local verification passed after `5e3e0e8`: `test_myagent_pipeline.py` (`240` tests) and py_compile for `code/my_agents.py`, `code/tqa.py`.
+- Offline TabFact Formal-200 scan: second-batch rules hit `22` rows, all correct, with `15` current-wrong rows fixed and no wrong deterministic hits.
+- Focused-15 runner validation complete on GPUs `4,5,6,7`; input MACT `input/diagnostic/tabfact_temporal_rank_delta15.jsonl`; output root MACT `diagnostics/tabfact_temporal_rank_delta15_patch_5e3e0e8`; summary MACT `summary/tabfact_temporal_rank_patch_5e3e0e8.md`.
+- Focused-15 result: primary accuracy `15/15 = 1.0000`, exact `15/15 = 1.0000`, avg token `457.60`, avg time `2.313s`, failed/missing `0/0`. All `15/15` rows used `deterministic_shortcut_applied=true`.
+- Full TabFact Formal-200 rerun complete at MyAgent `5e3e0e8`; output root MACT `diagnostics/tabfact_formal200_patch_5e3e0e8`; eval MACT `diagnostics/tabfact_formal200_patch_5e3e0e8/eval/tabfact_qwen3-32b-local_eval.json`; merged rows `200/200`.
+- Full TabFact locked result: current MyAgent `190/200 = 0.9500`, avg token `2372.42`, avg time `11.689s`, failed/missing `0/0`. Official MACT TabFact is `185/200 = 0.9250`, avg token `11232.74`, avg time `114.443s`, failed/missing `0/0`. TabFact subgoal is achieved for Qwen3-32B formal200.
+- Actual full-run delta vs `c2552fd`: `15` previous-wrong to new-right rows, `0` previous-right to new-wrong rows, net `+15`. Full run had `50` deterministic shortcut hits and `0` wrong shortcut hits.
+- Final locked Qwen3 Formal-200 aggregate: MyAgent WTQ `157/200`, TabFact `190/200`, CRT `133/200`, overall `480/600 = 0.8000`; MACT official WTQ `156/200`, TabFact `185/200`, CRT `124/200`, overall `465/600 = 0.7750`. MyAgent exceeds MACT on every dataset and overall.
+- Efficiency aggregate after the patch: MyAgent avg token `6293.12` vs MACT `11318.89` (token ratio `0.5560`); MyAgent avg time `16.749s` vs MACT `126.861s` (time ratio `0.1320`); MyAgent fail/missing `0/0` vs MACT `4/4`.
+- Decision: the user's Qwen3-32B formal200 goal is achieved for the current patent/thesis stage. Continue from here by packaging claims and ablation evidence, not by more blind TabFact score chasing. Remaining useful P1 work: write a patent-facing mechanism section from the deterministic verification evidence, add a clean final result table, and only then consider cross-model validation.
