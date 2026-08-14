@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 13:12 CST
+Last updated: 2026-08-14 13:30 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -599,3 +599,7 @@ WTQ deterministic shortcut patch started:
 - Local verification passed after `7e18c84`: `test_myagent_pipeline.py` (`224` tests) and py_compile for `code/my_agents.py`, `code/tqa.py`.
 - Offline WTQ formal200 scan after `7e18c84`: new rules only hit `nu-152` and `nu-160`, both correct. Focused-2 runner validation complete on GPUs `4,5,6,7`; input MACT `input/diagnostic/wtq_count_filter_regression2.jsonl`; output root MACT `diagnostics/wtq_count_filter_regression2_patch_7e18c84`; summary MACT `summary/wtq_count_filter_patch_7e18c84.md`.
 - Focused-2 result: primary accuracy `2/2 = 1.0000`, strict exact `2/2 = 1.0000`, avg token `3607.00`, avg time `6.339s`, failed/missing `0/0`. Expected WTQ if applied to the previous full run is `149/200 = 0.7450`, but avoid rerunning full WTQ200 after every two-row patch; batch the next full rerun with additional deterministic fixes to reduce server time and rerun variance.
+- WTQ table-filter patch pushed: MyAgent `cdc644c` (`feat: add wtq deterministic table filters`). It adds deterministic coverage for only-metric-value entity lookup, entity-filtered metric summation, listed-entity combined row counts, specific-date cutoff row counts, first metric-threshold date lookup, and column-value row counts.
+- Local verification passed after `cdc644c`: `test_myagent_pipeline.py` (`232` tests) and py_compile for `code/my_agents.py`, `code/tqa.py`.
+- Offline WTQ formal200 scan after `cdc644c`: new/extended rules only hit `8` rows and all are correct: `nu-18`, `nu-22`, `nu-73`, `nu-81`, `nu-94`, `nu-110`, `nu-142`, `nu-187`. Focused-8 runner validation complete on GPUs `4,5,6,7`; input MACT `input/diagnostic/wtq_table_filter_delta8.jsonl`; output root MACT `diagnostics/wtq_table_filter_delta8_patch_cdc644c`; summary MACT `summary/wtq_table_filter_patch_cdc644c.md`.
+- Focused-8 result: primary accuracy `8/8 = 1.0000`, strict exact `8/8 = 1.0000`, avg token `4398.00`, avg time `6.319s`, failed/missing `0/0`. If combined with previous validated patches, expected WTQ becomes `157/200 = 0.7850`, slightly above MACT WTQ `156/200 = 0.7800`; full WTQ200 rerun is still needed to lock the realized number because non-shortcut rows can vary across reruns.
