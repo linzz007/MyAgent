@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 13:30 CST
+Last updated: 2026-08-14 14:05 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -603,3 +603,6 @@ WTQ deterministic shortcut patch started:
 - Local verification passed after `cdc644c`: `test_myagent_pipeline.py` (`232` tests) and py_compile for `code/my_agents.py`, `code/tqa.py`.
 - Offline WTQ formal200 scan after `cdc644c`: new/extended rules only hit `8` rows and all are correct: `nu-18`, `nu-22`, `nu-73`, `nu-81`, `nu-94`, `nu-110`, `nu-142`, `nu-187`. Focused-8 runner validation complete on GPUs `4,5,6,7`; input MACT `input/diagnostic/wtq_table_filter_delta8.jsonl`; output root MACT `diagnostics/wtq_table_filter_delta8_patch_cdc644c`; summary MACT `summary/wtq_table_filter_patch_cdc644c.md`.
 - Focused-8 result: primary accuracy `8/8 = 1.0000`, strict exact `8/8 = 1.0000`, avg token `4398.00`, avg time `6.319s`, failed/missing `0/0`. If combined with previous validated patches, expected WTQ becomes `157/200 = 0.7850`, slightly above MACT WTQ `156/200 = 0.7800`; full WTQ200 rerun is still needed to lock the realized number because non-shortcut rows can vary across reruns.
+- Full WTQ Formal-200 rerun complete at MyAgent `7168923` on GPUs `4,5,6,7`. Output root: MACT `diagnostics/wtq_formal200_patch_7168923`; eval: MACT `diagnostics/wtq_formal200_patch_7168923/eval/wtq_qwen3-32b-local_eval.json`; compare JSON: MACT `diagnostics/wtq_formal200_patch_7168923_compare.json`; summary: MACT `summary/wtq_formal200_patch_7168923.md`.
+- Full WTQ locked result: current MyAgent `157/200 = 0.7850` primary accuracy, strict exact `155/200 = 0.7750`, avg token `6076.32`, avg time `15.424s`, failed/missing `0/0`. MACT WTQ is `156/200 = 0.7800`, avg token `10484.65`, avg time `115.088s`, failed/missing `4/4`. WTQ subgoal is achieved for Qwen3-32B formal200.
+- Updated formal200 overall estimate with new WTQ and existing TabFact/CRT: MyAgent `452/600 = 0.7533`, MACT `465/600 = 0.7750`. MyAgent now leads WTQ and CRT, but overall still trails because TabFact remains `162/200` vs MACT `185/200`. Next priority should shift from WTQ to TabFact gap closure, while preserving the deterministic shortcut evidence as patent mechanism support.
