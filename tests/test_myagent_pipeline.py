@@ -4415,7 +4415,7 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
             )
         )
 
-    def test_tabfact_high_risk_label_does_not_auto_run_strong_verifier(self):
+    def test_tabfact_single_cue_high_risk_label_does_not_auto_run_strong_verifier(self):
         df = pd.DataFrame({"team": ["A", "B"], "wins": [3, 2]})
         fake = FakePipelineLLM(semantic_score=0.9, rows=["A", "B"], cols=["team", "wins"])
         tracker = LLMCallTracker(fake)
@@ -4449,6 +4449,42 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertFalse(should_verify)
         self.assertEqual(reason, "")
+        self.assertFalse(forced)
+
+    def test_tabfact_compound_high_risk_label_runs_strong_verifier(self):
+        df = pd.DataFrame({"team": ["A", "B"], "wins": [3, 2], "year": [2019, 2020]})
+        fake = FakePipelineLLM(semantic_score=0.9, rows=["A", "B"], cols=["team", "wins", "year"])
+        tracker = LLMCallTracker(fake)
+        pipeline = TableQAPipeline(
+            router=RouterAgent(tracker),
+            planner=PlannerAgent(tracker),
+            calculator=Calculator(),
+            critic=CriticAgent(tracker),
+            final_answer_agent=FinalAnswerAgent(tracker),
+            enable_selective_collaboration=True,
+        )
+        state = TQASessionState(
+            question="after 2019, team A has more wins than team B",
+            df=df,
+            table_schema=_build_table_schema(df),
+            answer_mode="true_false",
+            answer_contract=infer_answer_contract(
+                "after 2019, team A has more wins than team B",
+                answer_mode="true_false",
+                reasoning_required=True,
+            ),
+            dataset_profile="tabfact",
+        )
+        state.problem_tags = ["comparison", "temporal", "closed_choice"]
+        state.risk_assessment = SimpleNamespace(level="high")
+
+        should_verify, reason, forced = pipeline._should_apply_strong_verification(
+            state,
+            SimpleNamespace(requires_fallback=False, reason="agreement"),
+        )
+
+        self.assertTrue(should_verify)
+        self.assertEqual(reason, "tabfact_compound_closed_choice_verification")
         self.assertFalse(forced)
 
     def test_tabfact_candidate_fallback_still_forces_strong_verifier(self):

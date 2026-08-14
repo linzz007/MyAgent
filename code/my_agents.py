@@ -9397,11 +9397,24 @@ class TableQAPipeline:
             if "temporal" in tags and tags & {"comparison", "arithmetic", "list_entity"}:
                 return True, "wtq_temporal_reasoning", False
         if dataset == "tabfact":
-            # TabFact true/false claims are already checked by the dataset-specific
-            # verifier in the legacy path. The high-risk verifier is reserved for
-            # forced fallback/disagreement cases above; otherwise it adds large
-            # prompt cost and can destabilize binary labels.
             if state.answer_contract.kind == "label":
+                compound_tags = tags & {
+                    "temporal",
+                    "negation_logic",
+                    "superlative_order",
+                    "comparison",
+                    "arithmetic",
+                    "count",
+                }
+                if (
+                    "closed_choice" in tags
+                    and state.risk_assessment
+                    and state.risk_assessment.level == "high"
+                    and len(compound_tags) >= 2
+                ):
+                    return True, "tabfact_compound_closed_choice_verification", False
+                # TabFact binary labels are otherwise kept on the cheaper verifier path:
+                # broad strong verification is expensive and can destabilize simple labels.
                 return False, "", False
         if dataset == "crt":
             if state.answer_contract.kind == "label" and tags & {

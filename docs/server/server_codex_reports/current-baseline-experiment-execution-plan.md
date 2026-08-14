@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 10:45 CST
+Last updated: 2026-08-14 10:52 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -566,3 +566,11 @@ Key diagnosis:
 
 - WTQ gap is broad: most MACT-only rows are high-risk/complex, with top tags `count`, `temporal`, `negation_logic`, `superlative_order`, and `arithmetic`. Strong verification already applied on `27/31` MACT-only rows, so the next WTQ fix should focus on evidence selection, entity canonicalization, tied answers, and temporal/count normalization rather than merely turning on more verification.
 - TabFact gap is concentrated: all `31/31` MACT-only rows are `closed_choice`, all are `COMPLEX`, and all have `strong_verification_applied=false`. This is the clearest next patch target: trigger selective strong verification for high-risk compound TabFact claims, especially temporal / negation / superlative closed-choice statements, then validate first on the diagnostic MACT-only rows.
+
+TabFact focused patch started:
+
+- Code change: `TableQAPipeline._should_apply_strong_verification` now keeps simple TabFact labels on the cheaper path, but triggers strong verification when the row is `tabfact`, answer kind is `label`, tags include `closed_choice`, risk level is `high`, and at least two compound-risk tags are present among `temporal`, `negation_logic`, `superlative_order`, `comparison`, `arithmetic`, and `count`.
+- Patent mechanism description: selective high-risk collaboration for compound binary table claims, controlled by problem tags and risk level instead of blanket second-pass verification.
+- Estimated Formal-200 trigger scope before rerun: `71/200` TabFact rows, covering `17/31` TabFact MACT-only diagnostic errors.
+- Local verification passed: `python -m unittest discover -s tests -p 'test_myagent_pipeline.py'` (`216` tests), `python -m py_compile code/my_agents.py code/tqa.py code/evaluate_results.py scripts/server/run_sharded_tqa.py`, and `python -m unittest discover -s tests -p 'test_evaluate_results.py'` (`15` tests). `test_run_sharded_tqa.py` discovery returned `0` tests in this workspace.
+- Next validation: run the patched MyAgent only on the `17` TabFact MACT-only rows predicted to trigger the new policy, using GPUs `4,5,6,7` endpoints only.
