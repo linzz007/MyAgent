@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 11:18 CST
+Last updated: 2026-08-14 11:35 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -576,3 +576,5 @@ TabFact focused patch started:
 - Focused-17 validation complete at MACT `diagnostics/tabfact_compound17_patch_ed6ceca/`: old MyAgent was `0/17` on these MACT-only rows; patched MyAgent reached `9/17 = 0.5294`, with `17/17` strong-verification triggers, avg token `18999.24`, avg time `37.224s`, failed/missing `0/0`.
 - Interpretation: the trigger recovers real old errors, but token/time cost is high. Before expanding to full200, run all `71` Formal-200 TabFact rows that match the trigger predicate to measure regressions among previously correct samples.
 - Trigger-71 validation started at MACT `diagnostics/tabfact_compound71_patch_ed6ceca/`, input `input/diagnostic/tabfact_compound_trigger71.jsonl`, using only endpoints `8000`/`8001` on GPUs `4,5,6,7`.
+- Trigger-71 validation complete: old MyAgent `50/71 = 0.7042`; patched MyAgent `51/71 = 0.7183`; MACT `65/71 = 0.9155`; old-wrong to new-right `8`, old-right to new-wrong `7`; avg token `16961.89`, avg time `33.425s`, failed/missing `0/0`.
+- Interpretation: this patch is directionally positive but too weak and too expensive as a final Formal-200 optimization. It must not be expanded blindly. Next required control: run the same 71 rows with `--disable-strong-verification` to separate true strong-verification value from rerun variance, then design a safer acceptance gate for TabFact verifier overrides.
