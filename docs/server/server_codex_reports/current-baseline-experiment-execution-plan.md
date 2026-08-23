@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-24 00:08 CST
+Last updated: 2026-08-24 00:40 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -725,7 +725,9 @@ Seed-E Gate-50 paired stability package prepared on 2026-08-23:
 - Static verification passed: input row count `50 * 3 = 150`, `seed_e_manifest.json` parses, `bash -n` passes for run scripts, and `py_compile` passes for package Python helpers.
 - Execution started on 2026-08-24 00:08 CST after completing Gate-50 mechanism ablations. Qwen3-32B services are resident on GPUs `4,5` -> `http://127.0.0.1:8000/v1` and GPUs `6,7` -> `http://127.0.0.1:8001/v1`; GPUs `0,1,2,3` remain unused.
 - Current active command: `bash run_myagent_seed_e_gate50.sh` in `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_seed_e_gate50_20260823/`.
-- Output target: `myagent_seed_e/`; first checkpoint showed WTQ raw rows being written on both shards.
+- MyAgent execution completed on 2026-08-24: WTQ `31/50 = 0.6200`, TabFact `40/50 = 0.8000`, CRT `24/50 = 0.4800`, overall `95/150 = 0.6333`, avg token `7160.61`, avg time `20.387s`, failed/missing `0/0`.
+- Interpretation: Seed-E is a harder stability split for current MyAgent. It is not enough to judge paired stability until MACT is run on the exact same 150 rows.
+- MyAgent output target: `myagent_seed_e/`; checkpoint should be committed to MACT before starting long MACT paired execution.
 
 Mechanism ablation expansion executed on 2026-08-23/2026-08-24:
 
