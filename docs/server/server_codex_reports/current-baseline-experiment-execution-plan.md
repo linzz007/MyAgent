@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-24 00:48 CST
+Last updated: 2026-08-24 00:51 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -730,6 +730,8 @@ Seed-E Gate-50 paired stability package prepared on 2026-08-23:
 - MyAgent output target: `myagent_seed_e/`; checkpoint should be committed to MACT before starting long MACT paired execution.
 - MyAgent Seed-E checkpoint pushed: MyAgent PRD commit `8e6d26f`; MACT output commit `5b4ff5f`.
 - MACT Seed-E paired execution started with `bash run_mact_seed_e_gate50_sharded.sh wtq`; early check showed shard00 and shard01 each wrote `1/25` row with no local-network errors. WTQ output target: `mact/wtq_mact_seed_e_gate50.jsonl` after merge; shard outputs under `mact_shards/wtq_wtq_mact_seed_e_gate50_00000_00050/output/`.
+- 2026-08-24 00:51 CST user reconfirmed: stop using GPUs `0,1,2,3`; run experiments only on GPUs `4,5,6,7`. Recheck showed no compute processes on GPUs `0,1,2,3`; the only visible compute workers were the two resident Qwen3-32B vLLM services on GPUs `4,5` and `6,7`. Do not release these services unless switching models or explicitly asked.
+- MACT Seed-E WTQ progress at the same checkpoint: shard00 `8/25`, shard01 `8/25`, total `16/50`. There is one recorded failure row so far, `nu-1109`, caused by context-limit `BadRequestError`; the one-by-one wrapper wrote the failed JSONL row and continued, so this is counted as a measurable failed/missing sample, not a run-stopping infrastructure failure.
 
 Mechanism ablation expansion executed on 2026-08-23/2026-08-24:
 
