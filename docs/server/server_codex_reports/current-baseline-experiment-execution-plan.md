@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-24 00:40 CST
+Last updated: 2026-08-24 00:48 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -728,6 +728,8 @@ Seed-E Gate-50 paired stability package prepared on 2026-08-23:
 - MyAgent execution completed on 2026-08-24: WTQ `31/50 = 0.6200`, TabFact `40/50 = 0.8000`, CRT `24/50 = 0.4800`, overall `95/150 = 0.6333`, avg token `7160.61`, avg time `20.387s`, failed/missing `0/0`.
 - Interpretation: Seed-E is a harder stability split for current MyAgent. It is not enough to judge paired stability until MACT is run on the exact same 150 rows.
 - MyAgent output target: `myagent_seed_e/`; checkpoint should be committed to MACT before starting long MACT paired execution.
+- MyAgent Seed-E checkpoint pushed: MyAgent PRD commit `8e6d26f`; MACT output commit `5b4ff5f`.
+- MACT Seed-E paired execution started with `bash run_mact_seed_e_gate50_sharded.sh wtq`; early check showed shard00 and shard01 each wrote `1/25` row with no local-network errors. WTQ output target: `mact/wtq_mact_seed_e_gate50.jsonl` after merge; shard outputs under `mact_shards/wtq_wtq_mact_seed_e_gate50_00000_00050/output/`.
 
 Mechanism ablation expansion executed on 2026-08-23/2026-08-24:
 
