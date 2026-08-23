@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-24 00:04 CST
+Last updated: 2026-08-24 00:08 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -723,7 +723,9 @@ Seed-E Gate-50 paired stability package prepared on 2026-08-23:
 - Inputs: `input/wtq_seed_e_gate50.jsonl`, `input/tabfact_seed_e_gate50.jsonl`, `input/crt_seed_e_gate50.jsonl`, each `50` rows.
 - Exclusions: Formal-200, ablation50, prior P4b new-seed, targeted slices, and Seed-C/D inputs.
 - Static verification passed: input row count `50 * 3 = 150`, `seed_e_manifest.json` parses, `bash -n` passes for run scripts, and `py_compile` passes for package Python helpers.
-- No model was called while preparing this package. Current observed server state has no visible vLLM/experiment process, so execution should wait until Qwen3-32B services are started again on GPUs `4,5,6,7`.
+- Execution started on 2026-08-24 00:08 CST after completing Gate-50 mechanism ablations. Qwen3-32B services are resident on GPUs `4,5` -> `http://127.0.0.1:8000/v1` and GPUs `6,7` -> `http://127.0.0.1:8001/v1`; GPUs `0,1,2,3` remain unused.
+- Current active command: `bash run_myagent_seed_e_gate50.sh` in `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_seed_e_gate50_20260823/`.
+- Output target: `myagent_seed_e/`; first checkpoint showed WTQ raw rows being written on both shards.
 
 Mechanism ablation expansion executed on 2026-08-23/2026-08-24:
 
