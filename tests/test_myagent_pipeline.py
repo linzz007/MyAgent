@@ -4399,6 +4399,76 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         self.assertIsNotNone(result.evidence_pack)
         self.assertIn("avg_tokens", result.budget_state)
 
+    def test_disable_risk_scoring_holds_medium_risk_for_ablation(self):
+        df = pd.DataFrame({"Name": ["Alpha"], "Value": [7]})
+        fake = FakePipelineLLM(semantic_score=0.05, rows=["Alpha"], cols=["Value"])
+        tracker = LLMCallTracker(fake)
+        pipeline = TableQAPipeline(
+            router=RouterAgent(tracker),
+            planner=PlannerAgent(tracker),
+            calculator=Calculator(),
+            critic=CriticAgent(tracker),
+            final_answer_agent=FinalAnswerAgent(tracker),
+            enable_selective_collaboration=True,
+            disable_risk_scoring=True,
+        )
+        state = TQASessionState(
+            question="What is the value for Alpha?",
+            df=df,
+            table_schema=_build_table_schema(df),
+            dataset_profile="wtq",
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.risk_assessment.level, "medium")
+        self.assertEqual(
+            result.risk_assessment.feature_evidence.get("ablation"),
+            "risk_scoring_disabled",
+        )
+        self.assertFalse(result.cost_metrics["risk_scoring_enabled"])
+
+    def test_disable_question_routing_forces_complex_path_for_ablation(self):
+        df = pd.DataFrame({"Year": ["2020", "2021"], "Profit": [10, 30]})
+        fake = FakePipelineLLM(semantic_score=0.01, rows=["2021"], cols=["Profit"])
+        pipeline, _ = self._pipeline(fake)
+        pipeline.disable_question_routing = True
+        state = TQASessionState(
+            question="What was the Profit in 2021?",
+            df=df,
+            table_schema=_build_table_schema(df),
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.route_type, "COMPLEX")
+        self.assertEqual(result.routing_context.get("ablation"), "question_routing_disabled")
+        self.assertFalse(result.cost_metrics["question_routing_enabled"])
+
+    def test_disable_table_compression_keeps_full_table_for_ablation(self):
+        df = pd.DataFrame(
+            {
+                "Year": ["2020", "2021", "2022"],
+                "Revenue": [100, 120, 150],
+                "Profit": [10, 30, 40],
+            }
+        )
+        fake = FakePipelineLLM(semantic_score=0.05, rows=["2021"], cols=["Revenue"])
+        pipeline, _ = self._pipeline(fake)
+        pipeline.disable_table_compression = True
+        state = TQASessionState(
+            question="What was the Revenue in 2021?",
+            df=df,
+            table_schema=_build_table_schema(df),
+        )
+
+        result = pipeline.run(state)
+
+        self.assertEqual(result.compression_info["strategy"], "disabled_ablation_full_table")
+        self.assertEqual(result.compression_info["compression_ratio"], 1.0)
+        self.assertEqual(len(result.df), len(df))
+        self.assertFalse(result.cost_metrics["table_compression_enabled"])
+
     def test_selective_high_risk_runs_candidate_judge(self):
         df = pd.DataFrame({"Year": ["2020", "2021"], "Profit": [10, 30]})
         fake = FakePipelineLLM(

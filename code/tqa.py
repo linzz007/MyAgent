@@ -238,6 +238,9 @@ def main(args):
         enable_selective_collaboration=getattr(args, "collaboration_mode", "selective") != "legacy",
         enable_strong_verification=not getattr(args, "disable_strong_verification", False),
         enable_deterministic_shortcuts=not getattr(args, "disable_deterministic_shortcuts", False),
+        disable_question_routing=getattr(args, "disable_question_routing", False),
+        disable_risk_scoring=getattr(args, "disable_risk_scoring", False),
+        disable_table_compression=getattr(args, "disable_table_compression", False),
         mact_avg_tokens=getattr(args, "mact_avg_tokens", 8867.0),
         max_replan=args.max_replan,
     )
@@ -520,6 +523,21 @@ if __name__ == "__main__":
         "--disable_deterministic_shortcuts",
         action="store_true",
         help="Disable deterministic semantic verifier shortcuts for ablation experiments.",
+    )
+    parser.add_argument(
+        "--disable_question_routing",
+        action="store_true",
+        help="Disable question-type routing and force the complex path for ablation experiments.",
+    )
+    parser.add_argument(
+        "--disable_risk_scoring",
+        action="store_true",
+        help="Disable selective risk scoring and hold risk level at medium for ablation experiments.",
+    )
+    parser.add_argument(
+        "--disable_table_compression",
+        action="store_true",
+        help="Disable question-aware table compression and expose the full table for ablation experiments.",
     )
     parser.add_argument(
         "--mact_avg_tokens",

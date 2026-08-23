@@ -674,7 +674,7 @@ Current completion audit against the long patent-data objective:
 | Qwen3-32B full200 MyAgent > MACT on WTQ/TabFact/CRT/overall | complete | Final evidence package: MyAgent `480/600 = 0.8000`, MACT `465/600 = 0.7750` |
 | Three baselines and efficiency metrics | complete | MACT, Direct-CoT, Single-Agent Pandas; token/time/fail table in final evidence package |
 | WTQ generalization diagnostic | complete as boundary evidence | `wtq_shortcut_generalization_20260814.md`; full unseen shortcut accuracy is not high enough for blind WTQ rule expansion |
-| Mechanism ablation | partial | Deterministic shortcut ablation is strong; strong verification is inconclusive; no-routing/no-risk/no-compression switches are still missing |
+| Mechanism ablation | partial | Deterministic shortcut ablation is strong; strong verification is inconclusive; no-routing/no-risk/no-compression switches and run scripts are now prepared but not executed |
 | Multi-model gate | complete as no-go boundary summary | Qwen3-14B-AWQ, Qwen2.5-14B-AWQ, Qwen2.5-3B Gate-50 summaries are all no-go |
 | Multi-seed stability | partial | P4b paired new-seed Gate-50 passes narrowly; Seed-C/D current-only and boundary summaries exist; Seed-E paired Gate-50 package is prepared but not executed |
 | Patent draft evidence | drafted as evidence, not legal final | Final evidence package section 7 gives technical problem, method steps, effects, claim directions, and wording boundaries |
@@ -687,4 +687,15 @@ Seed-E Gate-50 paired stability package prepared on 2026-08-23:
 - Static verification passed: input row count `50 * 3 = 150`, `seed_e_manifest.json` parses, `bash -n` passes for run scripts, and `py_compile` passes for package Python helpers.
 - No model was called while preparing this package. Current observed server state has no visible vLLM/experiment process, so execution should wait until Qwen3-32B services are started again on GPUs `4,5,6,7`.
 
-Next best work: if the user wants more experiments before drafting, either run the prepared Seed-E paired Gate-50 package after restarting Qwen3 on GPUs `4,5,6,7`, or implement/construct the missing mechanism ablations (`no_risk_scoring`, `no_routing`, `no_compression`) before any full-dataset rerun.
+Mechanism ablation expansion prepared on 2026-08-23:
+
+- New MyAgent switches: `--disable_question_routing`, `--disable_risk_scoring`, `--disable_table_compression`.
+- New sharded runner switches: `--disable-question-routing`, `--disable-risk-scoring`, `--disable-table-compression`.
+- New MACT run-package scripts:
+  - `run_ablation_no_question_routing50.sh`
+  - `run_ablation_no_risk_scoring50.sh`
+  - `run_ablation_no_table_compression50.sh`
+- Static verification passed: `py_compile` for `code/my_agents.py`, `code/tqa.py`, `scripts/server/run_sharded_tqa.py`, `scripts/server/prepare_baseline_experiment_run.py`; `test_myagent_pipeline.py` passed `243` tests; sharded dry-run confirmed the three new flags are passed to `code/tqa.py`.
+- These ablations are prepared but not executed because no Qwen3 service is currently running.
+
+Next best work: if the user wants more experiments before drafting, either run the prepared mechanism ablation scripts after restarting Qwen3 on GPUs `4,5,6,7`, or run the prepared Seed-E paired Gate-50 package. Do not run any full-dataset expansion before these smaller evidence gaps are closed.

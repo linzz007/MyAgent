@@ -28,7 +28,7 @@ from answer_contracts import (
     validate_contract_value,
 )
 from evidence_builder import EvidenceBuilder
-from risk_control import BudgetController, BudgetPolicy, RiskProfiler
+from risk_control import BudgetController, BudgetPolicy, RiskAssessment, RiskProfiler
 from selective_collaboration import (
     AgreementJudge,
     AgreementDecision,
@@ -3014,6 +3014,9 @@ class TableQAPipeline:
         enable_selective_collaboration: bool = False,
         enable_strong_verification: bool = True,
         enable_deterministic_shortcuts: bool = True,
+        disable_question_routing: bool = False,
+        disable_risk_scoring: bool = False,
+        disable_table_compression: bool = False,
         mact_avg_tokens: float = 8867.0,
         risk_profiler: Optional[RiskProfiler] = None,
         evidence_builder: Optional[EvidenceBuilder] = None,
@@ -3038,6 +3041,9 @@ class TableQAPipeline:
         self.enable_selective_collaboration = enable_selective_collaboration
         self.enable_strong_verification = enable_strong_verification
         self.enable_deterministic_shortcuts = enable_deterministic_shortcuts
+        self.disable_question_routing = disable_question_routing
+        self.disable_risk_scoring = disable_risk_scoring
+        self.disable_table_compression = disable_table_compression
         self.max_replan = max_replan
         self.mact_avg_tokens = mact_avg_tokens
         self.risk_profiler = risk_profiler or RiskProfiler()
@@ -3183,6 +3189,21 @@ class TableQAPipeline:
             state.dataset_profile,
             state.answer_contract,
         )
+        if self.disable_risk_scoring:
+            state.risk_assessment = RiskAssessment(
+                difficulty=0.0,
+                ambiguity=0.0,
+                evidence_gap=0.0,
+                operation_risk=0.0,
+                pre_risk=0.35,
+                level="medium",
+                feature_evidence={
+                    "ablation": "risk_scoring_disabled",
+                    "problem_tags": list(state.problem_tags),
+                },
+            )
+            state.risk_level = "medium"
+            return
         if state.evidence_pack is None:
             state.evidence_pack = self.evidence_builder.build(
                 question=state.question,
@@ -3212,6 +3233,60 @@ class TableQAPipeline:
             assessment.feature_evidence["tag_risk_floor"] = tag_floor
         state.risk_assessment = assessment
         state.risk_level = assessment.level
+
+    def _apply_no_routing_ablation(self, state: TQASessionState) -> TQASessionState:
+        state.route_type = "COMPLEX"
+        state.difficulty_score = 1.0
+        state.difficulty_level = "hard"
+        state.semantic_features["sem_score"] = 1.0
+        state.structural_features["cell_score"] = 1.0
+        state.structural_features["estimated_cells_touched"] = int(
+            max(1, state.original_df.shape[0] * state.original_df.shape[1])
+        )
+        state.routing_context = {
+            "ablation": "question_routing_disabled",
+            "route_type": state.route_type,
+            "difficulty_score": state.difficulty_score,
+            "difficulty_level": state.difficulty_level,
+        }
+        return state
+
+    def _apply_no_compression_ablation(self, state: TQASessionState) -> TQASessionState:
+        original_df = state.original_df
+        state.compressed_df = original_df
+        state.df = original_df
+        full_tokens = max(1, TableCompressor._token_estimate_df(original_df))
+        preview_rows = max(1, min(200, len(original_df)))
+        state.table_schema = _build_table_schema(
+            original_df,
+            max_preview_rows=preview_rows,
+        )
+        original_cells = int(max(1, original_df.shape[0] * original_df.shape[1]))
+        state.compression_info = {
+            "strategy": "disabled_ablation_full_table",
+            "original_rows": int(original_df.shape[0]),
+            "original_cols": int(original_df.shape[1]),
+            "compressed_rows": int(original_df.shape[0]),
+            "compressed_cols": int(original_df.shape[1]),
+            "original_cells": original_cells,
+            "compressed_cells": original_cells,
+            "compression_ratio": 1.0,
+            "token_compression_ratio_est": 1.0,
+            "full_table_tokens_est": full_tokens,
+            "compressed_table_tokens_est": full_tokens,
+            "used_rows": [str(x) for x in original_df.index.tolist()[:200]],
+            "used_cols": [str(x) for x in original_df.columns.tolist()],
+        }
+        state.structural_features["compression_ratio"] = 1.0
+        state.structural_features["token_compression_ratio_est"] = 1.0
+        state.routing_context.update(
+            {
+                "compression_strategy": state.compression_info["strategy"],
+                "compression_ratio": 1.0,
+                "token_compression_ratio_est": 1.0,
+            }
+        )
+        return state
 
     def _apply_semantic_shortcut(
         self,
@@ -10817,7 +10892,10 @@ class TableQAPipeline:
         started_at = time.perf_counter()
         try:
             # 1) routing
-            state = self.router.route(state)
+            if self.disable_question_routing:
+                state = self._apply_no_routing_ablation(state)
+            else:
+                state = self.router.route(state)
             if not state.route_type:
                 state.route_type = "COMPLEX"
             if state.answer_contract.reasoning_required:
@@ -10825,7 +10903,10 @@ class TableQAPipeline:
                 state.risk_escalated = True
 
             # 2) question-aware compression, used by both paths
-            state = self.compressor.compress(state)
+            if self.disable_table_compression:
+                state = self._apply_no_compression_ablation(state)
+            else:
+                state = self.compressor.compress(state)
 
             if self.enable_deterministic_shortcuts:
                 if self._try_wtq_semantic_shortcut(state):
@@ -10992,6 +11073,9 @@ class TableQAPipeline:
                 "selective_collaboration_enabled": self.enable_selective_collaboration,
                 "strong_verification_enabled": self.enable_strong_verification,
                 "deterministic_shortcuts_enabled": self.enable_deterministic_shortcuts,
+                "question_routing_enabled": not self.disable_question_routing,
+                "risk_scoring_enabled": not self.disable_risk_scoring,
+                "table_compression_enabled": not self.disable_table_compression,
                 "risk_level": state.risk_level,
                 "answer_mode": state.answer_mode,
                 "critic_skipped": state.critic_skipped,

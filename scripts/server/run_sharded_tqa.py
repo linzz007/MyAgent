@@ -132,6 +132,9 @@ def main() -> None:
     parser.add_argument("--collaboration-mode", choices=("legacy", "selective", "calibration"), default="selective")
     parser.add_argument("--disable-strong-verification", action="store_true")
     parser.add_argument("--disable-deterministic-shortcuts", action="store_true")
+    parser.add_argument("--disable-question-routing", action="store_true")
+    parser.add_argument("--disable-risk-scoring", action="store_true")
+    parser.add_argument("--disable-table-compression", action="store_true")
     parser.add_argument("--enable-multiview-validation", action="store_true")
     parser.add_argument("--limit-per-task", type=int, default=0, help="Optional smoke-test limit before sharding.")
     parser.add_argument("--resume", action="store_true", help="Skip shard output files whose line count matches the shard input.")
@@ -212,6 +215,12 @@ def main() -> None:
                 cmd.append("--disable_strong_verification")
             if args.disable_deterministic_shortcuts:
                 cmd.append("--disable_deterministic_shortcuts")
+            if args.disable_question_routing:
+                cmd.append("--disable_question_routing")
+            if args.disable_risk_scoring:
+                cmd.append("--disable_risk_scoring")
+            if args.disable_table_compression:
+                cmd.append("--disable_table_compression")
             if args.enable_multiview_validation:
                 cmd.append("--enable_multiview_validation")
             print("[run]", " ".join(cmd))

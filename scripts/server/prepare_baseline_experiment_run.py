@@ -322,8 +322,11 @@ Run these after the main Formal-200 table is stable:
 - `bash run_ablation_legacy50.sh`
 - `bash run_ablation_no_strong50.sh`
 - `bash run_ablation_no_deterministic_shortcuts50.sh`
+- `bash run_ablation_no_question_routing50.sh`
+- `bash run_ablation_no_risk_scoring50.sh`
+- `bash run_ablation_no_table_compression50.sh`
 
-Current limitation: no-question-routing and no-table-compression/evidence-retention switches are not present in the current codebase. Treat them as pending implementation or document the limitation if time is tight.
+These scripts isolate the implemented command-line switches. If runtime is limited, run the three existing completed ablations first and then run the new routing/risk/compression ablations one at a time.
 
 ## Output Layout
 
@@ -363,11 +366,11 @@ def build_manifest(args: argparse.Namespace, run_dir: Path, input_manifest: Dict
                 "collaboration_mode=legacy",
                 "disable_strong_verification",
                 "disable_deterministic_shortcuts",
+                "disable_question_routing",
+                "disable_risk_scoring",
+                "disable_table_compression",
             ],
-            "missing_ablation_switches": [
-                "disable_question_type_routing",
-                "disable_table_compression_or_evidence_retention",
-            ],
+            "missing_ablation_switches": [],
         },
     }
 
@@ -428,6 +431,21 @@ def prepare(args: argparse.Namespace) -> Path:
     write_text(
         run_dir / "run_ablation_no_deterministic_shortcuts50.sh",
         render_myagent_script(myagent_root, run_dir, slice_name="ablation50", output_name="ablation/no_deterministic_shortcuts_gate50", limit=args.ablation_limit, extra_args=["--disable-deterministic-shortcuts"]),
+        executable=True,
+    )
+    write_text(
+        run_dir / "run_ablation_no_question_routing50.sh",
+        render_myagent_script(myagent_root, run_dir, slice_name="ablation50", output_name="ablation/no_question_routing_gate50", limit=args.ablation_limit, extra_args=["--disable-question-routing"]),
+        executable=True,
+    )
+    write_text(
+        run_dir / "run_ablation_no_risk_scoring50.sh",
+        render_myagent_script(myagent_root, run_dir, slice_name="ablation50", output_name="ablation/no_risk_scoring_gate50", limit=args.ablation_limit, extra_args=["--disable-risk-scoring"]),
+        executable=True,
+    )
+    write_text(
+        run_dir / "run_ablation_no_table_compression50.sh",
+        render_myagent_script(myagent_root, run_dir, slice_name="ablation50", output_name="ablation/no_table_compression_gate50", limit=args.ablation_limit, extra_args=["--disable-table-compression"]),
         executable=True,
     )
     for index, dataset in enumerate(("wtq", "tabfact", "crt")):
