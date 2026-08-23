@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-14 14:27 CST
+Last updated: 2026-08-23 00:00 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -660,3 +660,31 @@ WTQ shortcut generalization diagnostic:
 | full_unseen_minus_formal200 | 4144 | 407 | 262 | 145 | 0.6437 |
 
 Interpretation: current WTQ deterministic shortcuts are valuable on the locked formal200 and blind200 samples, but are not safe enough to expand blindly across the full WTQ unseen pool. The most fragile rule families are `after_reference`, `last_requested_column`, `superlative_owner`, and `existing_total_metric`. Future WTQ work should add stronger semantic target-column and ambiguity gates instead of increasing pattern coverage. This is boundary evidence for the patent report, not a reason to continue prioritizing WTQ optimization now.
+
+Formal evidence package for patent/thesis drafting:
+
+- Authoritative MACT summary: `outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505/summary/formal200_final_evidence_package_20260814.md`.
+- Machine-readable evidence JSON: `outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505/summary/formal200_final_evidence_package_20260814.json`.
+- `summary/main_baseline_summary.md` is now explicitly marked as superseded by the final evidence package, because that old file records the pre-patch `436/600` MyAgent baseline.
+
+Current completion audit against the long patent-data objective:
+
+| Requirement | Status | Current evidence / next action |
+|---|---|---|
+| Qwen3-32B full200 MyAgent > MACT on WTQ/TabFact/CRT/overall | complete | Final evidence package: MyAgent `480/600 = 0.8000`, MACT `465/600 = 0.7750` |
+| Three baselines and efficiency metrics | complete | MACT, Direct-CoT, Single-Agent Pandas; token/time/fail table in final evidence package |
+| WTQ generalization diagnostic | complete as boundary evidence | `wtq_shortcut_generalization_20260814.md`; full unseen shortcut accuracy is not high enough for blind WTQ rule expansion |
+| Mechanism ablation | partial | Deterministic shortcut ablation is strong; strong verification is inconclusive; no-routing/no-risk/no-compression switches are still missing |
+| Multi-model gate | complete as no-go boundary summary | Qwen3-14B-AWQ, Qwen2.5-14B-AWQ, Qwen2.5-3B Gate-50 summaries are all no-go |
+| Multi-seed stability | partial | P4b paired new-seed Gate-50 passes narrowly; Seed-C/D current-only and boundary summaries exist; Seed-E paired Gate-50 package is prepared but not executed |
+| Patent draft evidence | drafted as evidence, not legal final | Final evidence package section 7 gives technical problem, method steps, effects, claim directions, and wording boundaries |
+
+Seed-E Gate-50 paired stability package prepared on 2026-08-23:
+
+- Run package: `outputs/server_runs/qwen3_32b_patent_seed_e_gate50_20260823/`.
+- Inputs: `input/wtq_seed_e_gate50.jsonl`, `input/tabfact_seed_e_gate50.jsonl`, `input/crt_seed_e_gate50.jsonl`, each `50` rows.
+- Exclusions: Formal-200, ablation50, prior P4b new-seed, targeted slices, and Seed-C/D inputs.
+- Static verification passed: input row count `50 * 3 = 150`, `seed_e_manifest.json` parses, `bash -n` passes for run scripts, and `py_compile` passes for package Python helpers.
+- No model was called while preparing this package. Current observed server state has no visible vLLM/experiment process, so execution should wait until Qwen3-32B services are started again on GPUs `4,5,6,7`.
+
+Next best work: if the user wants more experiments before drafting, either run the prepared Seed-E paired Gate-50 package after restarting Qwen3 on GPUs `4,5,6,7`, or implement/construct the missing mechanism ablations (`no_risk_scoring`, `no_routing`, `no_compression`) before any full-dataset rerun.
