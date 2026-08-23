@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-24 01:18 CST
+Last updated: 2026-08-24 01:28 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -735,6 +735,7 @@ Seed-E Gate-50 paired stability package prepared on 2026-08-23:
 - 2026-08-24 00:59 CST half-run checkpoint: MACT Seed-E WTQ reached shard00 `12/25`, shard01 `13/25`, total `25/50`. Recorded failure rows so far: `2` (`nu-1109`, `nu-3253`), both sample-level context-limit failures. GPUs `0,1,2,3` still show no compute processes; active generation remains only on GPUs `4,5,6,7`.
 - 2026-08-24 01:09 CST checkpoint: MACT Seed-E WTQ reached shard00 `14/25`, shard01 `16/25`, total `30/50`. Recorded failure rows remain `2`; GPUs `0,1,2,3` still show no compute processes.
 - 2026-08-24 01:18 CST checkpoint: MACT Seed-E WTQ reached shard00 `19/25`, shard01 `21/25`, total `40/50`. Recorded failure/error rows are `3`: `nu-553`, `nu-1109`, `nu-3253`. GPUs `0,1,2,3` still show no compute processes; Qwen3 services remain resident on GPUs `4,5,6,7`.
+- 2026-08-24 01:28 CST completion: MACT Seed-E WTQ completed and merged to `mact/wtq_mact_seed_e_gate50.jsonl` with `50/50` rows. Eval: MACT WTQ `37/50 = 0.7400`, avg token `10761.76`, avg time `117.007s`, failed/missing `3/3`; MyAgent WTQ on the same Seed-E rows was `31/50 = 0.6200`, avg token `6947.46`, avg time `20.399s`, failed/missing `0/0`. Interpretation: on Seed-E WTQ alone, MACT leads accuracy by `6` rows while MyAgent remains much cheaper and more robust. Do not judge paired stability until TabFact and CRT Seed-E MACT results are also complete.
 
 Mechanism ablation expansion executed on 2026-08-23/2026-08-24:
 
