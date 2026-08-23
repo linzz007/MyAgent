@@ -740,6 +740,7 @@ Seed-E Gate-50 paired stability package prepared on 2026-08-23:
 - 2026-08-24 01:48 CST checkpoint: MACT Seed-E TabFact reached shard00 `11/25`, shard01 `9/25`, total `20/50`, recorded errors `0`. Continue on GPUs `4,5,6,7`; do not use GPUs `0,1,2,3`.
 - 2026-08-24 01:57 CST checkpoint: MACT Seed-E TabFact reached shard00 `15/25`, shard01 `16/25`, total `31/50`, recorded errors `0`. Continue on GPUs `4,5,6,7`; model services remain resident.
 - 2026-08-24 02:06 CST checkpoint after user asked to stop GPUs `0,1,2,3`: `nvidia-smi pmon -c 1` showed no compute processes on GPUs `0,1,2,3`, so no kill was needed. MACT Seed-E TabFact reached shard00 `18/25`, shard01 `22/25`, total `40/50`, recorded errors `0`. Qwen3-32B services remain resident on GPUs `4,5` (`8000`) and `6,7` (`8001`), and the active MACT TabFact run continues only through those endpoints.
+- 2026-08-24 02:21 CST completion: MACT Seed-E TabFact completed and merged to `mact/tabfact_mact_seed_e_gate50.jsonl` with `50/50` rows. Eval: MACT TabFact `42/50 = 0.8400`, avg token `11488.04`, avg time `107.645s`, failed/missing `0/0`; MyAgent TabFact on the same Seed-E rows was `40/50 = 0.8000`, avg token `2766.76`, avg time `12.362s`, failed/missing `0/0`. Interpretation: on Seed-E TabFact alone, MACT leads by `2` rows, while MyAgent uses about `24.1%` of MACT tokens and about `11.5%` of MACT time. Paired Seed-E conclusion still requires MACT CRT completion.
 
 Mechanism ablation expansion executed on 2026-08-23/2026-08-24:
 
