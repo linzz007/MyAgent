@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-24 01:48 CST
+Last updated: 2026-08-24 01:57 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -738,6 +738,7 @@ Seed-E Gate-50 paired stability package prepared on 2026-08-23:
 - 2026-08-24 01:28 CST completion: MACT Seed-E WTQ completed and merged to `mact/wtq_mact_seed_e_gate50.jsonl` with `50/50` rows. Eval: MACT WTQ `37/50 = 0.7400`, avg token `10761.76`, avg time `117.007s`, failed/missing `3/3`; MyAgent WTQ on the same Seed-E rows was `31/50 = 0.6200`, avg token `6947.46`, avg time `20.399s`, failed/missing `0/0`. Interpretation: on Seed-E WTQ alone, MACT leads accuracy by `6` rows while MyAgent remains much cheaper and more robust. Do not judge paired stability until TabFact and CRT Seed-E MACT results are also complete.
 - 2026-08-24 01:38 CST checkpoint: MACT Seed-E TabFact paired run started with `bash run_mact_seed_e_gate50_sharded.sh tabfact`; MACT internally uses task name `scitab`, so shard outputs are under `mact_shards/scitab_tabfact_mact_seed_e_gate50_00000_00050/`. Current progress shard00 `5/25`, shard01 `5/25`, total `10/50`, recorded errors `0`. GPUs `0,1,2,3` still show no compute processes; Qwen3 services remain resident on GPUs `4,5,6,7`.
 - 2026-08-24 01:48 CST checkpoint: MACT Seed-E TabFact reached shard00 `11/25`, shard01 `9/25`, total `20/50`, recorded errors `0`. Continue on GPUs `4,5,6,7`; do not use GPUs `0,1,2,3`.
+- 2026-08-24 01:57 CST checkpoint: MACT Seed-E TabFact reached shard00 `15/25`, shard01 `16/25`, total `31/50`, recorded errors `0`. Continue on GPUs `4,5,6,7`; model services remain resident.
 
 Mechanism ablation expansion executed on 2026-08-23/2026-08-24:
 
