@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-23 23:30 CST
+Last updated: 2026-08-24 00:04 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -518,7 +518,7 @@ New helper scripts added to the MACT run package:
 Continue P0 from the current state:
 
 1. Commit and push the final Formal-200 MACT CRT output/eval/summary, plus this PRD update. Completed at MyAgent `2e1dd0e` and MACT `294d36a`.
-2. Run the prepared ablation-50 scripts and checkpoint after each stable result. Completed for `legacy50`, `no_strong50`, `no_deterministic_shortcuts50`, `no_question_routing50`, and `no_risk_scoring50`; `no_table_compression50` remains pending.
+2. Run the prepared ablation-50 scripts and checkpoint after each stable result. Completed for `legacy50`, `no_strong50`, `no_deterministic_shortcuts50`, `no_question_routing50`, `no_risk_scoring50`, and `no_table_compression50`.
 3. Diagnose why Formal-200 WTQ and TabFact trail MACT despite lower token/time. Candidate areas: route confidence thresholds, evidence-retention budget, final-answer normalization, and selective second-pass verification.
 4. Implement only patent-describable improvements, then rerun focused validation before expanding to another Formal-200 comparison.
 
@@ -531,7 +531,7 @@ Ablation execution status:
 | No deterministic shortcuts | `run_ablation_no_deterministic_shortcuts50.sh` | same 4567 endpoint policy | complete; WTQ/TabFact/CRT merged rows all `50/50`, failed/missing `0/0` |
 | No question routing | `run_ablation_no_question_routing50.sh` | same 4567 endpoint policy | complete; WTQ `0.66`, TabFact `0.90`, CRT `0.76`, overall `116/150 = 0.7733`, avg token `8353.59`, avg time `21.077s`, failed/missing `0/0` |
 | No risk scoring | `run_ablation_no_risk_scoring50.sh` | same 4567 endpoint policy | complete; WTQ `0.74`, TabFact `0.88`, CRT `0.82`, overall `122/150 = 0.8133`, avg token `6664.23`, avg time `18.473s`, failed/missing `0/0` |
-| No table compression | `run_ablation_no_table_compression50.sh` | same 4567 endpoint policy | prepared, not executed |
+| No table compression | `run_ablation_no_table_compression50.sh` | same 4567 endpoint policy | complete; WTQ `0.72`, TabFact `0.90`, CRT `0.70`, overall `116/150 = 0.7733`, avg token `7612.96`, avg time `18.148s`, failed/missing `2/2` |
 
 Legacy collaboration ablation result:
 
@@ -578,11 +578,24 @@ No-risk-scoring ablation result:
 | CRT | 50 | 0.820 | 11733.38 | 26.714s | 0/0 |
 | Overall | 150 | 122/150 = 0.8133 | 6664.23 | 18.473s | 0/0 |
 
+No-table-compression ablation result:
+
+| Dataset | Rows | Accuracy | Avg token | Avg time | Fail/Missing |
+|---|---:|---:|---:|---:|---:|
+| WTQ | 50 | 0.720 | 7346.16 | 15.504s | 2/2 |
+| TabFact | 50 | 0.900 | 2418.52 | 11.609s | 0/0 |
+| CRT | 50 | 0.700 | 13074.20 | 27.332s | 0/0 |
+| Overall | 150 | 116/150 = 0.7733 | 7612.96 | 18.148s | 2/2 |
+
 Ablation interpretation: `legacy50` and `no_strong50` have identical accuracy on the current gate50 split and near-identical token/time. This split does not yet isolate the value of strong verification; the next diagnostic should inspect whether strong verification was triggered on these rows, or select high-risk rows where it is expected to activate. In contrast, disabling deterministic shortcuts is strongly negative on the same 150 rows: primary overall drops from `116/150 = 0.7733` to `106/150 = 0.7067`, TabFact drops from `0.86` to `0.72`, CRT drops from `0.80` to `0.72`, and average token rises from about `2516` to about `7465`. This is currently the strongest P0 mechanism evidence for patent writing: deterministic shortcuts / answer normalization reduce unnecessary LLM work and protect accuracy on TabFact and CRT.
 
 No-question-routing keeps the same overall primary accuracy as legacy/no-strong on this split, but increases average token usage from about `2516` to `8354` and average time from about `14s` to `21s`. Current evidence therefore supports question routing primarily as an efficiency and path-selection mechanism, not as a standalone accuracy driver on gate50.
 
 No-risk-scoring is not accuracy-negative on this broad gate50 split: it reaches `122/150 = 0.8133`, above legacy/no-strong, while increasing average token usage to `6664.23`. Do not claim from this split that risk scoring directly improves accuracy. Current evidence supports a narrower claim that risk scoring is a selective cost/path-control component whose accuracy value needs a targeted high-risk split or additional acceptance-gate evidence.
+
+No-table-compression keeps the same overall primary accuracy as legacy/no-strong on this split, but raises average token usage to `7612.96` and creates `2/50` WTQ failed/missing rows (`nu-30`, `nu-44`) from Qwen3-32B context-limit `BadRequestError`. This is direct evidence that table compression/evidence retention is needed for both token efficiency and runnability under an 8192-token service budget.
+
+Runner robustness note: no-table-compression initially exposed that `code/tqa.py` raised on a per-sample `BadRequestError` and interrupted a shard. MyAgent commit `6de15a7` changed the output boundary so a per-sample exception writes one failed JSONL row and continues, preserving one output row per input row and allowing failed/missing counts to be reported.
 
 Formal-200 WTQ/TabFact error diagnosis:
 
@@ -699,7 +712,7 @@ Current completion audit against the long patent-data objective:
 | Qwen3-32B full200 MyAgent > MACT on WTQ/TabFact/CRT/overall | complete | Final evidence package: MyAgent `480/600 = 0.8000`, MACT `465/600 = 0.7750` |
 | Three baselines and efficiency metrics | complete | MACT, Direct-CoT, Single-Agent Pandas; token/time/fail table in final evidence package |
 | WTQ generalization diagnostic | complete as boundary evidence | `wtq_shortcut_generalization_20260814.md`; full unseen shortcut accuracy is not high enough for blind WTQ rule expansion |
-| Mechanism ablation | partial | Deterministic shortcut ablation is strong; question routing shows strong efficiency value; no-risk scoring improves accuracy but raises token on gate50, so risk scoring should be framed cautiously as cost/path control; strong verification is inconclusive; no-compression remains prepared but not executed |
+| Mechanism ablation | complete for Gate-50 core mechanisms | Deterministic shortcut ablation is strong; question routing and table compression show strong efficiency/runnability value; no-risk scoring improves accuracy but raises token on gate50, so risk scoring should be framed cautiously as cost/path control; strong verification remains inconclusive |
 | Multi-model gate | complete as no-go boundary summary | Qwen3-14B-AWQ, Qwen2.5-14B-AWQ, Qwen2.5-3B Gate-50 summaries are all no-go |
 | Multi-seed stability | partial | P4b paired new-seed Gate-50 passes narrowly; Seed-C/D current-only and boundary summaries exist; Seed-E paired Gate-50 package is prepared but not executed |
 | Patent draft evidence | drafted as evidence, not legal final | Final evidence package section 7 gives technical problem, method steps, effects, claim directions, and wording boundaries |
@@ -712,7 +725,7 @@ Seed-E Gate-50 paired stability package prepared on 2026-08-23:
 - Static verification passed: input row count `50 * 3 = 150`, `seed_e_manifest.json` parses, `bash -n` passes for run scripts, and `py_compile` passes for package Python helpers.
 - No model was called while preparing this package. Current observed server state has no visible vLLM/experiment process, so execution should wait until Qwen3-32B services are started again on GPUs `4,5,6,7`.
 
-Mechanism ablation expansion prepared on 2026-08-23:
+Mechanism ablation expansion executed on 2026-08-23/2026-08-24:
 
 - New MyAgent switches: `--disable_question_routing`, `--disable_risk_scoring`, `--disable_table_compression`.
 - New sharded runner switches: `--disable-question-routing`, `--disable-risk-scoring`, `--disable-table-compression`.
@@ -721,7 +734,7 @@ Mechanism ablation expansion prepared on 2026-08-23:
   - `run_ablation_no_risk_scoring50.sh`
   - `run_ablation_no_table_compression50.sh`
 - Static verification passed: `py_compile` for `code/my_agents.py`, `code/tqa.py`, `scripts/server/run_sharded_tqa.py`, `scripts/server/prepare_baseline_experiment_run.py`; `test_myagent_pipeline.py` passed `243` tests; sharded dry-run confirmed the three new flags are passed to `code/tqa.py`.
-- Execution checkpoint: `run_ablation_no_question_routing50.sh` and `run_ablation_no_risk_scoring50.sh` completed on 2026-08-23 using only GPUs `4,5,6,7`; merged rows are `50/50` for WTQ, TabFact, and CRT, with failed/missing `0/0`.
-- Remaining prepared ablation: `run_ablation_no_table_compression50.sh`.
+- Execution checkpoint: `run_ablation_no_question_routing50.sh`, `run_ablation_no_risk_scoring50.sh`, and `run_ablation_no_table_compression50.sh` completed on 2026-08-23/2026-08-24 using only GPUs `4,5,6,7`; merged rows are `50/50` for WTQ, TabFact, and CRT.
+- `no_table_compression50` has failed/missing `2/2` from WTQ context-limit rows `nu-30` and `nu-44`; this is part of the mechanism evidence, not a network failure.
 
 Next best work: if the user wants more experiments before drafting, either run the prepared mechanism ablation scripts after restarting Qwen3 on GPUs `4,5,6,7`, or run the prepared Seed-E paired Gate-50 package. Do not run any full-dataset expansion before these smaller evidence gaps are closed.
