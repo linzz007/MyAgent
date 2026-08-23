@@ -13,10 +13,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "code"))
 
 import tqa  # noqa: E402
+from evaluate_results import summarize_rows  # noqa: E402
 
 
 class TqaFailureExitTests(unittest.TestCase):
-    def test_row_processing_exception_is_not_swallowed(self):
+    def test_row_processing_exception_writes_failure_row(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             dataset_path = tmp_path / "bad_tabfact.jsonl"
@@ -49,10 +50,22 @@ class TqaFailureExitTests(unittest.TestCase):
 
             with patch.object(tqa, "build_llm_fn", return_value=lambda prompt: "fake"):
                 with redirect_stdout(io.StringIO()):
-                    with self.assertRaises(KeyError):
-                        tqa.main(args)
+                    tqa.main(args)
 
-            self.assertFalse(output_path.exists())
+            rows = [
+                json.loads(line)
+                for line in output_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(len(rows), 1)
+            self.assertFalse(rows[0]["exec_success"])
+            self.assertIn("KeyError", rows[0]["exec_error"])
+            self.assertEqual(rows[0]["final_answer"], "")
+
+            summary, _ = summarize_rows(rows)
+            self.assertEqual(summary["num_samples"], 1)
+            self.assertEqual(summary["num_failed_exec"], 1)
+            self.assertEqual(summary["num_missing_answer"], 1)
 
 
 if __name__ == "__main__":

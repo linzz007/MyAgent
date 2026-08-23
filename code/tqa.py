@@ -75,6 +75,70 @@ def _append_jsonl_with_retry(path, item, attempts=5, delay_seconds=0.5):
     raise last_error
 
 
+def _gold_answer_from_row(row):
+    return row.get("answer") or row.get("targetValue") or row.get("target_value") or ""
+
+
+def _source_dataset_for_task(task):
+    task_name = (task or "").lower()
+    return {
+        "scitab": "tabfact",
+    }.get(task_name, task_name)
+
+
+def _failure_item_for_exception(
+    row,
+    args,
+    exc,
+    *,
+    elapsed_seconds,
+    llm_metrics,
+    api_metrics=None,
+):
+    item = dict(row)
+    item.setdefault("source_dataset", _source_dataset_for_task(getattr(args, "task", "")))
+    item["route_type"] = item.get("route_type")
+    item["difficulty_score"] = item.get("difficulty_score")
+    item["difficulty_level"] = item.get("difficulty_level")
+    item["routing_context"] = item.get("routing_context") or {}
+    item["compression_info"] = item.get("compression_info") or {}
+    item["cost_metrics"] = {
+        "elapsed_seconds": elapsed_seconds,
+        "failure_stage": "sample_exception",
+    }
+    item["llm_metrics"] = llm_metrics
+    if api_metrics is not None:
+        item["api_metrics"] = api_metrics
+    item["elapsed_seconds_total"] = elapsed_seconds
+    item["planner_plan_steps"] = []
+    item["planner_code"] = ""
+    item["exec_success"] = False
+    item["exec_error"] = f"{exc.__class__.__name__}: {exc}"
+    item["final_value"] = None
+    item["simple_lookup_success"] = False
+    item["simple_lookup_value"] = None
+    item["simple_lookup_evidence"] = {}
+    item["critic_verdict"] = {}
+    item["critic_feedback"] = ""
+    item["multi_view_validation"] = {}
+    item["evidence_critic_verdict"] = {}
+    item["logic_critic_verdict"] = {}
+    item["alternative_code"] = ""
+    item["alternative_exec_success"] = False
+    item["alternative_exec_error"] = ""
+    item["alternative_final_value"] = None
+    item["cross_validation_verdict"] = ""
+    item["evidence_summary"] = ""
+    item["answer_mode"] = ""
+    item["classification_raw_output"] = ""
+    item["verification_raw_output"] = ""
+    item["final_answer"] = ""
+    item["pred_answer"] = ""
+    item["gold_answer"] = _gold_answer_from_row(row)
+    item["failure_traceback"] = traceback.format_exc()
+    return item
+
+
 def _to_serializable(value):
     if value is None:
         return None
@@ -271,12 +335,12 @@ def main(args):
     # ---------- 遍历样本并运行流水线 ----------
     trial = 0
     for idx, row in enumerate(table_dataset):
+        llm_tracker.reset()
+        api_metrics_before = (
+            raw_llm_fn.snapshot() if hasattr(raw_llm_fn, "snapshot") else None
+        )
+        sample_started_at = time.perf_counter()
         try:
-            llm_tracker.reset()
-            api_metrics_before = (
-                raw_llm_fn.snapshot() if hasattr(raw_llm_fn, "snapshot") else None
-            )
-            sample_started_at = time.perf_counter()
             question = row.get("question") or row.get("utterance") or row.get("statement", "")
             table_context = table_context_for_row(row)
 
@@ -365,15 +429,35 @@ def main(args):
             item["classification_raw_output"] = state.classification_raw_output
             item["verification_raw_output"] = state.verification_raw_output
             item["final_answer"] = state.final_answer
-            item["gold_answer"] = row.get("answer") or row.get("targetValue") or row.get("target_value") or ""
+            item["gold_answer"] = _gold_answer_from_row(row)
 
             _append_jsonl_with_retry(output_path, item)
 
             trial += 1
             print(f"Finished sample {trial}/{len(table_dataset)}")
-        except Exception:
+        except Exception as exc:
             print(traceback.format_exc())
-            raise
+            api_metrics = None
+            if api_metrics_before is not None:
+                api_metrics = _metric_delta(
+                    api_metrics_before,
+                    raw_llm_fn.snapshot(),
+                )
+            item = _failure_item_for_exception(
+                row,
+                args,
+                exc,
+                elapsed_seconds=time.perf_counter() - sample_started_at,
+                llm_metrics=llm_tracker.snapshot(),
+                api_metrics=api_metrics,
+            )
+            _append_jsonl_with_retry(output_path, item)
+            trial += 1
+            print(
+                f"Failed sample {trial}/{len(table_dataset)}: "
+                f"{row.get('id', idx)} ({exc.__class__.__name__})"
+            )
+            continue
 
 
 if __name__ == "__main__":
