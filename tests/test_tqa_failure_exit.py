@@ -60,12 +60,15 @@ class TqaFailureExitTests(unittest.TestCase):
             self.assertEqual(len(rows), 1)
             self.assertFalse(rows[0]["exec_success"])
             self.assertIn("KeyError", rows[0]["exec_error"])
-            self.assertEqual(rows[0]["final_answer"], "")
+            self.assertEqual(rows[0]["final_answer"], "false")
+            self.assertEqual(rows[0]["pred_answer"], "false")
+            self.assertTrue(rows[0]["fallback_used"])
+            self.assertEqual(rows[0]["error_type"], "execution_error")
 
             summary, _ = summarize_rows(rows)
             self.assertEqual(summary["num_samples"], 1)
             self.assertEqual(summary["num_failed_exec"], 1)
-            self.assertEqual(summary["num_missing_answer"], 1)
+            self.assertEqual(summary["num_missing_answer"], 0)
 
 
 if __name__ == "__main__":

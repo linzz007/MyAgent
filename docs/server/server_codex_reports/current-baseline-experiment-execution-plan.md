@@ -838,3 +838,13 @@ GPU execution rule:
 - Use only GPUs `4,5,6,7` for the current experiments.
 - Keep the resident Qwen3-32B services on GPUs `4,5` and `6,7` unless switching models or the user explicitly asks to release them.
 - 2026-08-24 10:14 CST check: visible compute processes are only VLLM workers on GPUs `4,5,6,7`; `nvidia-smi pmon -c 1` showed no visible PID on GPUs `0,1,2,3`. GPUs `0,1,2,3` still reported memory/utilization in `nvidia-smi`, but no MACT/MyAgent/vLLM process was exposed through NVML or `/proc` device-handle scan. Do not blind-kill unknown GPU usage; run all controlled experiments through the `4567` services.
+
+Robust-output implementation checkpoint:
+
+- MyAgent now has a shared output-contract helper in `code/robust_outputs.py`.
+- Integrated runners: `code/tqa.py`, `scripts/server/run_baseline_tqa.py`, and `scripts/server/run_mact_one_by_one.py`.
+- Failure rows now keep `exec_error` but also receive a non-empty fallback answer plus `fallback_used`, `retry_count`, `error_type`, `context_overflow`, `execution_error`, and nested `robust_runner` diagnostics.
+- MACT integration is wrapper-only and does not change MACT core reasoning logic.
+- Validation passed: py_compile for the touched runner/code files, and `36` targeted unit tests covering robust outputs, baseline runner, MACT wrappers, evaluator, and tqa failure output.
+- Evidence file: `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_patent_seed_e_gate50_20260823/summary/common_robust_runner_update_20260824.md`.
+- Remaining gap: full context truncation / prompt compression retry is not yet implemented for every method; the current change is the shared scoreable-output and diagnostic-field layer.

@@ -16,7 +16,7 @@ from run_mact_one_by_one import build_mact_command, failure_row, run_dataset  # 
 
 
 class RunMactOneByOneTests(unittest.TestCase):
-    def test_failure_row_is_counted_as_exec_error_and_missing_answer(self):
+    def test_failure_row_is_counted_as_exec_error_with_fallback_answer(self):
         sample = {
             "id": "wtq-1",
             "source_dataset": "wtq",
@@ -34,11 +34,14 @@ class RunMactOneByOneTests(unittest.TestCase):
         )
         summary, _ = summarize_rows([row])
 
-        self.assertEqual(row["pred_answer"], "")
+        self.assertEqual(row["pred_answer"], "0")
+        self.assertTrue(row["fallback_used"])
+        self.assertEqual(row["error_type"], "context_overflow")
+        self.assertTrue(row["context_overflow"])
         self.assertIn("context length exceeded", row["exec_error"])
         self.assertEqual(summary["num_samples"], 1)
         self.assertEqual(summary["num_failed_exec"], 1)
-        self.assertEqual(summary["num_missing_answer"], 1)
+        self.assertEqual(summary["num_missing_answer"], 0)
         self.assertEqual(summary["primary_accuracy"], 0.0)
 
     def test_build_mact_command_preserves_context_safe_parameters(self):

@@ -17,6 +17,7 @@ import pandas as pd
 from answer_contracts import infer_answer_contract
 from dataset_profiles import infer_dataset_hints
 from model_backends import add_model_backend_args, build_llm_fn
+from robust_outputs import apply_fallback_answer, attach_robust_fields
 from my_agents import (
     RouterAgent,
     PlannerAgent,
@@ -136,7 +137,13 @@ def _failure_item_for_exception(
     item["pred_answer"] = ""
     item["gold_answer"] = _gold_answer_from_row(row)
     item["failure_traceback"] = traceback.format_exc()
-    return item
+    return apply_fallback_answer(
+        item,
+        task=getattr(args, "task", ""),
+        error_message=item["exec_error"],
+        retry_count=0,
+        fallback_reason="myagent_sample_exception",
+    )
 
 
 def _to_serializable(value):
@@ -430,6 +437,7 @@ def main(args):
             item["verification_raw_output"] = state.verification_raw_output
             item["final_answer"] = state.final_answer
             item["gold_answer"] = _gold_answer_from_row(row)
+            attach_robust_fields(item, fallback_used=False, retry_count=0)
 
             _append_jsonl_with_retry(output_path, item)
 

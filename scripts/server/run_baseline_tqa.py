@@ -26,6 +26,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from model_backends import build_llm_fn  # noqa: E402
 from my_agents import Calculator, build_df_from_table  # noqa: E402
+from robust_outputs import apply_fallback_answer, attach_robust_fields  # noqa: E402
 from run_sharded_tqa import (  # noqa: E402
     TASK_DEFAULTS,
     count_jsonl,
@@ -323,11 +324,19 @@ def failure_payload(
             },
         }
     )
+    retry_count = 0
     if isinstance(error, BaselineExecutionError):
         payload["llm_raw_output"] = error.raw_output
         payload["planner_code"] = error.code
         payload["pandas_attempts"] = error.attempts
-    return payload
+        retry_count = len(error.attempts)
+    return apply_fallback_answer(
+        payload,
+        task=str(row.get("source_dataset") or ""),
+        error_message=payload["exec_error"],
+        retry_count=retry_count,
+        fallback_reason=f"{baseline}_exception",
+    )
 
 
 def run_row(
@@ -359,6 +368,11 @@ def run_row(
         payload["gold_answer"] = gold_answer(row)
         payload["api_metrics"] = metric_delta(before, after)
         payload["elapsed_seconds_total"] = time.perf_counter() - started
+        attach_robust_fields(
+            payload,
+            fallback_used=False,
+            retry_count=len(result.get("pandas_attempts") or []),
+        )
         return payload
     except Exception as exc:  # noqa: BLE001
         after = snapshot(llm_fn)

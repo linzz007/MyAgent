@@ -11,6 +11,13 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+CODE_DIR = SCRIPT_DIR.parents[1] / "code"
+if str(CODE_DIR) not in sys.path:
+    sys.path.insert(0, str(CODE_DIR))
+
+from robust_outputs import apply_fallback_answer, attach_robust_fields  # noqa: E402
+
 
 def load_jsonl(path: Path) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
@@ -58,7 +65,13 @@ def failure_row(
         "returncode": returncode,
         "log_path": str(log_path),
     }
-    return row
+    return apply_fallback_answer(
+        row,
+        task=str(sample.get("source_dataset") or ""),
+        error_message=row["exec_error"],
+        retry_count=0,
+        fallback_reason="mact_wrapper_failure",
+    )
 
 
 def build_mact_command(
@@ -181,7 +194,7 @@ def run_one_sample(
 
     output_rows = load_jsonl(sample_output)
     if result.returncode == 0 and len(output_rows) == 1:
-        return output_rows[0]
+        return attach_robust_fields(output_rows[0], fallback_used=False, retry_count=0)
 
     message = (
         f"MACT sample {sample_index} failed or produced {len(output_rows)} rows "

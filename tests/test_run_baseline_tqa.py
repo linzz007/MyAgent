@@ -97,7 +97,7 @@ class RunBaselineTqaTests(unittest.TestCase):
         self.assertEqual(len(row["pandas_attempts"]), 1)
         self.assertEqual(summary["primary_accuracy"], 1.0)
 
-    def test_failure_row_is_counted_as_failed_and_missing(self):
+    def test_failure_row_uses_fallback_answer_for_scoring(self):
         row = run_row(
             sample_row(),
             baseline="single_agent_pandas",
@@ -107,8 +107,11 @@ class RunBaselineTqaTests(unittest.TestCase):
 
         self.assertFalse(row["exec_success"])
         self.assertIn("NameError", row["exec_error"])
+        self.assertTrue(row["fallback_used"])
+        self.assertEqual(row["pred_answer"], "unknown")
+        self.assertEqual(row["error_type"], "execution_error")
         self.assertEqual(summary["num_failed_exec"], 1)
-        self.assertEqual(summary["num_missing_answer"], 1)
+        self.assertEqual(summary["num_missing_answer"], 0)
 
     def test_pandas_timedelta_is_json_serializable_at_output_boundary(self):
         encoded = json.dumps(
