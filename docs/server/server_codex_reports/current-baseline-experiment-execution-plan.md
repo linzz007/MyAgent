@@ -46,14 +46,53 @@ The user explicitly changed the direction on 2026-08-24:
 6. MACT fairness rule: if MACT gets truncation/recovery handling, it must be documented as a shared run-wrapper robustness layer and not as a change to MACT core reasoning.
 7. Seed-E shows current stability is insufficient. Next work is error attribution, not blind rule expansion.
 8. Optimization priority is parameter and mechanism tuning of existing components:
-   - route thresholds `tau_l` and `tau_h`;
+   - the two-path route threshold `tau_s` for `SIMPLE` versus `COMPLEX`;
+   - the pre-route risk threshold `theta_s`;
    - evidence retention threshold `theta_g`;
-   - posterior risk trigger threshold `theta_r`;
+   - posterior risk trigger threshold `theta_v`;
    - table compression budget, especially WTQ long tables and CRT complex tables;
    - confidence gates for deterministic rules;
    - bounded second-check budget for high-risk WTQ/CRT rows.
 9. Verification flow: repair from Seed-E error types, rerun Seed-E Gate-50, then create a new fully unseen Seed-F Gate-50 or Gate-100 for blind validation.
 10. Patent wording boundary: Formal-200 can be the main positive result; Seed-E is a stability diagnostic until a repaired method also passes a new random split. Risk scoring should be described mainly as a cost/path-control mechanism unless additional evidence proves direct accuracy gain.
+
+## 0.2 Patent Stage Freeze: 2026-08-24
+
+The patent-facing method is frozen at the component level as of 2026-08-24. Do not add new top-level routes, new independent agents, or a new post-hoc scoring layer unless the user explicitly reopens the patent design.
+
+Frozen patent components:
+
+| Component | Frozen meaning |
+|---|---|
+| Question-type recognition | Detects answer contract, operation type, semantic complexity, structural complexity, and task-specific table QA patterns. |
+| Dual scoring | Combines semantic complexity and structural/evidence complexity into a route decision, then uses pre-route and post-answer risk scores to control verification cost. |
+| Table compression | Converts the original table into a question-aware evidence table by retaining headers, candidate rows, candidate columns, and key cells before prompting. |
+| Two-path routing | Top-level route is only `SIMPLE` or `COMPLEX`. `SIMPLE` is a lightweight lookup path; `COMPLEX` is the reasoning path. |
+| Deterministic table validation | A tool capability inside the existing complexity/risk framework, used for reproducible table operations and answer normalization. It is not a third top-level route. |
+| Selective collaboration verification | A conditional sub-process inside `COMPLEX`, triggered by high posterior risk, answer-contract conflict, candidate disagreement, or insufficient evidence. It is not a blanket multi-agent pass. |
+| Robust scoreable output | A run-wrapper/output-boundary requirement: every input row should produce one scoreable output row with diagnostics. For MACT this remains wrapper-only and must not alter MACT core reasoning. |
+
+Allowed future changes before thesis experiments:
+
+- tune thresholds, weights, and table-compression budgets;
+- refine answer-contract normalization;
+- add confidence gates for existing deterministic validators;
+- add bounded retry/fallback handling inside the robust output contract;
+- fix reusable error categories found from Seed-E/F diagnostics.
+
+Not allowed without reopening the patent design:
+
+- sample-ID-specific rules;
+- fixed question-string rules;
+- new top-level paths beyond `SIMPLE` and `COMPLEX`;
+- new named modules that cannot be mapped to one of the frozen components above;
+- claims that multi-seed or all-model superiority is proven before new blind validation supports it.
+
+Patent document checkpoint:
+
+- Current patent specification candidate: `D:\AAAcode\AAA毕业相关\专利信息\lzz-成本感知表格问答路由\说明书7.0-定稿版.docx`.
+- PDF proof: `D:\AAAcode\AAA毕业相关\专利信息\lzz-成本感知表格问答路由\说明书7.0-定稿版.pdf`.
+- The specification uses the two-path `SIMPLE` / `COMPLEX` route wording and does not describe `Light` / `Tool` / `Collab` as three independent top-level routes.
 
 ## 1. Current Evidence Already Available
 
@@ -830,7 +869,7 @@ User direction update:
 - Final reports should not use failure rate as a headline metric. All methods should emit one scoreable answer for every input row. Recovery and fallback details stay in internal diagnostics.
 - Prefer a common robust runner for MyAgent, MACT, Direct-CoT, and Single-Agent Pandas. The robust layer may retry, compress, truncate, repair code, or fall back, but for MACT it must remain an outer wrapper and not change core MACT reasoning.
 - Seed-E is the active diagnostic split. Use it for error attribution across WTQ, TabFact, and CRT. If a mechanism repair improves Seed-E, create a fresh unseen Seed-F Gate-50 or Gate-100 as blind validation.
-- Next optimization levers should be existing-component parameters and gates: `tau_l`, `tau_h`, `theta_g`, `theta_r`, table-compression budget, deterministic-rule confidence gates, and high-risk WTQ/CRT second-check budget.
+- Next optimization levers should be existing-component parameters and gates: the `SIMPLE`/`COMPLEX` threshold `tau_s`, pre-route risk threshold `theta_s`, evidence retention threshold `theta_g`, posterior verification threshold `theta_v`, table-compression budget, deterministic-rule confidence gates, and high-risk WTQ/CRT second-check budget.
 - Patent wording boundary: claim Qwen3-32B Formal-200 superiority and efficiency; do not claim all-model superiority or multi-seed stability until Seed-F also validates.
 
 GPU execution rule:
