@@ -1643,14 +1643,23 @@ class RouterAgent:
 
     def _rule_based_route(self, question: str) -> Optional[str]:
         """Simple keyword-based fallback when scores are ambiguous."""
+        question_l = (question or "").lower()
         complex_keywords = [
             "增长", "增幅", "占比", "比例", "同比", "环比", "平均",
             "总和", "合计", "总计", "变化", "差值", "增速", "下降",
+            "average", "mean", "sum", "total", "ratio", "proportion",
+            "percentage", "percent", "difference", "compare", "comparison",
+            "highest", "lowest", "most", "least", "top", "earliest",
+            "latest", "before", "after", "trend", "change",
         ]
-        simple_triggers = ["是多少", "有多少", "是什么", "为多少"]
+        simple_triggers = [
+            "是多少", "有多少", "是什么", "为多少",
+            "what is", "what was", "which is", "which was", "who is",
+            "who was", "when is", "when was",
+        ]
 
-        has_complex = any(k in question for k in complex_keywords)
-        has_simple = any(k in question for k in simple_triggers)
+        has_complex = any(k in question_l for k in complex_keywords)
+        has_simple = any(k in question_l for k in simple_triggers)
 
         if has_complex:
             return "COMPLEX"
