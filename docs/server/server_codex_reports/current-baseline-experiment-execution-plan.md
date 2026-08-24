@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-24 01:57 CST
+Last updated: 2026-08-24 10:22 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -8,23 +8,52 @@ This is the latest experiment PRD. It replaces the previous broad baseline plan.
 
 ## 0. Executive Decision
 
-The immediate Qwen3-32B formal200 target is achieved: current MyAgent exceeds MACT on WTQ, TabFact, CRT, and overall while using much fewer tokens and much less time.
+The immediate Qwen3-32B formal200 target is achieved and can be kept as the current main result: current MyAgent exceeds MACT on WTQ, TabFact, CRT, and overall while using much fewer tokens and much less time.
 
-The immediate goal is no longer to keep optimizing Qwen3 or to reproduce every recent table-QA paper. The immediate goal is to package a master's-thesis-level and patent-supporting experiment body with:
+The immediate goal is no longer to keep optimizing Qwen3 on fixed formal200 samples or to reproduce every recent table-QA paper. The current goal is to make the experiment and method defensible for patent/thesis writing by proving mechanism-level robustness beyond one fixed split:
 
 1. at least three baselines,
 2. three datasets,
 3. one main model,
-4. accuracy / token / time / failure-rate reporting,
-5. a small but clear ablation table for the patent mechanisms.
+4. accuracy / token / time as the main metrics,
+5. internal robust-runner diagnostics for fallback / retry / error type,
+6. a small but clear ablation table for the patent mechanisms,
+7. Seed-E error attribution and a later Seed-F blind validation after mechanism fixes.
 
 If the P0 items in this PRD are complete, the experiment body can be considered complete for the current thesis/patent stage. P1 items strengthen the report. P2 items are not necessary now.
 
 Current execution emphasis:
 
 - Preserve the locked Qwen3-32B formal200 result instead of chasing more TabFact/WTQ single-dataset gains.
+- Do not introduce new optimizations keyed to formal200 sample IDs, fixed query strings, or one-off examples. Future optimization must be based on error types, answer contracts, routing thresholds, evidence retention, compression budgets, or risk/verification mechanisms.
 - Convert existing mechanism evidence into patent-facing claims: selective collaboration, deterministic verification, answer normalization, and evidence retention.
-- Add only bounded diagnostics that clarify generalization risk or cross-model boundary.
+- Add only bounded diagnostics that clarify generalization risk, cross-model boundary, or mechanism failure modes.
+- Treat Seed-E as the active diagnosis split. Use it for error attribution and mechanism repair, then validate with a new unseen Seed-F Gate-50 or Gate-100 before claiming multi-seed generalization.
+- Final paper/patent main tables should prioritize Accuracy, Avg Token, and Avg Time. Fallback and retry diagnostics remain in logs, not as a headline failure-rate metric.
+
+## 0.1 Current Active Direction: 2026-08-24
+
+The user explicitly changed the direction on 2026-08-24:
+
+1. No more formal200 sample-specific optimization. Formal200 remains the current main result, but all future fixes must target reusable mechanisms or error categories.
+2. Do not use "failure rate" as a final headline metric. Every method must produce one scoreable output row per input row.
+3. Implement or use a common robust runner whenever possible. Context overflow, API BadRequest, code execution errors, and tool errors should enter a recovery path instead of stopping the run.
+4. Recovery policy:
+   - context overflow: lower `max_tokens`, compress or truncate prompt, and preserve question, table header, candidate evidence rows/columns, and key cells first;
+   - code execution failure: feed execution error back into code generation/repair for at least 1-2 retries;
+   - repeated failure: use a fallback answer path so the row can still be scored as correct or incorrect.
+5. Internal logs must keep `fallback_used`, `retry_count`, `error_type`, `context_overflow`, `execution_error`, and related fields for diagnosis.
+6. MACT fairness rule: if MACT gets truncation/recovery handling, it must be documented as a shared run-wrapper robustness layer and not as a change to MACT core reasoning.
+7. Seed-E shows current stability is insufficient. Next work is error attribution, not blind rule expansion.
+8. Optimization priority is parameter and mechanism tuning of existing components:
+   - route thresholds `tau_l` and `tau_h`;
+   - evidence retention threshold `theta_g`;
+   - posterior risk trigger threshold `theta_r`;
+   - table compression budget, especially WTQ long tables and CRT complex tables;
+   - confidence gates for deterministic rules;
+   - bounded second-check budget for high-risk WTQ/CRT rows.
+9. Verification flow: repair from Seed-E error types, rerun Seed-E Gate-50, then create a new fully unseen Seed-F Gate-50 or Gate-100 for blind validation.
+10. Patent wording boundary: Formal-200 can be the main positive result; Seed-E is a stability diagnostic until a repaired method also passes a new random split. Risk scoring should be described mainly as a cost/path-control mechanism unless additional evidence proves direct accuracy gain.
 
 ## 1. Current Evidence Already Available
 
@@ -85,8 +114,10 @@ This gives three baselines: MACT, Direct-CoT, and Single-Agent Pandas. That sati
 
 Main result table format:
 
-| Method | WTQ Acc | TabFact Acc | CRT Acc | Overall Acc | Avg Token | Avg Time | Fail/Missing |
-|---|---:|---:|---:|---:|---:|---:|---:|
+| Method | WTQ Acc | TabFact Acc | CRT Acc | Overall Acc | Avg Token | Avg Time |
+|---|---:|---:|---:|---:|---:|---:|
+
+Fallback / retry / error diagnostics are stored in the run logs and diagnostic tables. They are not headline columns in the final main table.
 
 ### P0.2 Efficiency Reporting
 
@@ -94,8 +125,8 @@ Do not run a separate efficiency experiment. Compute these metrics from P0.1:
 
 - average token per sample,
 - average time per sample,
-- failure / missing-answer count,
-- token ratio to MACT.
+- token ratio to MACT,
+- internal fallback / retry diagnostics.
 
 Efficiency is required in the final report because the patent method claims selective collaboration and compression, not just higher accuracy.
 
@@ -119,7 +150,20 @@ Minimum ablation variants:
 
 The ablation table must report accuracy and token. It can use fewer samples than the main comparison because its purpose is mechanism evidence, not leaderboard-level comparison.
 
-### P0.4 Existing Multi-Model Boundary Summary
+### P0.4 Common Robust Runner
+
+All methods should be run through a shared robust-output contract whenever possible:
+
+- exactly one merged output row per input row;
+- context-overflow retry with smaller generation budget and prompt/table compression;
+- code execution repair for at least 1-2 attempts before fallback;
+- fallback answer generation after repeated recovery failure;
+- final output always scoreable by the same evaluator;
+- internal diagnostic fields for `fallback_used`, `retry_count`, `error_type`, `context_overflow`, and `execution_error`.
+
+For MACT, this layer is only an outer running wrapper. It must not alter MACT's core reasoning prompt, agent logic, voting logic, or tool-use strategy.
+
+### P0.5 Existing Multi-Model Boundary Summary
 
 Do not rerun smaller models now. Summarize existing no-go evidence:
 
@@ -180,7 +224,13 @@ Required output fields or equivalents:
 - gold answer copied from input
 - token usage if available
 - elapsed seconds if available
-- failure status if the sample cannot be answered
+- `fallback_used`
+- `retry_count`
+- `error_type`
+- `context_overflow`
+- `execution_error`
+
+If a sample cannot be solved after recovery, the runner must still write a fallback prediction that can be scored. The evaluator should count it as correct or incorrect, not as a run-level interruption.
 
 Before any 200-row run, each new baseline must pass a 5-row smoke test on WTQ, TabFact, and CRT.
 
@@ -232,7 +282,7 @@ Run each new baseline on 5 rows per dataset and produce:
 - raw JSONL,
 - eval JSON,
 - a short markdown summary,
-- logs for failures.
+- logs for recovery and fallback diagnostics.
 
 Stop and report if any runner cannot produce exactly one output row per input row.
 
@@ -247,7 +297,7 @@ Run:
 
 on WTQ / TabFact / CRT, `200` rows per dataset, same sample IDs.
 
-Then generate the main table with accuracy, token, time, and failure rate.
+Then generate the main table with accuracy, token, and time. Generate a separate diagnostic table for fallback, retry, and error fields.
 
 ### Step 6: Ablation
 
@@ -260,10 +310,14 @@ The current experiment stage is complete when all of the following exist:
 1. Main Formal-200 table for MyAgent, MACT, Direct-CoT, and Single-Agent Pandas on WTQ / TabFact / CRT.
 2. Efficiency metrics from the same Formal-200 runs.
 3. MyAgent ablation table covering at least three core mechanisms.
-4. Existing multi-model no-go/boundary summary included in the final report.
-5. A short final experiment summary markdown that states what was run, what was not run, and why.
+4. Common robust-runner policy or implementation that preserves one scoreable output row per input row.
+5. Seed-E error-attribution table covering WTQ, TabFact, and CRT categories.
+6. At least one mechanism-level repair batch validated on Seed-E without sample-ID-specific rules.
+7. A fresh unseen Seed-F Gate-50 or Gate-100 blind validation after the repair if Seed-E improves.
+8. Existing multi-model no-go/boundary summary included in the final report.
+9. A short final experiment summary markdown that states what was run, what was not run, and why.
 
-If these five items are done, do not continue running optional experiments without user approval.
+If these items are done, do not continue running optional experiments without user approval.
 
 ## 9. Stop Conditions
 
@@ -281,9 +335,11 @@ Stop and report instead of continuing if:
 Required final tables:
 
 1. Main baseline comparison: MyAgent vs MACT vs Direct-CoT vs Single-Agent Pandas.
-2. Efficiency comparison: accuracy, token, time, failure rate.
-3. Ablation comparison: remove MyAgent mechanisms.
-4. Multi-model boundary summary: existing smaller-model no-go results.
+2. Efficiency comparison: accuracy, token, time.
+3. Robust-runner diagnostics: fallback count, retry count, context overflow, execution error, tool error.
+4. Ablation comparison: remove MyAgent mechanisms.
+5. Seed-E error attribution and, after repair, Seed-F blind validation.
+6. Multi-model boundary summary: existing smaller-model no-go results.
 
 Optional final tables:
 
@@ -765,3 +821,20 @@ Mechanism ablation expansion executed on 2026-08-23/2026-08-24:
 - `no_table_compression50` has failed/missing `2/2` from WTQ context-limit rows `nu-30` and `nu-44`; this is part of the mechanism evidence, not a network failure.
 
 Next best work: do not rerun the full official 200-row package immediately. First use the completed Seed-E paired package as a failure-cluster diagnostic: compare MyAgent-only, MACT-only, and both-wrong rows for WTQ/TabFact/CRT; identify whether the gap comes from answer extraction, table filtering, risk routing, or CRT reasoning; then implement only mechanisms that are narrow, auditable, and patent-describable. After one such batch, run a small focused validation and then a new Seed-F/G Gate-50 paired check before considering another expensive formal run.
+
+## 14. 2026-08-24 Strategy Realignment
+
+User direction update:
+
+- Stop optimizing around formal200 sample IDs or fixed query text. Formal200 remains the locked positive main result, but future work must be driven by reusable error types and component mechanisms.
+- Final reports should not use failure rate as a headline metric. All methods should emit one scoreable answer for every input row. Recovery and fallback details stay in internal diagnostics.
+- Prefer a common robust runner for MyAgent, MACT, Direct-CoT, and Single-Agent Pandas. The robust layer may retry, compress, truncate, repair code, or fall back, but for MACT it must remain an outer wrapper and not change core MACT reasoning.
+- Seed-E is the active diagnostic split. Use it for error attribution across WTQ, TabFact, and CRT. If a mechanism repair improves Seed-E, create a fresh unseen Seed-F Gate-50 or Gate-100 as blind validation.
+- Next optimization levers should be existing-component parameters and gates: `tau_l`, `tau_h`, `theta_g`, `theta_r`, table-compression budget, deterministic-rule confidence gates, and high-risk WTQ/CRT second-check budget.
+- Patent wording boundary: claim Qwen3-32B Formal-200 superiority and efficiency; do not claim all-model superiority or multi-seed stability until Seed-F also validates.
+
+GPU execution rule:
+
+- Use only GPUs `4,5,6,7` for the current experiments.
+- Keep the resident Qwen3-32B services on GPUs `4,5` and `6,7` unless switching models or the user explicitly asks to release them.
+- 2026-08-24 10:14 CST check: visible compute processes are only VLLM workers on GPUs `4,5,6,7`; `nvidia-smi pmon -c 1` showed no visible PID on GPUs `0,1,2,3`. GPUs `0,1,2,3` still reported memory/utilization in `nvidia-smi`, but no MACT/MyAgent/vLLM process was exposed through NVML or `/proc` device-handle scan. Do not blind-kill unknown GPU usage; run all controlled experiments through the `4567` services.
