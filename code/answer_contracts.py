@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import json
+import math
 import re
 from typing import Any, Optional, Tuple
 
@@ -302,6 +303,8 @@ def validate_contract_value(
             )
         return True, ""
 
+    if isinstance(value, float) and math.isnan(value):
+        return False, "Answer contract requires one non-NaN scalar value."
     if value is None or (isinstance(value, str) and not value.strip()):
         return False, "Answer contract requires one non-empty scalar value."
     if isinstance(value, (list, tuple, set, dict)) and len(value) != 1:

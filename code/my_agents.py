@@ -14,7 +14,9 @@ This module defines a simplified agent architecture:
 from __future__ import annotations
 
 import ast
+from fractions import Fraction
 import json
+import math
 import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -1387,6 +1389,13 @@ def _canonicalize_wtq_scalar(value: Any, df: pd.DataFrame, question: str) -> Any
             suffix = "year" if years == 1 else "years"
             return f"{years} {suffix}"
         return value
+    if re.search(r"\babbrev(?:iation)?\b|\buse abbreviation\b", question_text, flags=re.I):
+        if candidate.upper() in COUNTRY_CODE_NAMES:
+            return candidate.upper()
+        candidate_key = _loose_text_key(candidate)
+        for code, country_name in COUNTRY_CODE_NAMES.items():
+            if candidate_key == _loose_text_key(country_name):
+                return code
     option_match = re.search(
         r"\b(?:which|what)\b.*?\b(?:earlier|later|first|last)\b[,\s]+(.+?)\s+or\s+(.+?)\??$",
         question_text,
@@ -1438,6 +1447,29 @@ def _canonicalize_wtq_scalar(value: Any, df: pd.DataFrame, question: str) -> Any
     return matches[0] if len(matches) == 1 else value
 
 
+def _format_crt_proportion_fraction(
+    value: Any,
+    question: str,
+    df: Optional[pd.DataFrame] = None,
+) -> Optional[str]:
+    if not re.search(r"\bproportion\b", question or "", flags=re.I):
+        return None
+    if re.search(r"\bpercent(?:age)?\b|%", question or "", flags=re.I):
+        return None
+    numeric = _as_number_like(value)
+    if numeric is None or numeric <= 0 or numeric >= 1:
+        return None
+    max_denominator = 100
+    if df is not None and len(df) > 1:
+        max_denominator = max(2, min(100, len(df)))
+    fraction = Fraction(float(numeric)).limit_denominator(max_denominator)
+    if fraction.denominator <= 1:
+        return None
+    if abs((fraction.numerator / fraction.denominator) - float(numeric)) <= 1e-9:
+        return f"{fraction.numerator}/{fraction.denominator}"
+    return None
+
+
 def _canonicalize_crt_scalar(
     value: Any,
     question: str,
@@ -1445,6 +1477,9 @@ def _canonicalize_crt_scalar(
 ) -> Any:
     question_text = question or ""
     if not isinstance(value, str):
+        proportion_fraction = _format_crt_proportion_fraction(value, question_text, df)
+        if proportion_fraction is not None:
+            return proportion_fraction
         numeric = _as_number_like(value)
         if (
             numeric is not None
@@ -1459,6 +1494,9 @@ def _canonicalize_crt_scalar(
     if not value.strip():
         return value
     candidate = re.sub(r"\s+", " ", value).strip()
+    proportion_fraction = _format_crt_proportion_fraction(candidate, question_text, df)
+    if proportion_fraction is not None:
+        return proportion_fraction
     candidate_number = _as_number_like(candidate)
     if (
         candidate_number is not None
@@ -1544,6 +1582,8 @@ def _coerce_pandas_answer_value(value: Any) -> Any:
 
 def _is_empty_answer_value(value: Any) -> bool:
     if value is None:
+        return True
+    if isinstance(value, float) and math.isnan(value):
         return True
     if isinstance(value, str):
         return not value.strip()
@@ -10408,6 +10448,41 @@ class TableQAPipeline:
             return True
         return thinking.confidence >= 0.60
 
+    @classmethod
+    def _should_preserve_crt_numeric_execution(
+        cls,
+        state: TQASessionState,
+        selected: Optional[CandidateAnswer],
+        consensus: Optional[CandidateAnswer],
+        forced: bool,
+    ) -> bool:
+        if forced or (state.dataset_profile or "").lower() != "crt":
+            return False
+        if selected is None or consensus is None:
+            return False
+        if selected.name != "code" or not selected.is_valid:
+            return False
+        if not consensus.name.startswith("thinking_") or not consensus.is_valid:
+            return False
+        if answer_similarity(
+            selected.normalized_answer,
+            consensus.normalized_answer,
+            state.answer_contract,
+        ) >= 1.0:
+            return False
+        if not (
+            cls._is_numeric_scalar_answer(selected.normalized_answer)
+            and cls._is_numeric_scalar_answer(consensus.normalized_answer)
+        ):
+            return False
+        return bool(
+            re.search(
+                r"\b(?:average|mean|proportion|ratio|percentage|percent)\b",
+                state.question or "",
+                flags=re.I,
+            )
+        )
+
     @staticmethod
     def _is_numeric_scalar_answer(value: Any) -> bool:
         if isinstance(value, bool):
@@ -10777,6 +10852,14 @@ class TableQAPipeline:
             )
             if protected_deterministic:
                 consensus = selected
+            protected_crt_numeric_execution = self._should_preserve_crt_numeric_execution(
+                result,
+                selected,
+                consensus,
+                forced,
+            )
+            if protected_crt_numeric_execution:
+                consensus = selected
             wtq_unforced_verifier_conflict = (
                 result.dataset_profile == "wtq"
                 and not forced
@@ -10843,6 +10926,8 @@ class TableQAPipeline:
                     reason=(
                         "deterministic_shortcut_preserved"
                         if protected_deterministic
+                        else "crt_numeric_execution_preserved"
+                        if protected_crt_numeric_execution
                         else "wtq_answer_shape_verifier_override"
                         if wtq_verifier_override
                         else "strong_verification_consensus"

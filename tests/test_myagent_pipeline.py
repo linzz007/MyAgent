@@ -30,7 +30,8 @@ from my_agents import (  # noqa: E402
     validate_answer_contract_code_alignment,
     validate_generated_code_grounding,
 )
-from answer_contracts import infer_answer_contract  # noqa: E402
+from answer_contracts import infer_answer_contract, validate_contract_value  # noqa: E402
+from dataset_profiles import infer_dataset_hints  # noqa: E402
 
 
 class FakePipelineLLM:
@@ -225,6 +226,26 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
 
         self.assertEqual(value, "2")
 
+    def test_wtq_abbreviation_request_preserves_country_code_shape(self):
+        df = pd.DataFrame({"Name": ["Li Na (CHN)", "Kim Clijsters (BEL)"]})
+
+        self.assertEqual(
+            _canonicalize_wtq_scalar(
+                "China",
+                df,
+                "what country had the most amount of people in the top 10? (use abbreviation)",
+            ),
+            "CHN",
+        )
+        self.assertEqual(
+            _canonicalize_wtq_scalar(
+                "CHN",
+                df,
+                "what country had the most amount of people in the top 10? use abbreviation",
+            ),
+            "CHN",
+        )
+
     def test_wtq_difference_between_canonicalizes_negative_numeric_delta(self):
         df = pd.DataFrame({"Player": ["first", "fourth"], "Balls": [10, 4]})
 
@@ -272,6 +293,61 @@ class MyAgentPipelineSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(value, "80%")
+
+    def test_crt_proportion_scalar_is_formatted_as_fraction(self):
+        df = pd.DataFrame({"company": list("abcdef")})
+
+        value = _canonicalize_crt_scalar(
+            1 / 6,
+            "What proportion of the Malaysia Airlines group companies are involved in the airline industry?",
+            df,
+        )
+
+        self.assertEqual(value, "1/6")
+
+    def test_crt_average_contract_preserves_three_decimal_precision(self):
+        hints = infer_dataset_hints(
+            "crt",
+            "What was the average viewership for episodes that aired in March 2006?",
+            pd.DataFrame({"viewers": [13.5, 13.77]}),
+        )
+
+        self.assertEqual(hints.decimal_places, 3)
+
+    def test_scalar_contract_rejects_nan_value(self):
+        contract = infer_answer_contract("What is the average number of viewers?")
+
+        valid, reason = validate_contract_value(float("nan"), contract)
+
+        self.assertFalse(valid)
+        self.assertIn("non-NaN", reason)
+
+    def test_crt_numeric_execution_candidate_is_preserved_over_conflicting_verifier(self):
+        state = TQASessionState(
+            question="What is the average number of losses for teams in the top half of the table?",
+            df=pd.DataFrame({"losses": [7, 9, 9, 8, 9, 7, 11, 11]}),
+            table_schema={},
+            dataset_profile="crt",
+        )
+        selected = SimpleNamespace(
+            name="code",
+            is_valid=True,
+            normalized_answer=8.875,
+        )
+        consensus = SimpleNamespace(
+            name="thinking_program",
+            is_valid=True,
+            normalized_answer=9.0,
+        )
+
+        self.assertTrue(
+            TableQAPipeline._should_preserve_crt_numeric_execution(
+                state,
+                selected,
+                consensus,
+                forced=False,
+            )
+        )
 
     def test_entity_metadata_suffix_is_removed_from_requested_name(self):
         self.assertEqual(

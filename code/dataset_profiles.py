@@ -79,7 +79,16 @@ def _crt_decimal_precision(question: str, df: pd.DataFrame) -> Optional[int]:
     text = question or ""
     if re.search(r"\bcorrelation\s+coefficient\b", text, flags=re.I):
         return 4
-    return _integer_average_precision(text, df)
+    explicit = re.search(r"\b(\d+)\s+decimal\s+places?\b", text, flags=re.I)
+    if explicit:
+        return int(explicit.group(1))
+    if re.search(r"\b(nearest\s+whole|whole\s+number|integer|round(?:ed)?\s+to\s+0)\b", text, flags=re.I):
+        return 0
+    if re.search(r"\b(average|mean)\b", text, flags=re.I):
+        return 3
+    if re.search(r"\b(percent|percentage|rate|ratio)\b", text, flags=re.I):
+        return 3
+    return None
 
 
 def infer_dataset_hints(
