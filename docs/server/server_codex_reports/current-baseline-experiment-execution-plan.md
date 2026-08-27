@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-27 11:19 CST
+Last updated: 2026-08-27 14:05 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -72,6 +72,122 @@ For the current graduation objective, the model plan is:
 3. Extra models: optional P2; do not run by default.
 
 TableZoomer note: if TableZoomer is run, use the same Qwen3-32B local service for fairness. Do not compare MyAgent's Qwen3-32B results against TableZoomer's paper-reported Qwen3-8B or different-dataset numbers as if they were same-condition results.
+
+### 0.0.4 Server Runbook and Evaluation Contract
+
+The server-side agent should be able to start the model service, run the planned experiments, and generate evaluation files from this PRD without inventing new experiments.
+
+Expected server paths:
+
+| Item | Path / value |
+|---|---|
+| MyAgent repo | `/home/ubuntu/lzz/MyAgent` |
+| MACT repo / run package host | `/home/ubuntu/lzz/MACT` |
+| Main run package | `/home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505` |
+| Main model weights | `/home/ubuntu/models/Qwen3-32B` |
+| Served model name | `qwen3-32b-local` |
+| API key env | `LOCAL_VLLM_API_KEY` |
+| Preferred endpoints | `http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1` |
+
+Start or verify Qwen3-32B local service:
+
+```bash
+cd /home/ubuntu/lzz/MyAgent
+source /home/ubuntu/miniconda3/etc/profile.d/conda.sh
+conda activate lzz-agent
+
+git fetch origin --tags
+git checkout codex/selective-risk-collaboration
+git pull --ff-only origin codex/selective-risk-collaboration
+
+cp -n configs/server/qwen3_32b_2gpu_local.env.example configs/server/qwen3_32b_2gpu_local.env
+
+# Four-GPU server default: two 2-GPU vLLM services, ports 8000 and 8001.
+# If only two GPUs are available, change GPU_GROUPS to "0,1" and BASELINE_ENDPOINTS to only port 8000.
+export BASELINE_ENDPOINTS=http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1
+sed -i 's/^export GPU_GROUPS=.*/export GPU_GROUPS="4,5;6,7"/' configs/server/qwen3_32b_2gpu_local.env
+sed -i 's#^export MODEL_ID=.*#export MODEL_ID=/home/ubuntu/models/Qwen3-32B#' configs/server/qwen3_32b_2gpu_local.env
+sed -i 's/^export SERVED_MODEL_NAME=.*/export SERVED_MODEL_NAME=qwen3-32b-local/' configs/server/qwen3_32b_2gpu_local.env
+sed -i 's/^export VLLM_MAX_MODEL_LEN=.*/export VLLM_MAX_MODEL_LEN=8192/' configs/server/qwen3_32b_2gpu_local.env
+
+bash scripts/server/start_vllm_pool.sh configs/server/qwen3_32b_2gpu_local.env
+bash scripts/server/healthcheck_vllm_pool.sh configs/server/qwen3_32b_2gpu_local.env
+```
+
+If the vLLM services are already running, do not restart them just to run experiments. Run only `healthcheck_vllm_pool.sh` and continue if the configured endpoint(s) answer.
+
+Generate or reuse the run package:
+
+```bash
+cd /home/ubuntu/lzz/MyAgent
+python scripts/server/prepare_baseline_experiment_run.py \
+  --myagent-root /home/ubuntu/lzz/MyAgent \
+  --mact-root /home/ubuntu/lzz/MACT \
+  --run-dir /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505 \
+  --served-model-name qwen3-32b-local \
+  --endpoints "$BASELINE_ENDPOINTS" \
+  --api-key-env LOCAL_VLLM_API_KEY \
+  --formal-limit 200 \
+  --ablation-limit 50 \
+  --smoke-limit 5
+```
+
+Run order:
+
+```bash
+cd /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505
+export LOCAL_VLLM_API_KEY=local-vllm-key-change-me
+export BASELINE_ENDPOINTS=${BASELINE_ENDPOINTS:-http://127.0.0.1:8000/v1,http://127.0.0.1:8001/v1}
+
+bash healthcheck_services.sh
+bash run_smoke_direct_cot.sh
+bash run_smoke_single_agent_pandas.sh
+
+# Run or reuse completed formal scripts.
+bash run_formal_myagent.sh
+bash run_formal_direct_cot.sh
+bash run_formal_single_agent_pandas.sh
+bash run_mact_wtq_formal200.sh
+bash run_mact_tabfact_formal200.sh
+bash run_mact_crt_formal200.sh
+
+# Run ablations after the main table is stable.
+bash run_ablation_legacy50.sh
+bash run_ablation_no_strong50.sh
+bash run_ablation_no_deterministic_shortcuts50.sh
+bash run_ablation_no_question_routing50.sh
+bash run_ablation_no_risk_scoring50.sh
+bash run_ablation_no_table_compression50.sh
+
+bash run_eval_and_summary.sh
+```
+
+Evaluation contract:
+
+| Output | Required meaning |
+|---|---|
+| `merged/*.jsonl` or method-specific merged outputs | One scoreable output row per input row |
+| `eval/*_eval.json` | Dataset-level accuracy, token, time, failed/missing diagnostics from `code/evaluate_results.py` |
+| `summary/main_baseline_summary.md` | Main baseline and efficiency table |
+| ablation summary files | Mechanism ablation table, accuracy and token/time first |
+| Seed-E/F diagnostic summaries | Error buckets: MyAgent-only, MACT-only, both-correct, both-wrong |
+
+Final metrics to report:
+
+- primary accuracy / correct count;
+- average total token;
+- average elapsed seconds;
+- token ratio to MACT;
+- failed/missing only as diagnostic, not as a headline metric;
+- fallback/retry/error type only in robustness diagnostics.
+
+Stop and report before continuing if:
+
+- a model endpoint fails healthcheck;
+- a runner does not produce exactly one output row per input row;
+- an evaluator JSON is missing or cannot parse;
+- token/time accounting is unavailable for a new baseline and cannot be consistently approximated;
+- TableZoomer or another P1 baseline needs substantial adaptation beyond Smoke-5.
 
 Experiment discipline:
 
