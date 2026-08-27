@@ -19,14 +19,14 @@ Current state:
 | Patent method | frozen | Top-level route is `SIMPLE` / `COMPLEX`; deterministic table validation and selective collaboration are sub-mechanisms, not new routes. |
 | Patent specification | final candidate | Version `7.0` Word/PDF has been generated locally and aligned with the frozen method wording. |
 | Main result | positive | Qwen3-32B Formal-200: MyAgent `480/600 = 0.8000`, MACT `465/600 = 0.7750`. |
-| Baselines | enough for supervisor requirement | MACT, Direct-CoT, and Single-Agent Pandas are the three required baselines. |
+| Baselines | enough for supervisor requirement | MACT, Direct-CoT, and Single-Agent Pandas are the three required baselines. Add TableZoomer as a recent fourth baseline if its official implementation passes smoke adaptation. |
 | Efficiency metrics | available | MyAgent average token `6293.12`; MACT average token `11318.89`; token ratio `0.5560`. |
 | Seed-E | diagnostic warning | MyAgent `95/150`, MACT `105/150`; this shows robustness risk and must not be claimed as solved. |
 | Code optimization | paused except bounded fixes | No broad new modules. Only parameter/gate/normalization/compression fixes mapped to frozen components are allowed. |
 
 Final thesis experiments to report by default:
 
-1. Main Formal-200 comparison: MyAgent vs MACT vs Direct-CoT vs Single-Agent Pandas on WTQ, TabFact, and CRT.
+1. Main Formal-200 comparison: MyAgent vs MACT vs Direct-CoT vs Single-Agent Pandas on WTQ, TabFact, and CRT; add TableZoomer as a recent fourth baseline if it passes smoke adaptation on the same inputs.
 2. Efficiency comparison from the same Formal-200 runs: accuracy, average token, and average time.
 3. Mechanism ablation: question routing, dual/risk scoring, table compression/evidence retention, deterministic table validation, and selective strong verification where the switch exists.
 4. Seed stability diagnostic: Seed-E error attribution, followed by one fresh Seed-F or Seed-G Gate-50/Gate-100 blind validation only if a mechanism-level repair is made.
@@ -38,8 +38,9 @@ Use this matrix as the default execution plan. A run not listed here is out of s
 
 | Experiment | Model | Datasets | Rows | Methods / variants | Metrics | Thesis destination | Status |
 |---|---|---|---:|---|---|---|---|
-| Main comparison | Qwen3-32B local | WTQ, TabFact, CRT | 200 per dataset | MyAgent, MACT, Direct-CoT, Single-Agent Pandas | Accuracy, Avg Token, Avg Time | Main baseline comparison table | Required; current evidence is positive |
-| Efficiency comparison | Qwen3-32B local | WTQ, TabFact, CRT | same rows as main comparison | Same four methods as main comparison | Accuracy, Avg Token, Avg Time, token ratio to MACT | Efficiency table or main table columns | Required; computed from main comparison, no separate run |
+| Main comparison | Qwen3-32B local | WTQ, TabFact, CRT | 200 per dataset | MyAgent, MACT, Direct-CoT, Single-Agent Pandas; TableZoomer if smoke adaptation passes | Accuracy, Avg Token, Avg Time | Main baseline comparison table | Required for first four methods; TableZoomer is recommended recent baseline if runnable |
+| Efficiency comparison | Qwen3-32B local | WTQ, TabFact, CRT | same rows as main comparison | Same methods as main comparison | Accuracy, Avg Token, Avg Time, token ratio to MACT | Efficiency table or main table columns | Required; computed from main comparison, no separate run |
+| Recent-method baseline | Qwen3-32B local | WTQ, TabFact, CRT | Smoke-5 first; then 200 per dataset only if stable | TableZoomer official implementation adapted to the same JSONL inputs and evaluator | Accuracy, Avg Token if available, Avg Time | Recent-method comparison row in the main table or a separate recent-baseline note | Recommended P1; must not block the required three-baseline result |
 | Mechanism ablation | Qwen3-32B local | WTQ, TabFact, CRT | 50 per dataset by default; expand to 100 only if noisy | MyAgent full, no question routing, no risk scoring, no table compression, no deterministic table validation, no selective strong verification | Accuracy, Avg Token, Avg Time, failed/missing only as diagnostic | Ablation table | Required for thesis mechanism proof |
 | Seed stability diagnostic | Qwen3-32B local | WTQ, TabFact, CRT | Seed-E Gate-50 already; Seed-F/G Gate-50 or Gate-100 only after a mechanism repair | MyAgent vs MACT on same sample IDs for paired diagnosis | Accuracy, Avg Token, Avg Time, MyAgent-only / MACT-only / both-wrong buckets | Robustness diagnostic table | Required as diagnostic, not as final superiority claim unless fresh seed passes |
 | Multi-model boundary | Existing smaller local models only | Gate-50 summaries already available | existing evidence only | Qwen3-14B-AWQ, Qwen2.5-14B-Instruct-AWQ, Qwen2.5-3B-Instruct | Accuracy and runnability summary | Model-boundary table | Summarize existing no-go results; do not rerun by default |
@@ -69,6 +70,8 @@ For the current graduation objective, the model plan is:
 1. Qwen3-32B local: main results and all required ablations.
 2. Existing smaller-model Gate-50 summaries: boundary evidence only.
 3. Extra models: optional P2; do not run by default.
+
+TableZoomer note: if TableZoomer is run, use the same Qwen3-32B local service for fairness. Do not compare MyAgent's Qwen3-32B results against TableZoomer's paper-reported Qwen3-8B or different-dataset numbers as if they were same-condition results.
 
 Experiment discipline:
 
@@ -297,15 +300,17 @@ Do these only after all P0 items are complete.
 
 Add one recent table-reasoning baseline only if time remains or the supervisor explicitly wants a recent method:
 
-- POS-style SQL baseline, preferred.
-- SynTQA-style baseline, fallback if POS is blocked.
+- TableZoomer official implementation, preferred, because it is a 2025 collaborative/programming table-QA agent and is close to the current patent comparison area.
+- POS-style SQL baseline, fallback if TableZoomer cannot be adapted to WTQ / TabFact / CRT within the smoke-test budget.
+- SynTQA-style baseline, second fallback if POS is blocked.
 
 Run policy:
 
-- First run Gate-50: WTQ / TabFact / CRT, `50` rows each.
-- Only expand to `200` rows per dataset if the runner is stable and the result is useful.
+- First run Smoke-5: WTQ / TabFact / CRT, `5` rows each, using the same Qwen3-32B local endpoint and the same evaluator contract.
+- If Smoke-5 passes with one scoreable row per input row, run Gate-50 for WTQ / TabFact / CRT.
+- Only expand to `200` rows per dataset if the runner is stable, token/time accounting is available or consistently approximated, and the result can be placed in the final baseline table.
 
-Do not let POS/SynTQA block P0 completion.
+Do not let TableZoomer/POS/SynTQA block P0 completion.
 
 ### P1.2 Larger Sample
 
