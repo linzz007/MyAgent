@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-27 10:44 CST
+Last updated: 2026-08-27 11:19 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -31,6 +31,44 @@ Final thesis experiments to report by default:
 3. Mechanism ablation: question routing, dual/risk scoring, table compression/evidence retention, deterministic table validation, and selective strong verification where the switch exists.
 4. Seed stability diagnostic: Seed-E error attribution, followed by one fresh Seed-F or Seed-G Gate-50/Gate-100 blind validation only if a mechanism-level repair is made.
 5. Multi-model boundary summary: existing smaller-model no-go results should be summarized, not rerun by default.
+
+### 0.0.1 Final Experiment Matrix
+
+Use this matrix as the default execution plan. A run not listed here is out of scope unless the user explicitly reopens the plan.
+
+| Experiment | Model | Datasets | Rows | Methods / variants | Metrics | Thesis destination | Status |
+|---|---|---|---:|---|---|---|---|
+| Main comparison | Qwen3-32B local | WTQ, TabFact, CRT | 200 per dataset | MyAgent, MACT, Direct-CoT, Single-Agent Pandas | Accuracy, Avg Token, Avg Time | Main baseline comparison table | Required; current evidence is positive |
+| Efficiency comparison | Qwen3-32B local | WTQ, TabFact, CRT | same rows as main comparison | Same four methods as main comparison | Accuracy, Avg Token, Avg Time, token ratio to MACT | Efficiency table or main table columns | Required; computed from main comparison, no separate run |
+| Mechanism ablation | Qwen3-32B local | WTQ, TabFact, CRT | 50 per dataset by default; expand to 100 only if noisy | MyAgent full, no question routing, no risk scoring, no table compression, no deterministic table validation, no selective strong verification | Accuracy, Avg Token, Avg Time, failed/missing only as diagnostic | Ablation table | Required for thesis mechanism proof |
+| Seed stability diagnostic | Qwen3-32B local | WTQ, TabFact, CRT | Seed-E Gate-50 already; Seed-F/G Gate-50 or Gate-100 only after a mechanism repair | MyAgent vs MACT on same sample IDs for paired diagnosis | Accuracy, Avg Token, Avg Time, MyAgent-only / MACT-only / both-wrong buckets | Robustness diagnostic table | Required as diagnostic, not as final superiority claim unless fresh seed passes |
+| Multi-model boundary | Existing smaller local models only | Gate-50 summaries already available | existing evidence only | Qwen3-14B-AWQ, Qwen2.5-14B-Instruct-AWQ, Qwen2.5-3B-Instruct | Accuracy and runnability summary | Model-boundary table | Summarize existing no-go results; do not rerun by default |
+
+### 0.0.2 Ablation Matrix
+
+Run ablations only on MyAgent under Qwen3-32B local, using the same WTQ / TabFact / CRT sample IDs for every variant.
+
+| Ablation name | What is removed | Expected command switch | Patent mechanism supported |
+|---|---|---|---|
+| Full MyAgent | Nothing removed | default MyAgent run | Proposed complete method |
+| No question routing | Disable question-type route influence and route all rows through the fallback/default route policy | `--disable-question-routing` | Problem type differentiation |
+| No risk scoring | Disable selective risk scoring and hold risk level at the default medium path | `--disable-risk-scoring` | Dual scoring / cost-aware risk control |
+| No table compression | Expose the full table instead of question-aware compressed evidence | `--disable-table-compression` | Table information compression and evidence retention |
+| No deterministic table validation | Disable deterministic table validator shortcuts and answer normalization shortcuts | `--disable-deterministic-shortcuts` | Deterministic table validation / answer contract |
+| No selective strong verification | Disable high-risk second-pass LLM verification | `--disable-strong-verification` | Selective collaboration verification |
+| Legacy collaboration | Use the old collaboration policy where needed for compatibility comparison | `--collaboration-mode legacy` | Shows the value boundary of the selective-risk policy |
+
+Ablation reporting rule: report accuracy and token/time. Failed/missing, fallback, retry, and error type are diagnostic fields and should not become the headline metric.
+
+### 0.0.3 Model Policy
+
+The main paper model is Qwen3-32B local. Do not switch the main result to DeepSeek API, Qwen3-14B, Qwen2.5-14B, Qwen2.5-3B, or any additional model unless the final thesis table explicitly needs a model-boundary comparison.
+
+For the current graduation objective, the model plan is:
+
+1. Qwen3-32B local: main results and all required ablations.
+2. Existing smaller-model Gate-50 summaries: boundary evidence only.
+3. Extra models: optional P2; do not run by default.
 
 Experiment discipline:
 
@@ -461,8 +499,8 @@ Runner audit result:
 | Direct-CoT runner | implemented in preparation | `scripts/server/run_baseline_tqa.py --baseline direct_cot` |
 | Single-Agent Pandas runner | implemented in preparation | `scripts/server/run_baseline_tqa.py --baseline single_agent_pandas` |
 | Final summary table generator | implemented in preparation | `scripts/server/summarize_baseline_experiment.py` |
-| Existing ablation switches | partially available | `--collaboration-mode legacy`, `--disable-strong-verification`, `--disable-deterministic-shortcuts` |
-| Missing ablation switches | still pending | no explicit no-question-routing switch; no explicit no-table-compression/evidence-retention switch |
+| Ablation switches | implemented | `--collaboration-mode legacy`, `--disable-strong-verification`, `--disable-deterministic-shortcuts`, `--disable-question-routing`, `--disable-risk-scoring`, `--disable-table-compression` |
+| Missing ablation switches | none for current P0 matrix | Do not add more switches unless a new thesis table explicitly needs them |
 
 Prepared MACT run package:
 
