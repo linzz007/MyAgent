@@ -55,8 +55,8 @@ Do not add:
 
 Current candidate final patent files:
 
-- `D:\AAAcode\AAA毕业相关\专利信息\lzz-成本感知表格问答路由\说明书7.0-定稿版.docx`
-- `D:\AAAcode\AAA毕业相关\专利信息\lzz-成本感知表格问答路由\说明书7.0-定稿版.pdf`
+- local patent folder, version `7.0`, Word file: `说明书7.0-定稿版.docx`
+- local patent folder, version `7.0`, PDF proof: `说明书7.0-定稿版.pdf`
 
 The patent wording is aligned with the current code direction:
 
@@ -79,3 +79,15 @@ The positive Qwen3-32B Formal-200 result remains the current main evidence:
 - token ratio to MACT: `0.5560`.
 
 Seed-E is diagnostic boundary evidence, not the final positive claim. Future optimization should start from Seed-E failure clusters and must be validated on a fresh unseen Seed-F/G split before being used as a generalization claim.
+
+## 7. Final Experiment Discipline
+
+The post-freeze experiment plan is a thesis-output plan, not a search plan. A run is allowed only when it fills one of these final report tables:
+
+1. main comparison table;
+2. token/time efficiency table;
+3. mechanism ablation table;
+4. Seed-E/F robustness diagnostic table;
+5. smaller-model boundary table.
+
+Do not start broad extra runs, full-dataset runs, new paper-baseline reproductions, or additional model sweeps unless the user explicitly reopens the scope.

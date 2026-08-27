@@ -1,10 +1,49 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-24 10:22 CST
+Last updated: 2026-08-27 10:44 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
 This is the latest experiment PRD. It replaces the previous broad baseline plan. The user has limited time, so the plan below distinguishes necessary experiments from optional strengthening work. Do not expand the experiment scope unless the user or supervisor explicitly asks for it.
+
+## 0.0 Final Thesis Experiment Contract: 2026-08-27
+
+This PRD is now the execution contract for the final thesis/patent experiment stage. It is not an open brainstorming backlog.
+
+The current patent method is frozen at the component level by tag `patent-stage-freeze-2026-08-24` on branch `codex/selective-risk-collaboration`. Server-side Codex agents should pull the latest branch and treat the frozen method as the main experimental object.
+
+Current state:
+
+| Item | Status | Notes |
+|---|---|---|
+| Patent method | frozen | Top-level route is `SIMPLE` / `COMPLEX`; deterministic table validation and selective collaboration are sub-mechanisms, not new routes. |
+| Patent specification | final candidate | Version `7.0` Word/PDF has been generated locally and aligned with the frozen method wording. |
+| Main result | positive | Qwen3-32B Formal-200: MyAgent `480/600 = 0.8000`, MACT `465/600 = 0.7750`. |
+| Baselines | enough for supervisor requirement | MACT, Direct-CoT, and Single-Agent Pandas are the three required baselines. |
+| Efficiency metrics | available | MyAgent average token `6293.12`; MACT average token `11318.89`; token ratio `0.5560`. |
+| Seed-E | diagnostic warning | MyAgent `95/150`, MACT `105/150`; this shows robustness risk and must not be claimed as solved. |
+| Code optimization | paused except bounded fixes | No broad new modules. Only parameter/gate/normalization/compression fixes mapped to frozen components are allowed. |
+
+Final thesis experiments to report by default:
+
+1. Main Formal-200 comparison: MyAgent vs MACT vs Direct-CoT vs Single-Agent Pandas on WTQ, TabFact, and CRT.
+2. Efficiency comparison from the same Formal-200 runs: accuracy, average token, and average time.
+3. Mechanism ablation: question routing, dual/risk scoring, table compression/evidence retention, deterministic table validation, and selective strong verification where the switch exists.
+4. Seed stability diagnostic: Seed-E error attribution, followed by one fresh Seed-F or Seed-G Gate-50/Gate-100 blind validation only if a mechanism-level repair is made.
+5. Multi-model boundary summary: existing smaller-model no-go results should be summarized, not rerun by default.
+
+Experiment discipline:
+
+- Do not run full official datasets by default.
+- Do not reproduce every MACT paper baseline by default.
+- Do not test extra models unless they answer a thesis table requirement.
+- Do not continue optimizing on Formal-200 sample IDs, fixed questions, or one-off failures.
+- Do not add modules whose names and behavior cannot be mapped to the frozen patent components.
+- Every experiment must have a table destination in the thesis: main comparison, efficiency, ablation, robustness diagnostic, or model-boundary analysis.
+
+Completion standard:
+
+If the main Formal-200 comparison, three-baseline table, efficiency table, ablation table, Seed-E diagnostic, and one post-fix fresh seed validation are packaged into final markdown/CSV tables, this experiment stage is complete for the current graduation/patent objective. Optional experiments require explicit approval.
 
 ## 0. Executive Decision
 
