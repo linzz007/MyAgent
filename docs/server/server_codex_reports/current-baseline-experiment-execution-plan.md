@@ -1,6 +1,6 @@
 # Current Baseline Experiment PRD
 
-Last updated: 2026-08-27 14:05 CST
+Last updated: 2026-08-27 14:33 CST
 
 Audience: server-side Codex agent controlling `/home/ubuntu/lzz/MyAgent` and `/home/ubuntu/lzz/MACT`.
 
@@ -171,6 +171,90 @@ Evaluation contract:
 | `summary/main_baseline_summary.md` | Main baseline and efficiency table |
 | ablation summary files | Mechanism ablation table, accuracy and token/time first |
 | Seed-E/F diagnostic summaries | Error buckets: MyAgent-only, MACT-only, both-correct, both-wrong |
+
+### 0.0.5 Logging, Progress, and Checkpoint Protocol
+
+All server-side runs must use a fixed logging layout. This is required so the local Codex thread and the server Codex thread can jointly judge progress without guessing from terminal history.
+
+Model-service logs:
+
+| Item | Path |
+|---|---|
+| vLLM service logs | `/home/ubuntu/lzz/MyAgent/logs/server/vllm_8000.log`, `/home/ubuntu/lzz/MyAgent/logs/server/vllm_8001.log` |
+| vLLM service PIDs | `/home/ubuntu/lzz/MyAgent/pids/server/vllm_8000.pid`, `/home/ubuntu/lzz/MyAgent/pids/server/vllm_8001.pid` |
+
+Experiment-package logs:
+
+| Item | Path / meaning |
+|---|---|
+| Controller stdout/stderr | `$RUN_DIR/logs/controller/<step-name>.nohup.log` |
+| Controller PID | `$RUN_DIR/logs/controller/<step-name>.pid` |
+| Run journal | `$RUN_DIR/summary/run_journal.md` |
+| Progress snapshot | `$RUN_DIR/summary/progress_snapshot.md` and `$RUN_DIR/summary/progress_snapshot.json` |
+| MyAgent formal logs | `$RUN_DIR/myagent_formal200/logs/<dataset>/*.log` |
+| Direct-CoT logs | `$RUN_DIR/direct_cot_formal200/logs/direct_cot/<dataset>/*.log` |
+| Single-Agent Pandas logs | `$RUN_DIR/single_agent_pandas_formal200/logs/single_agent_pandas/<dataset>/*.log` |
+| MACT logs | `$RUN_DIR/logs/mact_<dataset>_formal200.log` |
+| Evaluator JSON | method-specific `eval/*_eval.json` plus `$RUN_DIR/eval/*_mact_formal200_eval.json` |
+| Main summary | `$RUN_DIR/summary/main_baseline_summary.md` and `$RUN_DIR/summary/main_baseline_summary.json` |
+
+Use the generated wrapper for every long-running command:
+
+```bash
+cd /home/ubuntu/lzz/MACT/outputs/server_runs/qwen3_32b_baseline_formal200_20260812_1505
+
+bash run_logged.sh run_formal_myagent bash run_formal_myagent.sh
+bash run_logged.sh run_formal_direct_cot bash run_formal_direct_cot.sh
+bash run_logged.sh run_formal_single_agent_pandas bash run_formal_single_agent_pandas.sh
+bash run_logged.sh run_mact_wtq_formal200 bash run_mact_wtq_formal200.sh
+bash run_logged.sh run_mact_tabfact_formal200 bash run_mact_tabfact_formal200.sh
+bash run_logged.sh run_mact_crt_formal200 bash run_mact_crt_formal200.sh
+```
+
+Use the same wrapper for ablations:
+
+```bash
+bash run_logged.sh run_ablation_legacy50 bash run_ablation_legacy50.sh
+bash run_logged.sh run_ablation_no_strong50 bash run_ablation_no_strong50.sh
+bash run_logged.sh run_ablation_no_deterministic_shortcuts50 bash run_ablation_no_deterministic_shortcuts50.sh
+bash run_logged.sh run_ablation_no_question_routing50 bash run_ablation_no_question_routing50.sh
+bash run_logged.sh run_ablation_no_risk_scoring50 bash run_ablation_no_risk_scoring50.sh
+bash run_logged.sh run_ablation_no_table_compression50 bash run_ablation_no_table_compression50.sh
+```
+
+Progress check command:
+
+```bash
+bash run_progress_snapshot.sh
+tail -80 summary/progress_snapshot.md
+```
+
+Process and log check command:
+
+```bash
+STEP=run_formal_myagent
+ps -p $(cat logs/controller/${STEP}.pid)
+tail -100 logs/controller/${STEP}.nohup.log
+tail -120 summary/run_journal.md
+```
+
+Checkpoint after every completed method or every completed MACT dataset:
+
+```bash
+bash run_eval_and_summary.sh
+bash run_progress_snapshot.sh
+bash checkpoint_to_git.sh "results: checkpoint <method-or-dataset-name>"
+```
+
+When asking the local Codex thread to judge progress, paste these files or their tails:
+
+- `$RUN_DIR/summary/progress_snapshot.md`;
+- `$RUN_DIR/summary/main_baseline_summary.md` if it exists;
+- `$RUN_DIR/summary/run_journal.md`;
+- the relevant `$RUN_DIR/logs/controller/<step-name>.nohup.log` tail if the run stopped or looks stalled;
+- the relevant evaluator JSON if accuracy/token/time looks abnormal.
+
+Stop before launching the next step if the progress snapshot shows `row_mismatch`, `needs_eval`, a dead controller PID with incomplete rows, an unparseable evaluator JSON, or a failed vLLM healthcheck.
 
 Final metrics to report:
 
